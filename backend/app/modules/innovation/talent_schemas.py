@@ -49,6 +49,9 @@ class TalentFields(BaseModel):
         str, StringConstraints(strip_whitespace=True, max_length=100)
     ] = ""
     grade: Annotated[str, StringConstraints(strip_whitespace=True, max_length=30)] = ""
+    headline: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=40)
+    ] = ""
     introduction: Annotated[
         str, StringConstraints(strip_whitespace=True, max_length=1000)
     ] = ""
@@ -91,12 +94,13 @@ class TalentFields(BaseModel):
             self.name,
             self.faculty,
             self.grade,
+            self.headline,
             self.introduction,
             self.advantages,
         )
         if not all(required) or not self.tag_ids or self.cooperation_state is None:
             raise ValueError(
-                "请完善姓名、院系、年级、介绍、优势、至少一个技能标签及合作状态"
+                "请完善姓名、院系、年级、一句话介绍、介绍、优势、至少一个技能标签及合作状态"
             )
 
 
@@ -105,6 +109,13 @@ class TalentSaveCommand(BaseModel):
     request_id: UUID
     version: Annotated[int, Field(strict=True, ge=0)]
     fields: TalentFields
+
+    @model_validator(mode="after")
+    def require_headline(self) -> "TalentSaveCommand":
+        # Reads of legacy JSON remain valid; every new save needs the card text.
+        if not self.fields.headline:
+            raise ValueError("请填写一句话介绍")
+        return self
 
 
 class TalentVersionCommand(BaseModel):
@@ -192,6 +203,7 @@ class PublicTalentContent(BaseModel):
     name: str
     faculty: str
     grade: str
+    headline: str = ""
     introduction: str
     advantages: str
     tags: list[TalentTagResponse]
@@ -219,6 +231,7 @@ class PublicTalentSummary(BaseModel):
     name: str
     faculty: str
     grade: str
+    headline: str = ""
     introduction: str
     advantages: str
     tags: list[TalentTagResponse]

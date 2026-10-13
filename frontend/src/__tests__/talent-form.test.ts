@@ -7,7 +7,7 @@ test('talent contact unavailability has a registered independent client error co
   assert.ok(isKnownErrorCode('TALENT_CONTACTS_UNAVAILABLE'));
 });
 
-const minimal = () => ({ ...emptyTalentForm(), name:'模拟新生', faculty:'模拟学院', grade:'2026级', introduction:'模拟资料：愿意尝试', advantages:'愿意从小任务开始', tag_ids:['00000000-0000-4000-8000-000000000001'], cooperation_state:'LOOKING' as const });
+const minimal = () => ({ ...emptyTalentForm(), name:'模拟新生', headline:'想参与学习实践', faculty:'模拟学院', grade:'2026级', introduction:'模拟资料：愿意尝试', advantages:'愿意从小任务开始', tag_ids:['00000000-0000-4000-8000-000000000001'], cooperation_state:'LOOKING' as const });
 
 test('saved fields are clean regardless of JSON transport property order',()=>{
   const form=minimal();const values=talentFormToFields(form);
@@ -17,7 +17,7 @@ test('saved fields are clean regardless of JSON transport property order',()=>{
 });
 test('a novice can publish without experience, files, links or contacts', () => {
   assert.deepEqual(validateTalentForm(minimal(),'publish'),{});
-  assert.deepEqual(validateTalentForm(emptyTalentForm(),'save'),{});
+  assert.deepEqual(validateTalentForm(emptyTalentForm(),'save'),{headline:'请填写一句话介绍。'});
   assert.ok(Object.keys(validateTalentForm(emptyTalentForm(),'publish')).length >= 7);
 });
 for (const {key,limit} of TALENT_TEXT_FIELDS) test(`${key} counts Unicode codepoints at its exact boundary`, () => {

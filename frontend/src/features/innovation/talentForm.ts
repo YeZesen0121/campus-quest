@@ -6,6 +6,7 @@ export const TALENT_TEXT_FIELDS = [
   {key:'name',label:'展示姓名',limit:50,rows:1,required:true},
   {key:'faculty',label:'院系',limit:100,rows:1,required:true},
   {key:'grade',label:'年级',limit:30,rows:1,required:true},
+  {key:'headline',label:'一句话介绍',limit:40,rows:2,required:true},
   {key:'introduction',label:'自我介绍',limit:1000,rows:3,required:true},
   {key:'advantages',label:'我的优势',limit:2000,rows:3,required:true},
   {key:'skill_notes',label:'技能补充',limit:1000,rows:2,required:false},
@@ -23,7 +24,7 @@ export const TALENT_STATES:Record<TalentState,string>={LOOKING:'找项目',OPEN_
 export const TALENT_WORK_MODES:Record<TalentWorkMode,string>={UNSPECIFIED:'未填写',ONLINE:'线上',OFFLINE:'线下',EITHER:'线上或线下均可'};
 
 export function emptyTalentForm():TalentForm {
-  return {name:'',faculty:'',grade:'',introduction:'',advantages:'',skill_notes:'',cooperation_direction:'',desired_roles:'',experience:'',tag_ids:[],weekly_hours:'',work_mode:'UNSPECIFIED',cooperation_state:'',links:[],file_ids:[],contacts:[]};
+  return {name:'',faculty:'',grade:'',headline:'',introduction:'',advantages:'',skill_notes:'',cooperation_direction:'',desired_roles:'',experience:'',tag_ids:[],weekly_hours:'',work_mode:'UNSPECIFIED',cooperation_state:'',links:[],file_ids:[],contacts:[]};
 }
 export function fieldsToTalentForm(fields:TalentFieldsDto):TalentForm {
   const form=emptyTalentForm();
@@ -31,7 +32,7 @@ export function fieldsToTalentForm(fields:TalentFieldsDto):TalentForm {
   return {...form,tag_ids:[...(fields.tag_ids??[])],weekly_hours:fields.weekly_hours==null?'':String(fields.weekly_hours),work_mode:fields.work_mode??'UNSPECIFIED',cooperation_state:fields.cooperation_state??'',links:(fields.links??[]).map(link=>({...link})),file_ids:[...(fields.file_ids??[])],contacts:(fields.contacts??[]).map(contact=>({...contact}))};
 }
 export function talentFormToFields(form:TalentForm):TalentFieldsDto {
-  const fields = {name:'',faculty:'',grade:'',introduction:'',advantages:'',skill_notes:'',cooperation_direction:'',desired_roles:'',experience:''};
+  const fields = {name:'',faculty:'',grade:'',headline:'',introduction:'',advantages:'',skill_notes:'',cooperation_direction:'',desired_roles:'',experience:''};
   for (const {key} of TALENT_TEXT_FIELDS) fields[key]=form[key].trim();
   return {...fields,tag_ids:[...form.tag_ids],weekly_hours:form.weekly_hours.trim()===''?null:Number(form.weekly_hours),work_mode:form.work_mode,cooperation_state:form.cooperation_state||null,links:form.links.map(link=>({title:link.title.trim(),url:link.url.trim()})),file_ids:[...form.file_ids],contacts:form.contacts.map(contact=>({...contact,value:contact.value.trim()}))};
 }
@@ -42,7 +43,7 @@ export function hasTalentChanges(form:TalentForm,fields:TalentFieldsDto):boolean
 export function validateTalentForm(form:TalentForm,mode:'save'|'publish'):TalentFormErrors {
   const errors:TalentFormErrors={};
   for (const {key,label,limit,required} of TALENT_TEXT_FIELDS) {
-    if (mode==='publish' && required && !form[key].trim()) errors[key]=`请填写${label}。`;
+    if ((key==='headline' || mode==='publish' && required) && !form[key].trim()) errors[key]=`请填写${label}。`;
     else if (codePointCount(form[key].trim())>limit) errors[key]=`最多 ${limit} 个字符。`;
   }
   if (form.tag_ids.length>10 || new Set(form.tag_ids).size!==form.tag_ids.length) errors.tag_ids='最多选择 10 个不重复的标准标签。';

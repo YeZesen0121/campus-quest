@@ -33,3 +33,9 @@ Tasks 1–3 的真实 PG/HTTP 与存储扫描验证见工作区 `.local-dev/logs
 | A15 | R4.1 查询： 有/无/全部与技能/状态/关键词组合，total及稳定分页一致，无N+1 | `tests/integration/innovation/test_public_talents.py::test_material_filter_has_stable_pagination_without_per_profile_queries`；既有多标签全部匹配用例 | 已覆盖 |
 | A16 | R4.1 URL/UI： false与true均保留，返回详情/分页保留，提交重置offset；默认全部、清除筛选 | `frontend/src/__tests__/talent-query.test.ts`；`frontend/e2e/innovation-talents.spec.ts` 的 R4.1 场景 | 已覆盖 |
 | A17 | R4.1 UI： 材料事实不等于认证，新生无文件仍能公开；四组字段、窄屏长内容、键盘焦点与axe | `frontend/e2e/innovation-talents.spec.ts` 最小新生与 R4.1 场景；`frontend/e2e/innovation-talents-visual.spec.ts` | 已覆盖 |
+| A18 | CARD-01/02：一句话介绍草稿也必填，Unicode40可存41拒绝，其他草稿字段可不完整 | `tests/unit/innovation/test_talent_headline.py`；`tests/integration/innovation/test_talent_headline.py::test_missing_card_sentence_cannot_save_a_draft`；`frontend/src/__tests__/talent-headline.test.ts` | 已覆盖 |
+| A19 | CARD-03：旧无字段草稿/公开快照仍可读取，不误判未公开修改；保存需补填，关闭仍允许 | `tests/integration/innovation/test_talent_headline.py::test_legacy_draft_and_public_snapshot_remain_readable` | 已覆盖 |
+| A20 | CARD-04：列表和关键词只使用公开句，私有修改须明确公开才替换 | `tests/integration/innovation/test_talent_headline.py::test_card_sentence_search_waits_for_explicit_publication` | 已覆盖 |
+| A21 | CARD-05/06：列表仅一句话；详情保留完整介绍/优势；白卡手机桌面可访问 | `frontend/e2e/innovation-talents.spec.ts` 的 card sentence 场景；`frontend/e2e/innovation-talents-visual.spec.ts`；项目/岗位视觉 | 已覆盖 |
+
+G-5（已关闭）：本轮新增card sentence浏览器场景及更新后的五组像素回归已通过，使用当轮结果关闭；完整电池与门禁记录见本轮回执。

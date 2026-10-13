@@ -139,6 +139,7 @@ class PublicTalentService:
                 for name in (
                     "name",
                     "faculty",
+                    "headline",
                     "introduction",
                     "advantages",
                     "skill_notes",
@@ -191,6 +192,7 @@ class PublicTalentService:
                     "public_version": row["public_version"],
                     "published_at": row["published_at"],
                     "has_public_materials": row["has_public_materials"],
+                    "headline": row["content"].get("headline", ""),
                     **{
                         name: row["content"][name]
                         for name in (
@@ -224,7 +226,7 @@ class PublicTalentService:
             raise not_found()
         fields = PublicTalentContent.model_fields
         content = PublicTalentContent.model_validate(
-            {name: row["content"][name] for name in fields}
+            {name: row["content"][name] for name in fields if name in row["content"]}
         )
         files = (
             (

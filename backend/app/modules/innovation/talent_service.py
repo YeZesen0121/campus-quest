@@ -78,6 +78,8 @@ class TalentService:
             if revision
             else None
         )
+        if public_content is not None:
+            public_content.setdefault("headline", "")
         return TalentProfileResponse(
             id=row.id,
             fields=fields,

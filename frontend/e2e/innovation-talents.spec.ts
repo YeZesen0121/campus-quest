@@ -4,6 +4,26 @@ import { TALENT_OWN, editor, result, prepareTalent, fillTalent, saveTalent, publ
 
 test.skip(process.env.CQ_E2E!=='1','CQ_E2E=1 with an owned real database');
 
+test('R4.1: card sentence is mandatory for drafts and is the only directory prose',async({page})=>{
+  await prepareTalent(page);await fillTalent(page,'模拟卡片同学');
+  const sentence=editor(page).getByLabel('一句话介绍',{exact:true});
+  await expect(sentence).toHaveAttribute('aria-required','true');
+  await sentence.fill('  ');await editor(page).getByRole('button',{name:'保存人才草稿',exact:true}).click();
+  await expect(sentence).toBeFocused();await expect(editor(page)).toContainText('请填写一句话介绍。');
+  await sentence.fill('🌱'.repeat(41));await editor(page).getByRole('button',{name:'保存人才草稿',exact:true}).click();
+  await expect(sentence).toBeFocused();await expect(editor(page)).toContainText('最多 40 个字符。');
+  const text='🌱'.repeat(40);await sentence.fill(text);await saveTalent(page);await publishTalent(page);
+  await page.goto(`${BASE_URL}/innovation/talents?q=模拟卡片同学`);
+  const directory=page.getByRole('region',{name:'校内人才库'});
+  await expect(directory).toContainText(text);
+  await expect(directory).not.toContainText('愿意倾听、整理资料，也愿意学习新技能。');
+  await expect(directory).not.toContainText('模拟资料：愿意参与学习实验与产品实践。');
+  const name=directory.getByRole('link',{name:'模拟卡片同学',exact:true});
+  await name.focus();await expect(name).toBeFocused();await name.press('Enter');
+  await expect(page.getByRole('article',{name:'校内人才详情'})).toContainText(text);
+  await expect(page.getByRole('article')).toContainText('愿意倾听、整理资料，也愿意学习新技能。');
+});
+
 test('R4.1: public materials filter follows publication and withdrawal without certifying talent',async({page})=>{
   test.setTimeout(240_000);await prepareTalent(page);await fillTalent(page,'模拟材料同学');await saveTalent(page);await publishTalent(page);
   const selected=await uploadTalent(page,'模拟材料标志.png');await selected.check();await saveTalent(page);

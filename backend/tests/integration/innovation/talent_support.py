@@ -39,6 +39,7 @@ async def client(db_session, clock):
 def fields(tag_id):
     return {
         "name": "模拟新生",
+        "headline": "模拟资料：想参与学习实践",
         "faculty": "模拟学院",
         "grade": "2026级",
         "introduction": "模拟资料：希望参加学习实践",

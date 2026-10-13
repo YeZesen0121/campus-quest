@@ -4324,8 +4324,18 @@ body {
   color: var(--muted-foreground);
 }
 .ie-talent-material svg { width: var(--space-4); height: var(--space-4); flex-shrink: 0; }
-.ie-talent-results .ie-draft-row { padding-block: var(--space-5); }
-.ie-talent-advantage { white-space: pre-wrap; }
+.ie-discovery-list { display: grid; gap: var(--space-3); }
+.ie-discovery-list > .ie-draft-row {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.ie-discovery-list .ie-draft-copy { width: 100%; }
+.ie-discovery-list .section-title { margin: 0; }
+.ie-discovery-list .section-title a { color: var(--foreground); text-decoration: none; }
+.ie-discovery-list .section-title a:hover { text-decoration: underline; }
+.ie-talent-headline { margin: 0; color: var(--foreground); white-space: pre-wrap; }
 .ie-talent-summary, .ie-talent-reading, .ie-talent-preview {
   display: grid;
   gap: var(--space-3);

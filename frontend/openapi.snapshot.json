@@ -12985,6 +12985,11 @@
             "type": "string",
             "title": "Grade"
           },
+          "headline": {
+            "type": "string",
+            "title": "Headline",
+            "default": ""
+          },
           "introduction": {
             "type": "string",
             "title": "Introduction"
@@ -13210,6 +13215,11 @@
           "grade": {
             "type": "string",
             "title": "Grade"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline",
+            "default": ""
           },
           "introduction": {
             "type": "string",
@@ -15865,6 +15875,12 @@
             "type": "string",
             "maxLength": 30,
             "title": "Grade",
+            "default": ""
+          },
+          "headline": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Headline",
             "default": ""
           },
           "introduction": {

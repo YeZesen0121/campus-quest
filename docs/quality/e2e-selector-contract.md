@@ -172,6 +172,8 @@ Recruitment contact correction (2026-10-12): missing channels focuses the 授权
 Recruitment acceptance fixes (2026-10-12): same-tab route recovery returns directly to the unsaved editor without automatic saves; explicit local 返回招募列表 discards only after confirmation when dirty. New/edit headings 新建招募岗位 / 编辑招募岗位 are focusable on entry, and returning restores the create/edit action. A workspace 404 says 项目不存在或不可访问, preserving its neutral privacy meaning and 返回我的项目; temporary errors retain 重试. Idea-only 阶段目标 / 初步方案 are absent outside idea stage, except an invalid preserved field temporarily reappears for correction. Contact fields retain their individual error associations and add channel format hints/input semantics. Persistent status 联系读取结果 announces 联系方式已读取，请查看下方已授权渠道。 without containing contact values. Public beginner false says 不接受零基础. Only normal, open, undated roles show 下次提醒.
 # R4.1 人才材料与阅读分组（2026-10-13）
 
+R4.1 卡片反馈追加：label/name `一句话介绍` / `talent-headline` 为保存草稿也必填，提示关联 `talent-headline-hint` / `talent-headline-error`，40字符计数沿用码点契约。校内发现条目使用 `.ie-discovery-list > .ie-draft-row` 白卡，`.ie-talent-headline` 为人才卡片唯一自述摘要；原标题链接、列表详情返回、筛选和完整阅读区域保持。字段为空保存聚焦该输入，旧公开档案显示 `暂未填写一句话介绍`。
+
 | B 契约 | 范围 | 行为 |
 | --- | --- | --- |
 | label `作品/证明材料筛选` | form `人才筛选` | 原生 select，空值全部、true有材料、false无材料；提交重置offset，详情返回/分页保留URL |

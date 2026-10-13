@@ -17,14 +17,14 @@ export async function prepareTalent(page:Page){
     for(const channel of record!.public_contact_channels){const revoke=await page.request.post(`${API_URL}${TALENT_OWN}/revoke-contact`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version,channel}});expect(revoke.status()).toBe(200);record=(await revoke.json()).current;}
     const files=await page.request.get(`${API_URL}${TALENT_OWN}/files`,{headers:ownerHeaders()});expect(files.status()).toBe(200);
     for(const file of (await files.json()).items){const removed=await page.request.post(`${API_URL}${TALENT_OWN}/files/${file.id}/remove`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version}});expect(removed.status()).toBe(200);record=(await removed.json()).current;}
-    const reset=await page.request.put(`${API_URL}${TALENT_OWN}`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version,fields:{}}});expect(reset.status()).toBe(200);
+    const reset=await page.request.put(`${API_URL}${TALENT_OWN}`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version,fields:{headline:'模拟资料：待完善档案'}}});expect(reset.status()).toBe(200);
   }
   await page.goto(`${BASE_URL}/profile/talent-profile`);await expect(editor(page)).toBeVisible();
   return editor(page);
 }
 export async function fillTalent(page:Page,name='模拟新同学'){
   const form=editor(page);
-  for(const [label,value] of [['展示姓名',name],['院系','模拟信息管理系'],['年级','2026级'],['自我介绍','模拟资料：愿意参与学习实验与产品实践。'],['我的优势','愿意倾听、整理资料，也愿意学习新技能。']])await form.getByLabel(label,{exact:true}).fill(value);
+  for(const [label,value] of [['展示姓名',name],['一句话介绍','模拟资料：想参与学习实验与产品实践。'],['院系','模拟信息管理系'],['年级','2026级'],['自我介绍','模拟资料：愿意参与学习实验与产品实践。'],['我的优势','愿意倾听、整理资料，也愿意学习新技能。']])await form.getByLabel(label,{exact:true}).fill(value);
   await form.getByLabel('PPT 制作',{exact:true}).check();await form.getByLabel('当前合作状态',{exact:true}).selectOption('LOOKING');return form;
 }
 export async function saveTalent(page:Page){await editor(page).getByRole('button',{name:'保存人才草稿',exact:true}).click();await expect(result(page)).toContainText('已保存');}

@@ -35,7 +35,7 @@ function PublicPage({ offset, onPage }: { offset: number; onPage: (value: number
   if (state.status === "loading") return <SectionSkeleton />;
   if (state.status === "error") return <SectionError error={state.error} onRetry={retry} />;
   return <section className="section" aria-label="校内已核实成果">
-    {state.data.items.length ? <ul className="ie-draft-list">{state.data.items.map((item) => <li className="ie-draft-row" key={item.id}><div className="ie-draft-copy"><h2 className="section-title"><Link href={`/innovation/achievements/${item.id}`}>{item.achievement.title}</Link></h2><p>{item.project.title} · {item.project.stage}</p><p className="ie-draft-excerpt">{item.achievement.description}</p><PublicationDates item={item} /></div></li>)}</ul> : <EmptyState title="暂无可浏览的成果" hint="首次核实通过的成果将在这里展示。" />}
+    {state.data.items.length ? <ul className="ie-draft-list ie-discovery-list">{state.data.items.map((item) => <li className="ie-draft-row" key={item.id}><div className="ie-draft-copy"><h2 className="section-title"><Link href={`/innovation/achievements/${item.id}`}>{item.achievement.title}</Link></h2><p>{item.project.title} · {item.project.stage}</p><p className="ie-draft-excerpt">{item.achievement.description}</p><PublicationDates item={item} /></div></li>)}</ul> : <EmptyState title="暂无可浏览的成果" hint="首次核实通过的成果将在这里展示。" />}
     <nav className="ie-draft-actions" aria-label="校内成果分页"><Button variant="secondary" disabled={!offset} onClick={() => onPage(Math.max(0, offset - 20))}>上一页</Button><span className="field-hint">第 {Math.floor(offset / 20) + 1} 页 · 共 {state.data.total} 份</span><Button variant="secondary" disabled={offset + 20 >= state.data.total} onClick={() => onPage(offset + 20)}>下一页</Button></nav>
   </section>;
 }

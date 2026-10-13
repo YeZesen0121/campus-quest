@@ -4917,6 +4917,11 @@ export interface components {
             faculty: string;
             /** Grade */
             grade: string;
+            /**
+             * Headline
+             * @default
+             */
+            headline: string;
             /** Introduction */
             introduction: string;
             /** Advantages */
@@ -5007,6 +5012,11 @@ export interface components {
             faculty: string;
             /** Grade */
             grade: string;
+            /**
+             * Headline
+             * @default
+             */
+            headline: string;
             /** Introduction */
             introduction: string;
             /** Advantages */
@@ -6207,6 +6217,11 @@ export interface components {
              * @default
              */
             grade: string;
+            /**
+             * Headline
+             * @default
+             */
+            headline: string;
             /**
              * Introduction
              * @default

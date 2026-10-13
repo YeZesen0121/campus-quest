@@ -16,6 +16,7 @@ def schemas():
 def minimal():
     return {
         "name": "模拟新生",
+        "headline": "想参与学习实践",
         "faculty": "模拟学院",
         "grade": "2026",
         "introduction": "模拟自述",
@@ -41,6 +42,7 @@ def test_empty_draft_is_valid_but_publication_requires_basic_fields():
         ("name", 50),
         ("faculty", 100),
         ("grade", 30),
+        ("headline", 40),
         ("introduction", 1000),
         ("advantages", 2000),
         ("skill_notes", 1000),
