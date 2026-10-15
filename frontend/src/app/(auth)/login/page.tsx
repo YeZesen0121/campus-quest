@@ -35,6 +35,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       ) : null}
       <LoginForm />
       <p className="auth-alt-action">
+        <Link className="link" href="/mentor/login">导师登录：确认与维护导师档案</Link>
+      </p>
+      <p className="auth-alt-action">
         还没有账号？
         <Link className="link" href="/register">
           注册学生账号

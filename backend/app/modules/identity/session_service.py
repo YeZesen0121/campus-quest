@@ -133,10 +133,30 @@ class SessionService:
         stranger without the password cannot probe account status. This is
         the STUDENT door: a TEACHER/ADMIN account with the correct password
         gets the same uniform authentication failure (the reverse mirror of
-        ``StaffService.authenticate_staff``'s STUDENT check), so a staff
+        ``StaffService.authenticate_staff``'s role allowlist), so a staff
         account can never open a password-only session and reach the
         self-service endpoints without its second factor (spec §5.6, §33.4).
         """
+        return await self._login_password_account(
+            db, username, password, expected_role=Role.STUDENT
+        )
+
+    async def login_mentor(
+        self, db: AsyncSession, username: str, password: str
+    ) -> SessionTokens:
+        """Open a mentor-only session, without student or staff capabilities."""
+        return await self._login_password_account(
+            db, username, password, expected_role=Role.MENTOR
+        )
+
+    async def _login_password_account(
+        self,
+        db: AsyncSession,
+        username: str,
+        password: str,
+        *,
+        expected_role: Role,
+    ) -> SessionTokens:
         now = self._clock.now()
         user = await self._users.find_by_username(db, username.strip())
         if user is None:
@@ -161,12 +181,12 @@ class SessionService:
                 status_code=403,
             )
 
-        if user.role != Role.STUDENT:
+        if user.role != expected_role:
             # Same uniform failure as a wrong password — no role oracle for
             # an attacker holding a staff password; staff login goes through
             # authenticate_staff's TOTP flow instead.
             logger.info(
-                "student login rejected reason=non_student_role role=%s", user.role
+                "password login rejected reason=role_mismatch role=%s", user.role
             )
             raise self._authentication_required()
 

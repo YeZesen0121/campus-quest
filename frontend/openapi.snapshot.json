@@ -171,6 +171,44 @@
         }
       }
     },
+    "/api/v1/auth/mentor/login": {
+      "post": {
+        "summary": "Login Mentor",
+        "operationId": "login_mentor_api_v1_auth_mentor_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPairResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/refresh": {
       "post": {
         "summary": "Refresh",
@@ -4643,6 +4681,1132 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PublicAchievementResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/operations/mentors": {
+      "get": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "List Operations",
+        "operationId": "list_operations_api_v1_ie_operations_mentors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorOperationsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_v1_ie_operations_mentors_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorCreateCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/operations/mentors/{profile_id}": {
+      "get": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Read Operation",
+        "operationId": "read_operation_api_v1_ie_operations_mentors__profile_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Save",
+        "operationId": "save_api_v1_ie_operations_mentors__profile_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorSaveCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/mentor": {
+      "get": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Read Me",
+        "operationId": "read_me_api_v1_ie_me_mentor_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorProfileReadResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/confirm": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Confirm",
+        "operationId": "confirm_api_v1_ie_me_mentor_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorConfirmCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/reject": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Reject",
+        "operationId": "reject_api_v1_ie_me_mentor_reject_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorVersionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/withdraw": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Withdraw",
+        "operationId": "withdraw_api_v1_ie_me_mentor_withdraw_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorVersionCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/contact-state": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Contact State",
+        "operationId": "contact_state_api_v1_ie_me_mentor_contact_state_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorContactStateCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/maintenance-scope": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Scope",
+        "operationId": "scope_api_v1_ie_me_mentor_maintenance_scope_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorScopeCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/mentor/revoke-contact": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Revoke Contact",
+        "operationId": "revoke_contact_api_v1_ie_me_mentor_revoke_contact_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorRevokeContactCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/mentors": {
+      "get": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "List Public",
+        "operationId": "list_public_api_v1_ie_mentors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Direction"
+            }
+          },
+          {
+            "name": "accepting_contact",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accepting Contact"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicMentorListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/mentors/{profile_id}": {
+      "get": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Detail",
+        "operationId": "detail_api_v1_ie_mentors__profile_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicMentorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/mentors/{profile_id}/contacts": {
+      "post": {
+        "tags": [
+          "innovation mentors"
+        ],
+        "summary": "Contacts",
+        "operationId": "contacts_api_v1_ie_mentors__profile_id__contacts_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "profile_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorContactReadCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorContactsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/mentors": {
+      "get": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "List Owned",
+        "operationId": "list_owned_api_v1_ie_me_project_drafts__project_id__mentors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "Request Link",
+        "operationId": "request_link_api_v1_ie_me_project_drafts__project_id__mentors_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectMentorCreateCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/mentor/project-links": {
+      "get": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "List Mentor",
+        "operationId": "list_mentor_api_v1_ie_me_mentor_project_links_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/mentor-links/{link_id}/accept": {
+      "post": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "Accept",
+        "operationId": "accept_api_v1_ie_mentor_links__link_id__accept_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/mentor-links/{link_id}/reject": {
+      "post": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "Reject",
+        "operationId": "reject_api_v1_ie_mentor_links__link_id__reject_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/mentor-links/{link_id}/revoke": {
+      "post": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "Revoke",
+        "operationId": "revoke_api_v1_ie_mentor_links__link_id__revoke_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMentorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/projects/{project_id}/mentors": {
+      "get": {
+        "tags": [
+          "innovation mentor links"
+        ],
+        "summary": "Public Links",
+        "operationId": "public_links_api_v1_ie_projects__project_id__mentors_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProjectMentorsResponse"
                 }
               }
             }
@@ -11308,7 +12472,7 @@
           "password"
         ],
         "title": "LoginRequest",
-        "description": "Student login: student number + password (spec §5.6)."
+        "description": "Password login: account identifier + password; route fixes the role."
       },
       "LogoutRequest": {
         "properties": {
@@ -11457,6 +12621,609 @@
         ],
         "title": "MePublic",
         "description": "The owner's own account page (spec §40): contacts included.\n\nPhone and email are the owner's own data (they typed them); the DTO\nstill enumerates fields explicitly, so the Argon2id verifier and any\nother internal column stay unrepresentable."
+      },
+      "MentorActionResult": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "applied_version": {
+            "type": "integer",
+            "title": "Applied Version"
+          },
+          "current": {
+            "$ref": "#/components/schemas/MentorProfileResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "replayed",
+          "applied_version",
+          "current"
+        ],
+        "title": "MentorActionResult"
+      },
+      "MentorConfirmCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "authorized_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "introduction",
+                "directions",
+                "achievements",
+                "project_types"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Authorized Fields"
+          },
+          "confirm_profile": {
+            "type": "boolean",
+            "title": "Confirm Profile"
+          },
+          "contact_channels": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "WECHAT",
+                "QQ",
+                "EMAIL",
+                "PHONE"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Contact Channels"
+          },
+          "accepting_contact": {
+            "type": "boolean",
+            "title": "Accepting Contact"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "authorized_fields",
+          "confirm_profile",
+          "contact_channels",
+          "accepting_contact"
+        ],
+        "title": "MentorConfirmCommand"
+      },
+      "MentorContactReadCommand": {
+        "properties": {
+          "expected_public_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Public Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_public_version"
+        ],
+        "title": "MentorContactReadCommand"
+      },
+      "MentorContactStateCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "accepting_contact": {
+            "type": "boolean",
+            "title": "Accepting Contact"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "accepting_contact"
+        ],
+        "title": "MentorContactStateCommand"
+      },
+      "MentorContactsResponse": {
+        "properties": {
+          "public_version": {
+            "type": "integer",
+            "title": "Public Version"
+          },
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/ContactInput"
+            },
+            "type": "array",
+            "title": "Contacts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "public_version",
+          "contacts"
+        ],
+        "title": "MentorContactsResponse"
+      },
+      "MentorContent": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Name",
+            "default": ""
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Unit",
+            "default": ""
+          },
+          "introduction": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Introduction",
+            "default": ""
+          },
+          "directions": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Directions",
+            "default": ""
+          },
+          "achievements": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Achievements",
+            "default": ""
+          },
+          "project_types": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Project Types",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MentorContent"
+      },
+      "MentorCreateCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "mentor_username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Mentor Username"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/MentorFields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "mentor_username",
+          "fields"
+        ],
+        "title": "MentorCreateCommand"
+      },
+      "MentorFields": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Name",
+            "default": ""
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Unit",
+            "default": ""
+          },
+          "introduction": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Introduction",
+            "default": ""
+          },
+          "directions": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Directions",
+            "default": ""
+          },
+          "achievements": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Achievements",
+            "default": ""
+          },
+          "project_types": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Project Types",
+            "default": ""
+          },
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/ContactInput"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Contacts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MentorFields"
+      },
+      "MentorOperationsListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MentorOperationsSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "MentorOperationsListResponse"
+      },
+      "MentorOperationsSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "confirmation_state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "REJECTED"
+            ],
+            "title": "Confirmation State"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "HIDDEN",
+              "VISIBLE"
+            ],
+            "title": "Visibility"
+          },
+          "moderation_state": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "TAKEN_DOWN"
+            ],
+            "title": "Moderation State"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "unit",
+          "version",
+          "confirmation_state",
+          "visibility",
+          "moderation_state",
+          "updated_at"
+        ],
+        "title": "MentorOperationsSummary"
+      },
+      "MentorProfileReadResponse": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MentorProfileResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile"
+        ],
+        "title": "MentorProfileReadResponse"
+      },
+      "MentorProfileResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/MentorFields"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "confirmation_state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "CONFIRMED",
+              "REJECTED"
+            ],
+            "title": "Confirmation State"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "HIDDEN",
+              "VISIBLE"
+            ],
+            "title": "Visibility"
+          },
+          "moderation_state": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "TAKEN_DOWN"
+            ],
+            "title": "Moderation State"
+          },
+          "accepting_contact": {
+            "type": "boolean",
+            "title": "Accepting Contact"
+          },
+          "authorized_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "introduction",
+                "directions",
+                "achievements",
+                "project_types"
+              ]
+            },
+            "type": "array",
+            "title": "Authorized Fields"
+          },
+          "public_version": {
+            "type": "integer",
+            "title": "Public Version"
+          },
+          "public_content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MentorContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "public_contact_channels": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "WECHAT",
+                "QQ",
+                "EMAIL",
+                "PHONE"
+              ]
+            },
+            "type": "array",
+            "title": "Public Contact Channels"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fields",
+          "version",
+          "confirmation_state",
+          "visibility",
+          "moderation_state",
+          "accepting_contact",
+          "authorized_fields",
+          "public_version",
+          "public_content",
+          "public_contact_channels",
+          "updated_at"
+        ],
+        "title": "MentorProfileResponse"
+      },
+      "MentorRevokeContactCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "WECHAT",
+              "QQ",
+              "EMAIL",
+              "PHONE"
+            ],
+            "title": "Channel"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "channel"
+        ],
+        "title": "MentorRevokeContactCommand"
+      },
+      "MentorSaveCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/MentorFields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "fields"
+        ],
+        "title": "MentorSaveCommand"
+      },
+      "MentorScopeCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "authorized_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "introduction",
+                "directions",
+                "achievements",
+                "project_types"
+              ]
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Authorized Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "authorized_fields"
+        ],
+        "title": "MentorScopeCommand"
+      },
+      "MentorVersionCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version"
+        ],
+        "title": "MentorVersionCommand"
       },
       "ModerationCommentListResponse": {
         "properties": {
@@ -12554,6 +14321,126 @@
         "title": "ProjectDraftUpdate",
         "description": "PATCH submits the complete five-field editor plus the observed version."
       },
+      "ProjectMentorCreateCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "mentor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mentor Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "mentor_id"
+        ],
+        "title": "ProjectMentorCreateCommand"
+      },
+      "ProjectMentorListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectMentorResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ProjectMentorListResponse"
+      },
+      "ProjectMentorResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "mentor_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mentor Id"
+          },
+          "mentor_name": {
+            "type": "string",
+            "title": "Mentor Name"
+          },
+          "project_title": {
+            "type": "string",
+            "title": "Project Title"
+          },
+          "project_summary": {
+            "type": "string",
+            "title": "Project Summary"
+          },
+          "project_direction": {
+            "type": "string",
+            "title": "Project Direction"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "REJECTED",
+              "REVOKED"
+            ],
+            "title": "Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "mentor_id",
+          "mentor_name",
+          "project_title",
+          "project_summary",
+          "project_direction",
+          "status",
+          "version",
+          "created_at"
+        ],
+        "title": "ProjectMentorResponse"
+      },
       "PublicAchievementContent": {
         "properties": {
           "title": {
@@ -12665,6 +14552,146 @@
         ],
         "title": "PublicAchievementResponse"
       },
+      "PublicMentorListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicMentorSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "PublicMentorListResponse"
+      },
+      "PublicMentorResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "content": {
+            "$ref": "#/components/schemas/MentorContent"
+          },
+          "accepting_contact": {
+            "type": "boolean",
+            "title": "Accepting Contact"
+          },
+          "contact_channels": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "WECHAT",
+                "QQ",
+                "EMAIL",
+                "PHONE"
+              ]
+            },
+            "type": "array",
+            "title": "Contact Channels"
+          },
+          "public_version": {
+            "type": "integer",
+            "title": "Public Version"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "content",
+          "accepting_contact",
+          "contact_channels",
+          "public_version",
+          "published_at"
+        ],
+        "title": "PublicMentorResponse"
+      },
+      "PublicMentorSummary": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Name",
+            "default": ""
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Unit",
+            "default": ""
+          },
+          "introduction": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Introduction",
+            "default": ""
+          },
+          "directions": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Directions",
+            "default": ""
+          },
+          "achievements": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Achievements",
+            "default": ""
+          },
+          "project_types": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Project Types",
+            "default": ""
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "accepting_contact": {
+            "type": "boolean",
+            "title": "Accepting Contact"
+          },
+          "public_version": {
+            "type": "integer",
+            "title": "Public Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "accepting_contact",
+          "public_version"
+        ],
+        "title": "PublicMentorSummary"
+      },
       "PublicProjectContent": {
         "properties": {
           "title": {
@@ -12748,6 +14775,22 @@
           "offset"
         ],
         "title": "PublicProjectListResponse"
+      },
+      "PublicProjectMentorsResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicMentorSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PublicProjectMentorsResponse"
       },
       "PublicProjectSummary": {
         "properties": {
@@ -15447,7 +17490,8 @@
         "enum": [
           "STUDENT",
           "TEACHER",
-          "ADMIN"
+          "ADMIN",
+          "MENTOR"
         ],
         "title": "Role"
       },

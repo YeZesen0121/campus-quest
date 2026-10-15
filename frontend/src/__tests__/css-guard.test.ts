@@ -19,6 +19,14 @@ import test from "node:test";
 const frontendRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const guardScript = join(frontendRoot, "scripts/check-css-integrity.mjs");
 
+function fixtureEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  // A runner may export a private Git context. Nested fixture repositories
+  // must neither read nor mutate that caller's metadata or index.
+  for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX"]) delete env[key];
+  return env;
+}
+
 const FIXTURE_GLOBALS = `@import "tailwindcss/utilities" layer(utilities);
 
 @theme inline {
@@ -50,8 +58,8 @@ function makeFixture(files: Record<string, string>): string {
     join(dir, "node_modules"),
     process.platform === "win32" ? "junction" : undefined,
   );
-  execFileSync("git", ["init", "-q"], { cwd: dir });
-  execFileSync("git", ["add", "--", "src"], { cwd: dir });
+  execFileSync("git", ["init", "-q"], { cwd: dir, env: fixtureEnvironment() });
+  execFileSync("git", ["add", "--", "src"], { cwd: dir, env: fixtureEnvironment() });
   return dir;
 }
 
@@ -59,6 +67,7 @@ function runGuard(dir: string) {
   return spawnSync(process.execPath, [guardScript], {
     cwd: dir,
     encoding: "utf8",
+    env: fixtureEnvironment(),
   });
 }
 

@@ -159,9 +159,15 @@ export function extractValidationFieldErrors(
  * Derive the presentation view of a failed auth mutation. Pure: same envelope
  * in, same view out, message text never parsed.
  */
-export function describeAuthError(error: ApiError): AuthErrorView {
+export function describeAuthError(error: ApiError, account: "student" | "mentor" = "student"): AuthErrorView {
+  if (account === "mentor" && error.code === "AUTHENTICATION_REQUIRED") {
+    return { summary: "导师账号或密码不正确", fieldErrors: {}, requestId: null };
+  }
   if (error.code === "VALIDATION_ERROR") {
     const fieldErrors = extractValidationFieldErrors(error.details);
+    if (account === "mentor" && fieldErrors.username) {
+      fieldErrors.username = "请输入导师账号";
+    }
     return {
       summary:
         Object.keys(fieldErrors).length > 0

@@ -31,11 +31,11 @@ export const backendEnv: NodeJS.ProcessEnv = {
   // on :9002 (mixed content is blocked from https pages) + the CA
   // bundle that lets boto3 trust its self-signed certificate (resolved
   // from this module's location — CWD-independent).
-  S3_ENDPOINT_URL: "https://127.0.0.1:9002",
-  AWS_CA_BUNDLE: join(here, "..", "..", "infra", "e2e-certs", "minio", "public.crt"),
-  S3_BUCKET: "campusquest-test",
-  S3_ACCESS_KEY: "campusquest",
-  S3_SECRET_KEY: "campusquest-dev",
+  S3_ENDPOINT_URL: process.env.CQ_E2E_S3_ENDPOINT_URL ?? "https://127.0.0.1:9002",
+  AWS_CA_BUNDLE: process.env.CQ_E2E_S3_CA_BUNDLE ?? join(here, "..", "..", "infra", "e2e-certs", "minio", "public.crt"),
+  S3_BUCKET: process.env.CQ_E2E_S3_BUCKET ?? "campusquest-test",
+  S3_ACCESS_KEY: process.env.CQ_E2E_S3_ACCESS_KEY ?? "campusquest",
+  S3_SECRET_KEY: process.env.CQ_E2E_S3_SECRET_KEY ?? "campusquest-dev",
   BUSINESS_TIMEZONE: "Asia/Shanghai",
   CQ_E2E: "1",
 };

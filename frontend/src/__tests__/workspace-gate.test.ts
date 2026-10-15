@@ -30,6 +30,9 @@ import {
 } from "../features/auth/workspace";
 
 describe("login landing by role", () => {
+  test("mentor login opens only the mentor workspace", () => {
+    assert.equal(landingPathForRole("MENTOR"), "/innovation/mentors/me");
+  });
   test("regression 1: a student login lands on the student home", () => {
     assert.equal(landingPathForRole("STUDENT"), "/");
     assert.equal(STUDENT_LANDING_PATH, "/");
@@ -40,6 +43,21 @@ describe("login landing by role", () => {
     assert.equal(landingPathForRole("ADMIN"), "/teacher/reviews");
     assert.equal(TEACHER_LANDING_PATH, "/teacher/reviews");
   });
+});
+
+describe("mentor isolation from student and staff workspaces", () => {
+  for (const [name, gate] of [
+    ["student", studentWorkspaceGate],
+    ["teacher", teacherWorkspaceGate],
+    ["admin", adminWorkspaceGate],
+  ] as const) {
+    test(`mentor cannot mount the ${name} workspace`, () => {
+      assert.deepEqual(gate("MENTOR"), {
+        kind: "mentor-guidance",
+        workspacePath: "/innovation/mentors/me",
+      });
+    });
+  }
 });
 
 describe("student workspace gate (the / student shell's branch)", () => {

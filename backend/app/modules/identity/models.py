@@ -67,12 +67,12 @@ from app.db.base import Base
 
 
 class User(Base):
-    """Account row shared by students and staff (spec §5.2-5.7)."""
+    """Account row shared by students, staff and mentor-only identities."""
 
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(
-            "role IN ('STUDENT', 'TEACHER', 'ADMIN')",
+            "role IN ('STUDENT', 'TEACHER', 'ADMIN', 'MENTOR')",
             name="role",
         ),
         CheckConstraint(

@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { backendEnv } from './global-setup';
 import { API_URL, BASE_URL, expect, test, mintToken, loginThroughUi, parseSeededAccount, staffLogin } from './fixtures';
 import { TALENT_OWN, editor, result, prepareTalent, fillTalent, saveTalent, publishTalent, uploadTalent, ownRecord, PNG, ownerHeaders } from './talent-helpers';
 
@@ -59,6 +60,8 @@ test('R4.1: public materials filter follows publication and withdrawal without c
 });
 
 test('R4 review: returning reconciles current visibility and clean fields while preserving edits',async({page})=>{
+  // This full return-and-upload journey measured 87s in the isolated runner.
+  test.setTimeout(180_000);
   await prepareTalent(page);await fillTalent(page);await saveTalent(page);
   await editor(page).getByLabel('我的优势',{exact:true}).fill('本窗口尚未保存的优势');
   await page.locator('a[href="/innovation"]:visible').first().click();await expect(page).toHaveURL(/\/innovation$/);
@@ -94,9 +97,12 @@ test('R4 review: removed upload grant is reconciled and does not lock file selec
 
 test('R4 review: existing uploaded bytes can be checked without replaying an expired PUT',async({page})=>{
   await prepareTalent(page);await fillTalent(page);await saveTalent(page);
+  const storageOrigin=new URL(backendEnv.S3_ENDPOINT_URL!).origin;
+  const uploadedPut=page.waitForRequest(request=>request.method()==='PUT');
   const complete=(url:URL)=>url.pathname.startsWith('/api/v1/ie/me/talent-profile/files/')&&url.pathname.endsWith('/complete');await page.route(complete,route=>route.fulfill({status:503,json:{error:{code:'HTTP_ERROR',message:'模拟丢失检查回执'}}}));
   await editor(page).getByLabel('选择作品或证明文件',{exact:true}).setInputFiles({name:'模拟已上传.png',mimeType:'image/png',buffer:PNG});await expect(editor(page).getByRole('button',{name:'重试原文件上传',exact:true})).toBeVisible();await page.unroute(complete);
-  let oldPuts=0;await page.route('https://127.0.0.1:9002/**',route=>{if(route.request().method()==='PUT'){oldPuts++;return route.fulfill({status:403,body:'ExpiredToken'});}return route.continue();});
+  expect(new URL((await uploadedPut).url()).origin).toBe(storageOrigin);
+  let oldPuts=0;await page.route((url)=>url.origin===storageOrigin,route=>{if(route.request().method()==='PUT'){oldPuts++;return route.fulfill({status:403,body:'ExpiredToken'});}return route.continue();});
   await editor(page).getByRole('button',{name:'重试原文件上传',exact:true}).click();await expect(page.getByRole('status',{name:'人才文件操作结果'})).toContainText('检查通过');await expect(editor(page).getByLabel('选择作品或证明文件',{exact:true})).toBeEnabled();expect(oldPuts).toBe(0);
 });
 

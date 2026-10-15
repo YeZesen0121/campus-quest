@@ -643,7 +643,7 @@ class StaffService:
                 _ACCOUNT_NOT_ACTIVE_MESSAGE,
                 status_code=403,
             )
-        if user.role == Role.STUDENT:
+        if user.role not in (Role.TEACHER, Role.ADMIN):
             raise self._staff_authentication_required()
 
         credential = await db.get(TotpCredential, user.id)

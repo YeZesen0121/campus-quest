@@ -96,6 +96,7 @@ from app.modules.tasks.enums import (
     TaskType,
 )
 from app.modules.tasks.models import Assignment, AssignmentClaim, Task, TaskCollaborator
+from tests.e2e.mentor_cleanup import clean_mentor_world
 
 #: Shared plaintext for every seeded account (returned on each fixture
 #: so callers and the frontend ``username:password`` contract never
@@ -748,6 +749,7 @@ async def clean_world(
             delete(OwnerQualification).where(OwnerQualification.user_id.in_(users))
         )
         await db.execute(delete(OwnerProfile).where(OwnerProfile.user_id.in_(users)))
+        await clean_mentor_world(db, users)
         await db.execute(
             delete(ProjectDraft).where(ProjectDraft.owner_user_id.in_(users))
         )

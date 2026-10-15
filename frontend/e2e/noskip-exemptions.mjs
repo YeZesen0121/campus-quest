@@ -10,6 +10,14 @@
  * an over-broad fragment hides future skips — keep them specific).
  */
 export const NOSKIP_EXEMPTIONS = [
+  ...[
+    'R5 mentor long content stays usable on mobile and desktop',
+    'R5 mentor lifecycle: operations, explicit consent, scoped maintenance, contact and project links',
+    'R5 mentor conflict preserves operations input and resets stale personal consent',
+    'R5 mentor uncertain save retries the same command and account changes clear private inputs',
+    'R5 mentor create recovery survives navigation and clears after cross-tab logout',
+    'R5 mentor and owner can reach older links and refresh the current page after actions',
+  ].map(title=>({file:'innovation-mentors.spec.ts',title,gate:'CQ_E2E_MENTOR_WORLD=1',reason:'R5 uses a dedicated simulated mentor identity; its required dedicated run verifies real confirmation and authorizations without altering existing visual fixture counts.'})),
   ...['R4.1 visual: public materials remain neutral in directory and detail','R4 visual: owner, mobile preview and public talent','R4 visual: empty, unavailable, loading and error','R4 visual: long content and zero availability remain usable on mobile'].map(title=>({
     file:'innovation-talents-visual.spec.ts',title,gate:'CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1',
     reason:'Talent pixel and axe checks run in their own Linux pinned-font stage with a disposable real publication world.',

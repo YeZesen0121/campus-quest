@@ -481,10 +481,9 @@ async def require_active_student_or_staff_management_actor(
     never establishes one — while the staff arm adds the management
     gate's CONFIRMED-TOTP check (§33.4), so a pending-setup staff
     account cannot pull a presigned GET before the second factor is
-    proven. The role enum is closed (STUDENT is the only non-staff
-    member), so no ``PERMISSION_DENIED`` branch exists: every role has
-    exactly one arm, and check order still follows the family — role
-    selects the arm, then status (``ACCOUNT_NOT_ACTIVE``), then the
+    proven. Only STUDENT, TEACHER and ADMIN have an arm; MENTOR has no
+    task-submission capability. Check order follows the family — role
+    selects the arm or denies, then status (``ACCOUNT_NOT_ACTIVE``), then the
     staff-only 2FA gate (``TotpSetupRequiredError`` → 403
     ``TOTP_SETUP_REQUIRED``, rendered by the app-wide identity handler).
 
@@ -493,6 +492,12 @@ async def require_active_student_or_staff_management_actor(
     submission after the port-boundary gate (backend-engineering §16).
     """
     user = await _resolve_user(credentials, db, codec, clock)
+    if user.role not in (Role.STUDENT, Role.TEACHER, Role.ADMIN):
+        raise BusinessError(
+            ErrorCode.PERMISSION_DENIED,
+            "当前账号没有任务提交访问权限",
+            status_code=403,
+        )
     staff = rbac.is_staff(user.role)
     if user.status != UserStatus.ACTIVE:
         raise BusinessError(

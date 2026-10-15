@@ -157,7 +157,7 @@ def _preflight(url: str) -> tuple[int, Any]:
         url,
         method="OPTIONS",
         headers={
-            "Origin": "http://localhost:3000",
+            "Origin": os.environ.get("CQ_S3_SMOKE_ORIGIN", "http://localhost:3000"),
             "Access-Control-Request-Method": "PUT",
             # Exactly the headers the adapter signs onto the PUT
             # (client_headers minus the browser-forbidden
@@ -192,9 +192,9 @@ def test_cors_preflight_admits_the_signed_browser_put(
     status, headers = _preflight(upload.url)
     assert 200 <= status < 300, f"preflight must be allowed, got {status}"
     allow_origin = headers.get("Access-Control-Allow-Origin")
-    assert allow_origin == "http://localhost:3000", (
-        f"the frontend origin must be allowed, got {allow_origin!r}"
-    )
+    assert allow_origin == os.environ.get(
+        "CQ_S3_SMOKE_ORIGIN", "http://localhost:3000"
+    ), f"the frontend origin must be allowed, got {allow_origin!r}"
     allow_headers = {
         header.strip().lower()
         for header in (headers.get("Access-Control-Allow-Headers") or "").split(",")

@@ -24,8 +24,16 @@ import {
   validatePassword,
   validatePhone,
   validateStudentNumber,
+  validateUsername,
   NICKNAME_MAX_GRAPHEME_CLUSTERS,
 } from "../features/auth/validation";
+
+test("mentor login accepts a non-student account while rejecting empty or oversized identifiers", () => {
+  assert.equal(validateUsername("mentor@example.edu", "mentor"), null);
+  assert.notEqual(validateUsername("", "mentor"), null);
+  assert.notEqual(validateUsername("x".repeat(65), "mentor"), null);
+  assert.notEqual(validateUsername("mentor@example.edu"), null);
+});
 
 /** ZWJ-joined family: 4 emoji + 3 ZWJ = 7 code points, ONE grapheme. */
 const FAMILY_EMOJI = "\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466}";

@@ -10,6 +10,7 @@ import { AuthField } from "@/features/auth/AuthField";
 import { SubmitButton } from "@/features/auth/SubmitButton";
 import { useSession } from "@/features/auth/session";
 import { getAuthEpoch } from "@/lib/accessToken";
+import { ProjectMentorManagement } from './mentors/ProjectMentors';
 
 import { createProjectDraft, getProjectDraft, listProjectDrafts, updateProjectDraft, type DraftFields, type ProjectDraftDto } from "./api";
 import {
@@ -211,11 +212,12 @@ function ProjectDraftEditor({ initialDraft, onBack }: { initialDraft?: ProjectDr
             {saveError.reload && record ? <Button variant="secondary" onClick={() => void readLatest()} disabled={busy}>读取最新版本（保留当前输入）</Button> : null}
           </div>
         ) : null}
-        <p className={saved ? "alert alert-success" : "field-hint"} role="status">
+        <p className={saved ? "alert alert-success" : "field-hint"} role="status" aria-label="项目草稿保存状态">
           {busy ? "正在保存或读取，请稍候…" : saved ? "草稿已保存，仅自己可见。" : dirty ? "有未保存的修改。" : record ? "当前内容已保存。" : "尚未保存。"}
         </p>
         <SubmitButton loading={busy} disabled={saveError?.reload === true}>保存草稿</SubmitButton>
       </form>
+      {record ? <ProjectMentorManagement key={record.id} projectId={record.id} invitationBlockedReason={busy ? "请等待项目保存或读取完成，再发起挂名。" : saveError ? "请先处理项目保存问题，核对最新资料后再发起挂名。" : dirty ? "请先保存项目修改，再发起挂名。" : undefined}/> : null}
       {remote ? (
         <section className="panel ie-draft-remote" aria-label="最新已保存版本">
           <h3 className="section-title">最新已保存版本</h3>

@@ -27,6 +27,8 @@ import {
   requestPhoneChallenge,
   verifyPhoneChallenge,
 } from "../features/auth/api";
+import * as authApi from "../features/auth/api";
+import { getAccessToken, getAuthEpoch } from "../lib/accessToken";
 import { cooldownSecondsFrom, describeAuthError, resendButtonLabel } from "../features/auth/errors";
 import { isApiError } from "../lib/errors";
 
@@ -80,6 +82,21 @@ afterEach(() => {
 });
 
 describe("login", () => {
+  test("mentor login uses its own endpoint and replaces the previous auth context", async () => {
+    const previousEpoch = getAuthEpoch();
+    stubFetch(JSON.stringify({ access_token: "mentor-at", csrf_token: "ct", token_type: "bearer" }), 200);
+    assert.equal(typeof authApi.loginMentor, "function");
+    const tokens = await authApi.loginMentor("mentor@example.edu", "correct-horse");
+    assert.equal(tokens.access_token, "mentor-at");
+    assert.equal(recorded?.url, "/api/v1/auth/mentor/login");
+    assert.equal(recorded?.method, "POST");
+    assert.equal(recorded?.credentials, "include");
+    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
+      username: "mentor@example.edu", password: "correct-horse",
+    });
+    assert.equal(getAccessToken(), "mentor-at");
+    assert.ok(getAuthEpoch() > previousEpoch);
+  });
   test("posts username/password to /api/v1/auth/login with cookie credentials", async () => {
     stubFetch(JSON.stringify({ access_token: "at", csrf_token: "ct", token_type: "bearer" }), 200);
     const tokens = await loginStudent("20240001", "correct-horse");

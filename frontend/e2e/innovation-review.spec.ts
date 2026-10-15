@@ -90,7 +90,7 @@ test("achievement review: private proof and every update reviewed across three a
     await owner.getByRole("button", { name: "新建项目草稿", exact: true }).click();
     for (const [label, value] of Object.entries({ 项目名称: "真实核实闭环项目", 项目简介: "校园回收调研和可操作原型。", 项目方向: "环境保护", 项目阶段: "原型验证", 团队现状: "两名同学负责设计和调研。" })) await owner.getByLabel(label, { exact: true }).fill(value);
     await owner.getByRole("button", { name: "保存草稿", exact: true }).click();
-    await expect(owner.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+    await expect(owner.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
     await owner.getByRole("link", { name: "管理成果草稿", exact: true }).click();
     await expect(owner).toHaveURL(/\/project-drafts\/[0-9a-f-]+\/achievements$/);
     const projectId = new URL(owner.url()).pathname.match(/\/project-drafts\/([0-9a-f-]+)\/achievements$/)![1];
@@ -104,12 +104,16 @@ test("achievement review: private proof and every update reviewed across three a
     await expect(panel(owner)).toContainText("尚未提交首次核实");
     // A failed signed PUT keeps its original retry key, but must not trap the
     // author after the upload intent is explicitly removed.
-    await owner.route("**:9002/**", async (route) => {
-      if (route.request().method() === "PUT") await route.fulfill({ status: 403, body: "upload rejected" });
+    const storageOrigin = new URL(backendEnv.S3_ENDPOINT_URL!).origin;
+    const storageRequest = (url: URL) => url.origin === storageOrigin;
+    let rejectedUploads = 0;
+    await owner.route(storageRequest, async (route) => {
+      if (route.request().method() === "PUT") { rejectedUploads++; await route.fulfill({ status: 403, body: "upload rejected" }); }
       else await route.continue();
     });
     await owner.getByLabel("上传证明材料", { exact: true }).setInputFiles({ name: "retry.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") });
     await expect(owner.getByRole("button", { name: "重试原文件上传与检查", exact: true })).toBeVisible();
+    expect(rejectedUploads).toBe(1);
     await expect(owner.getByLabel("上传证明材料", { exact: true })).toBeDisabled();
     await owner.getByRole("button", { name: "移除证明 1", exact: true }).click();
     await expect(panel(owner)).toContainText("还没有证明材料");
@@ -117,7 +121,7 @@ test("achievement review: private proof and every update reviewed across three a
     await owner.getByRole("button", { name: "放弃本次上传重试", exact: true }).click();
     await expect(owner.getByLabel("上传证明材料", { exact: true })).toBeEnabled();
     await expect(owner.getByRole("button", { name: "重试原文件上传与检查", exact: true })).toHaveCount(0);
-    await owner.unroute("**:9002/**");
+    await owner.unroute(storageRequest);
     await owner.getByLabel("上传证明材料", { exact: true }).setInputFiles({ name: "wrong.pdf", mimeType: "application/pdf", buffer: Buffer.from("this is not a PDF") });
     await expect(panel(owner)).toContainText("文件检查未通过");
     await owner.getByRole("button", { name: "移除证明 1", exact: true }).click();

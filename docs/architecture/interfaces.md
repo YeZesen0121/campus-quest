@@ -56,7 +56,14 @@ class Role(StrEnum):
     STUDENT = "STUDENT"
     TEACHER = "TEACHER"
     ADMIN = "ADMIN"
+    MENTOR = "MENTOR"
 ```
+
+MENTOR is the R5 school mentor display/consent identity defined in
+`docs/superpowers/specs/2026-10-15-innovation-mentor-design.md`. It uses the
+existing session system but grants no student task or staff management
+capabilities. An existing TEACHER may separately bind a mentor profile without
+changing the task permissions they already hold.
 
 ### UserStatus (spec §5.7)
 

@@ -54,11 +54,11 @@ const backendEnv: Record<string, string> = {
   // else. AWS_CA_BUNDLE makes boto3 trust the self-signed cert — a
   // deployment knob, zero product-code change — resolved absolutely so
   // it holds regardless of the spawned backend's CWD.
-  S3_ENDPOINT_URL: "https://127.0.0.1:9002",
-  AWS_CA_BUNDLE: join(__dirname, "..", "infra", "e2e-certs", "minio", "public.crt"),
-  S3_BUCKET: "campusquest-test",
-  S3_ACCESS_KEY: "campusquest",
-  S3_SECRET_KEY: "campusquest-dev",
+  S3_ENDPOINT_URL: process.env.CQ_E2E_S3_ENDPOINT_URL ?? "https://127.0.0.1:9002",
+  AWS_CA_BUNDLE: process.env.CQ_E2E_S3_CA_BUNDLE ?? join(__dirname, "..", "infra", "e2e-certs", "minio", "public.crt"),
+  S3_BUCKET: process.env.CQ_E2E_S3_BUCKET ?? "campusquest-test",
+  S3_ACCESS_KEY: process.env.CQ_E2E_S3_ACCESS_KEY ?? "campusquest",
+  S3_SECRET_KEY: process.env.CQ_E2E_S3_SECRET_KEY ?? "campusquest-dev",
   BUSINESS_TIMEZONE: "Asia/Shanghai",
 };
 

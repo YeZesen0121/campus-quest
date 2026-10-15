@@ -1,0 +1,120 @@
+name: campusquest-r5-dev
+
+x-runtime: &runtime
+  image: campusquest-r3-runtime:20261011
+  network_mode: host
+  working_dir: /workspace
+  volumes:
+    - ${CQ_R5_DEV_SOURCE:-./.runtime/dev-source}:/workspace
+    - dev-python:/opt/cq-r5-dev-venv
+    - dev-node:/workspace/frontend/node_modules
+    - dev-next:/workspace/frontend/.next
+    - ./.runtime/dev-certs:/opt/cq-r5-dev-certs:ro
+  environment:
+    DATABASE_URL: postgresql+asyncpg://r5_dev:r5-local-only@127.0.0.1:16436/campusquest_r5_dev
+    REDIS_URL: redis://127.0.0.1:6476/5
+    S3_ENDPOINT_URL: https://127.0.0.1:9107
+    S3_BUCKET: campusquest-r5-dev
+    S3_ACCESS_KEY: campusquest-r5-dev
+    S3_SECRET_KEY: campusquest-r5-dev-local
+    AWS_CA_BUNDLE: /opt/cq-r5-dev-certs/public.crt
+    BUSINESS_TIMEZONE: Asia/Shanghai
+    ENVIRONMENT: development
+    SMS_PROVIDER: logging
+    EMAIL_PROVIDER: logging
+    CLAMD_HOST: 127.0.0.1
+    CLAMD_PORT: "3316"
+    CQ_DEV_API_PROXY: http://127.0.0.1:8306
+    UV_PROJECT_ENVIRONMENT: /opt/cq-r5-dev-venv
+    UV_CACHE_DIR: /tmp/cq-r5-dev-uv-cache
+    PYTHONDONTWRITEBYTECODE: "1"
+    PYTHONUTF8: "1"
+    PYTHONUNBUFFERED: "1"
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: campusquest-r5-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: r5_dev
+      POSTGRES_PASSWORD: r5-local-only
+      POSTGRES_DB: campusquest_r5_dev
+    ports: ["127.0.0.1:16436:5432"]
+    volumes: ["dev-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U r5_dev -d campusquest_r5_dev"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: campusquest-r5-dev-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:6476:6379"]
+    volumes: ["dev-redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: campusquest-r5-dev-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--certs-dir", "/etc/minio/certs", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: campusquest-r5-dev
+      MINIO_ROOT_PASSWORD: campusquest-r5-dev-local
+      MINIO_API_CORS_ALLOW_ORIGIN: https://localhost:3306,https://127.0.0.1:3306
+    ports: ["127.0.0.1:9107:9000"]
+    volumes:
+      - dev-minio:/data
+      - ./.runtime/dev-certs:/etc/minio/certs:ro
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: campusquest-r5-dev-minio-init
+    depends_on: [minio]
+    environment:
+      MC_HOST_r5dev: https://campusquest-r5-dev:campusquest-r5-dev-local@minio:9000
+    entrypoint: ["/bin/sh", "-c", "until mc --insecure ready r5dev >/dev/null 2>&1; do sleep 1; done; mc --insecure mb --ignore-existing r5dev/campusquest-r5-dev"]
+
+  runner:
+    <<: *runtime
+    container_name: campusquest-r5-dev-runner
+    command: ["sleep", "infinity"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  api:
+    <<: *runtime
+    container_name: campusquest-r5-dev-api
+    profiles: [application]
+    restart: unless-stopped
+    command: ["bash", "/workspace/infra/r5/dev-process.sh", "api"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  web:
+    <<: *runtime
+    container_name: campusquest-r5-dev-web
+    profiles: [application]
+    restart: unless-stopped
+    command: ["bash", "/workspace/infra/r5/dev-process.sh", "web"]
+    depends_on: [api]
+
+volumes:
+  dev-postgres:
+  dev-redis:
+  dev-minio:
+  dev-python:
+  dev-node:
+  dev-next:

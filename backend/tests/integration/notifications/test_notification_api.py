@@ -69,9 +69,8 @@ from app.modules.notifications.models import Notification, NotificationDelivery
 
 pytestmark = pytest.mark.integration
 
-# Anchored to the real now: PyJWT validates `exp` at decode time
-# against wall-clock time, so tokens minted by the app must be "just
-# now" (the identity and tasks API suites use the same anchoring).
+# Fixed ordering/scheduling samples only. Authentication uses the per-test
+# api_clock below: collection can precede execution by more than the JWT TTL.
 _T0 = datetime.now(UTC).replace(microsecond=0)
 _PASSWORD = "correct-horse-battery"
 
@@ -97,7 +96,7 @@ class StepClock:
 
 @pytest.fixture
 def api_clock() -> StepClock:
-    return StepClock(_T0)
+    return StepClock(datetime.now(UTC).replace(microsecond=0))
 
 
 @pytest.fixture
@@ -455,6 +454,7 @@ async def test_mark_read_is_idempotent(
     await db_session.flush()
     headers = await _session_tokens(db_session, api_clock, student)
 
+    first_read_at = api_clock.now()
     first = await client.post(
         f"/api/v1/notifications/{notification.id}/read", headers=headers
     )
@@ -462,7 +462,9 @@ async def test_mark_read_is_idempotent(
     body = first.json()
     assert set(body) == _ITEM_FIELDS
     # Pydantic JSON renders UTC as "Z"; parse back before comparing.
-    assert datetime.fromisoformat(body["read_at"].replace("Z", "+00:00")) == _T0
+    assert (
+        datetime.fromisoformat(body["read_at"].replace("Z", "+00:00")) == first_read_at
+    )
 
     # Five minutes later the re-read is a no-op: the FIRST read_at
     # survives (a frozen clock could not distinguish this from a
@@ -473,11 +475,12 @@ async def test_mark_read_is_idempotent(
     )
     assert second.status_code == 200
     assert (
-        datetime.fromisoformat(second.json()["read_at"].replace("Z", "+00:00")) == _T0
+        datetime.fromisoformat(second.json()["read_at"].replace("Z", "+00:00"))
+        == first_read_at
     )
 
     await db_session.refresh(notification)
-    assert notification.read_at == _T0
+    assert notification.read_at == first_read_at
 
 
 async def test_mark_read_rejects_foreign_and_missing_ids(

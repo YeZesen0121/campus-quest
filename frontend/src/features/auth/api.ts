@@ -87,10 +87,26 @@ export async function loginStudent(
   username: string,
   password: string,
 ): Promise<LoginTokens> {
+  return loginPasswordAccount("login", username, password);
+}
+
+/** Mentor login uses the same account-transition fencing as student login. */
+export async function loginMentor(
+  username: string,
+  password: string,
+): Promise<LoginTokens> {
+  return loginPasswordAccount("mentor/login", username, password);
+}
+
+async function loginPasswordAccount(
+  path: "login" | "mentor/login",
+  username: string,
+  password: string,
+): Promise<LoginTokens> {
   await beginAuthTransition();
   let tokens: LoginTokens;
   try {
-    tokens = await apiRequest<LoginTokens>(`${BASE}/login`, {
+    tokens = await apiRequest<LoginTokens>(`${BASE}/${path}`, {
       method: "POST",
       body: { username, password },
     });

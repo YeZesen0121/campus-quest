@@ -103,7 +103,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
   // permission guidance (design §10: explain + navigate back), never a
   // page of 403ing sections.
   const gate = teacherWorkspaceGate(state.me.role);
-  if (gate.kind === "student-guidance") {
+  if (gate.kind !== "staff") {
     return (
       <div className="app-shell">
         <div className="app-topbar">
@@ -115,11 +115,11 @@ export function TeacherShell({ children }: { children: ReactNode }) {
           <div className="alert alert-error" role="alert">
             <p>
               <span className="alert-marker" aria-hidden="true">!</span>
-              教师工作台仅对教师与管理员开放，当前账号是学生账号。
+              教师工作台仅对教师与管理员开放，当前账号是{gate.kind === "mentor-guidance" ? "导师" : "学生"}账号。
             </p>
             <p>
               <Link className="link" href={gate.workspacePath}>
-                返回学生首页
+                {gate.kind === "mentor-guidance" ? "前往我的导师档案" : "返回学生首页"}
               </Link>
             </p>
           </div>

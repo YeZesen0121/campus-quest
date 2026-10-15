@@ -1062,10 +1062,12 @@ def celery_app(monkeypatch: pytest.MonkeyPatch) -> Any:
     for name, value in {
         "DATABASE_URL": _database_url(),
         "REDIS_URL": os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-        "S3_ENDPOINT_URL": "http://localhost:9000",
-        "S3_BUCKET": "campusquest-test",
-        "S3_ACCESS_KEY": "campusquest",
-        "S3_SECRET_KEY": "campusquest-dev",
+        # Honor the calling test stack: the real-adapter check must never
+        # switch an isolated runner back to another checkout's MinIO.
+        "S3_ENDPOINT_URL": os.environ.get("S3_ENDPOINT_URL", "http://localhost:9000"),
+        "S3_BUCKET": os.environ.get("S3_BUCKET", "campusquest-test"),
+        "S3_ACCESS_KEY": os.environ.get("S3_ACCESS_KEY", "campusquest"),
+        "S3_SECRET_KEY": os.environ.get("S3_SECRET_KEY", "campusquest-dev"),
         "BUSINESS_TIMEZONE": "Asia/Shanghai",
     }.items():
         monkeypatch.setenv(name, value)

@@ -13,7 +13,7 @@
  * - CQ_E2E=1            enable the suite (required);
  * - CQ_E2E_BASE_URL     frontend origin   (default https://localhost:3000);
  * - CQ_E2E_API_URL      backend API root  (default http://localhost:8000/api/v1);
- * - CQ_E2E_STUDENT / CQ_E2E_TEACHER / CQ_E2E_ADMIN — seeded account
+ * - CQ_E2E_STUDENT / CQ_E2E_TEACHER / CQ_E2E_ADMIN / CQ_E2E_MENTOR — seeded account
  *   credentials in "username:password" form, the backend e2e
  *   factories' contract (backend/tests/e2e/factories.py; every seeded
  *   account shares its DEFAULT_PASSWORD there).
@@ -315,18 +315,31 @@ export async function staffLogin(
   await expect(page).not.toHaveURL(/\/staff\/login/);
 }
 
-/** The three-role account contract consumed by happy-path specs (each
+/** Mentor login uses its dedicated form and clears any student resume state. */
+export async function mentorLogin(
+  page: Page,
+  account: SeededAccount,
+): Promise<void> {
+  await openLoginForm(page, `${BASE_URL}/mentor/login`);
+  await page.getByLabel("导师账号").fill(account.username);
+  await page.getByLabel("密码").fill(account.password);
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page).toHaveURL(/\/innovation\/mentors\/me$/);
+}
+
+/** The role account contract consumed by happy-path specs (each
  * leg optional: the e2e world exports only what its flows need). */
 export interface SeededAccounts {
   student?: SeededAccount;
   teacher?: SeededAccount;
   admin?: SeededAccount;
+  mentor?: SeededAccount;
 }
 
 type CqFixtures = {
   /** Auto: the backend answers /health/ready before the test body runs. */
   backendReady: void;
-  /** The seeded three-role accounts (CQ_E2E_STUDENT/TEACHER/ADMIN). */
+  /** Seeded accounts, with MENTOR present only in the R5 world. */
   accounts: SeededAccounts;
   /** Auto: persist this test's browser cookies after the body (the
    * session-resume chain — see ensureStudentLogin). */
@@ -374,6 +387,7 @@ export const test = base.extend<CqFixtures>({
       student: parse(process.env.CQ_E2E_STUDENT, "CQ_E2E_STUDENT"),
       teacher: parse(process.env.CQ_E2E_TEACHER, "CQ_E2E_TEACHER"),
       admin: parse(process.env.CQ_E2E_ADMIN, "CQ_E2E_ADMIN"),
+      mentor: parse(process.env.CQ_E2E_MENTOR, "CQ_E2E_MENTOR"),
     });
   },
 });

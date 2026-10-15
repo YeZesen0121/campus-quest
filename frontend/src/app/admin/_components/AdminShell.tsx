@@ -115,6 +115,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const gate = adminWorkspaceGate(state.me.role);
   if (gate.kind !== "admin") {
     const isTeacher = gate.kind === "staff-guidance";
+    const isMentor = gate.kind === "mentor-guidance";
     return (
       <div className="app-shell">
         <div className="app-topbar">
@@ -126,11 +127,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <div className="alert alert-error" role="alert">
             <p>
               <span className="alert-marker" aria-hidden="true">!</span>
-              管理后台仅对管理员开放，当前账号是{isTeacher ? "教师" : "学生"}账号。
+              管理后台仅对管理员开放，当前账号是{isTeacher ? "教师" : isMentor ? "导师" : "学生"}账号。
             </p>
             <p>
               <Link className="link" href={gate.workspacePath}>
-                {isTeacher ? "返回教师工作台" : "返回学生首页"}
+                {isTeacher ? "返回教师工作台" : isMentor ? "前往我的导师档案" : "返回学生首页"}
               </Link>
             </p>
           </div>

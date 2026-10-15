@@ -17,9 +17,14 @@ export const STUDENT_LANDING_PATH = "/";
 /** Where a successful STAFF (teacher/admin) login lands: the review queue. */
 export const TEACHER_LANDING_PATH = "/teacher/reviews";
 
+/** Mentor-only accounts manage their own profile without task capabilities. */
+export const MENTOR_LANDING_PATH = "/innovation/mentors/me";
+
 /** Landing path by the session's role (login-success redirect target). */
 export function landingPathForRole(role: Role): string {
-  return role === "STUDENT" ? STUDENT_LANDING_PATH : TEACHER_LANDING_PATH;
+  if (role === "STUDENT") return STUDENT_LANDING_PATH;
+  if (role === "TEACHER" || role === "ADMIN") return TEACHER_LANDING_PATH;
+  return MENTOR_LANDING_PATH;
 }
 
 /**
@@ -31,13 +36,17 @@ export function landingPathForRole(role: Role): string {
  */
 export type StudentWorkspaceGate =
   | { kind: "student" }
-  | { kind: "staff-guidance"; workspacePath: string };
+  | { kind: "staff-guidance"; workspacePath: string }
+  | { kind: "mentor-guidance"; workspacePath: string };
 
 export function studentWorkspaceGate(role: Role): StudentWorkspaceGate {
   if (role === "STUDENT") {
     return { kind: "student" };
   }
-  return { kind: "staff-guidance", workspacePath: TEACHER_LANDING_PATH };
+  if (role === "TEACHER" || role === "ADMIN") {
+    return { kind: "staff-guidance", workspacePath: TEACHER_LANDING_PATH };
+  }
+  return { kind: "mentor-guidance", workspacePath: MENTOR_LANDING_PATH };
 }
 
 /**
@@ -49,13 +58,15 @@ export function studentWorkspaceGate(role: Role): StudentWorkspaceGate {
  */
 export type TeacherWorkspaceGate =
   | { kind: "staff" }
-  | { kind: "student-guidance"; workspacePath: string };
+  | { kind: "student-guidance"; workspacePath: string }
+  | { kind: "mentor-guidance"; workspacePath: string };
 
 export function teacherWorkspaceGate(role: Role): TeacherWorkspaceGate {
   if (role === "STUDENT") {
     return { kind: "student-guidance", workspacePath: STUDENT_LANDING_PATH };
   }
-  return { kind: "staff" };
+  if (role === "TEACHER" || role === "ADMIN") return { kind: "staff" };
+  return { kind: "mentor-guidance", workspacePath: MENTOR_LANDING_PATH };
 }
 
 /**
@@ -72,7 +83,8 @@ export function teacherWorkspaceGate(role: Role): TeacherWorkspaceGate {
 export type AdminWorkspaceGate =
   | { kind: "admin" }
   | { kind: "staff-guidance"; workspacePath: string }
-  | { kind: "student-guidance"; workspacePath: string };
+  | { kind: "student-guidance"; workspacePath: string }
+  | { kind: "mentor-guidance"; workspacePath: string };
 
 export function adminWorkspaceGate(role: Role): AdminWorkspaceGate {
   if (role === "ADMIN") {
@@ -81,5 +93,8 @@ export function adminWorkspaceGate(role: Role): AdminWorkspaceGate {
   if (role === "TEACHER") {
     return { kind: "staff-guidance", workspacePath: TEACHER_LANDING_PATH };
   }
-  return { kind: "student-guidance", workspacePath: STUDENT_LANDING_PATH };
+  if (role === "STUDENT") {
+    return { kind: "student-guidance", workspacePath: STUDENT_LANDING_PATH };
+  }
+  return { kind: "mentor-guidance", workspacePath: MENTOR_LANDING_PATH };
 }

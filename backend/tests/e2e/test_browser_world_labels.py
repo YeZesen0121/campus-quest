@@ -28,10 +28,12 @@ import uuid
 from typing import TypedDict
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.modules.identity.models import User
+from app.core.security import verify_password
+from app.modules.identity.models import TotpCredential, User
+from app.modules.innovation.mentor_models import MentorProfile
 from app.modules.points.models import RewardItem
 from app.modules.tasks.models import Task
 from tests.e2e import browser_world
@@ -106,6 +108,7 @@ async def test_fixed_labels_byte_identical_across_runs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CQ_E2E_FIXED_LABELS", "1")
+    monkeypatch.delenv("CQ_E2E_MENTOR_WORLD", raising=False)
     labels: list[WorldLabels] = []
     runs: list[str] = []
     for _ in range(2):
@@ -139,8 +142,11 @@ async def test_default_mode_still_embeds_run_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("CQ_E2E_FIXED_LABELS", raising=False)
+    monkeypatch.delenv("CQ_E2E_MENTOR_WORLD", raising=False)
     world = await browser_world._seed()
     try:
+        assert "mentor" not in world
+        assert "CQ_E2E_MENTOR" not in world["env"]
         run = world["run"]
         labels = await _world_labels(db_factory, world)
         # Default behavior is byte-identical to the pre-flag world: every
@@ -153,3 +159,39 @@ async def test_default_mode_still_embeds_run_id(
         assert not any(FIXED[:6] in title for title in labels["task_titles"])
     finally:
         await browser_world._clean(world["world_file"])
+
+
+async def test_mentor_world_seeds_only_a_marked_identity_and_cleans_it(
+    db_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CQ_E2E_MENTOR_WORLD", "1")
+    world = await browser_world._seed()
+    mentor_id = None
+    try:
+        mentor = world.get("mentor")
+        assert mentor is not None, "R5 world must expose a mentor login identity"
+        mentor_id = uuid.UUID(mentor["id"])
+        async with db_factory() as db:
+            user = await db.get(User, mentor_id)
+            assert user is not None
+            assert user.role == "MENTOR"
+            assert "模拟" in user.nickname
+            assert verify_password(mentor["password"], user.password_hash)
+            assert await db.get(TotpCredential, mentor_id) is None
+            assert (
+                await db.scalar(
+                    select(func.count())
+                    .select_from(MentorProfile)
+                    .where(MentorProfile.user_id == mentor_id)
+                )
+                == 0
+            )
+        assert world["env"]["CQ_E2E_MENTOR_ID"] == mentor["id"]
+        assert world["env"]["CQ_E2E_MENTOR"] == (
+            f"{mentor['username']}:{mentor['password']}"
+        )
+    finally:
+        await browser_world._clean(world["world_file"])
+    async with db_factory() as db:
+        assert await db.get(User, mentor_id) is None

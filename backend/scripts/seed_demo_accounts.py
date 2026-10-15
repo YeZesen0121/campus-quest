@@ -12,6 +12,8 @@ Creates:
   otpauth URI and the current code) so management endpoints' 2FA
   gate can be passed immediately.
 - TEACHER: teacher@campus.example.edu, same shape (staff console demo).
+- MENTOR: mentor@campus.example.edu, password "mentor-demo-2026". Explicitly
+  simulated identity only: no task powers, TOTP or mentor publication/consent.
 
 Idempotent: skips rows whose username/email already exist.
 """
@@ -39,6 +41,8 @@ from app.modules.identity.totp import (
 
 STUDENT_PASSWORD = "student-demo-2026"
 STAFF_PASSWORD = "admin-demo-2026"
+MENTOR_USERNAME = "mentor@campus.example.edu"
+MENTOR_PASSWORD = "mentor-demo-2026"
 # A fixed demo TOTP secret: printed so an authenticator app can add it;
 # NOT a production pattern (production secrets are per-account CSPRNG).
 DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
@@ -75,6 +79,20 @@ async def main() -> None:
                     )
                 )
                 created.append(f"student {username} / {STUDENT_PASSWORD}")
+        mentor_exists = await session.scalar(
+            select(User.id).where(User.username == MENTOR_USERNAME)
+        )
+        if mentor_exists is None:
+            session.add(
+                User(
+                    username=MENTOR_USERNAME,
+                    password_hash=hash_password(MENTOR_PASSWORD),
+                    nickname="模拟导师（演示）",
+                    role=Role.MENTOR,
+                    status=UserStatus.ACTIVE,
+                )
+            )
+            created.append(f"MENTOR {MENTOR_USERNAME} / {MENTOR_PASSWORD} (模拟演示)")
         for email, role, label in STAFF_ACCOUNTS:
             exists = await session.scalar(
                 select(User.id).where(User.email_normalized == email)

@@ -1,9 +1,9 @@
 "use client";
 /**
- * Student login island (spec §5.6; patterns §2/§6).
+ * Password login island for students and mentor-only accounts.
  *
  * Client convenience validation mirrors the backend bands; the submit flow is
- * input -> validate -> POST /api/v1/auth/login -> branch on the §29 envelope
+ * input -> validate -> role-specific login -> branch on the §29 envelope
  * code -> on success refresh the session cache and redirect home. The
  * refresh token never touches JS: the backend delivers it in the HttpOnly
  * cookie and `apiRequest` sends credentials on the follow-up /me fetch.
@@ -12,13 +12,13 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { useSession } from "@/features/auth/session";
-import { STUDENT_LANDING_PATH } from "@/features/auth/workspace";
+import { MENTOR_LANDING_PATH, STUDENT_LANDING_PATH } from "@/features/auth/workspace";
 import { isApiError } from "@/lib/errors";
 
 import { AuthField } from "./AuthField";
 import { FormErrorSummary } from "./FormErrorSummary";
 import { SubmitButton } from "./SubmitButton";
-import { loginStudent } from "./api";
+import { loginMentor, loginStudent } from "./api";
 import {
   NETWORK_ERROR_TEXT,
   describeAuthError,
@@ -30,7 +30,7 @@ import { validatePassword, validateUsername } from "./validation";
 
 type LoginFields = Extract<AuthFieldName, "username" | "password">;
 
-export function LoginForm() {
+export function LoginForm({ account = "student" }: { account?: "student" | "mentor" }) {
   const router = useRouter();
   const { refresh: refreshSession } = useSession();
   const [username, setUsername] = useState("");
@@ -43,7 +43,7 @@ export function LoginForm() {
     event.preventDefault();
     const trimmed = username.trim(); // backend strips outer whitespace at login (§5.2)
     const errors: Partial<Record<LoginFields, string>> = {
-      username: validateUsername(trimmed) ?? undefined,
+      username: validateUsername(trimmed, account) ?? undefined,
       password: validatePassword(password) ?? undefined,
     };
     setFieldErrors(errors);
@@ -54,9 +54,9 @@ export function LoginForm() {
 
     setLoading(true);
     try {
-      await loginStudent(trimmed, password);
+      await (account === "mentor" ? loginMentor : loginStudent)(trimmed, password);
       refreshSession(); // invalidate the cached anonymous /me result
-      router.replace(STUDENT_LANDING_PATH); // student home (role's own landing)
+      router.replace(account === "mentor" ? MENTOR_LANDING_PATH : STUDENT_LANDING_PATH);
       router.refresh(); // re-render server components with the new session
     } catch (error) {
       if (!isApiError(error)) {
@@ -65,7 +65,7 @@ export function LoginForm() {
       }
       // Field-only views still get a summary line so the failure is
       // announced (patterns §18), not just painted next to the inputs.
-      const view = withFieldErrorSummary(describeAuthError(error));
+      const view = withFieldErrorSummary(describeAuthError(error, account));
       setSummary(view);
       setFieldErrors(view.fieldErrors as Partial<Record<LoginFields, string>>);
     } finally {
@@ -78,18 +78,18 @@ export function LoginForm() {
       <FormErrorSummary view={summary} />
       <AuthField
         name="username"
-        label="学号"
+        label={account === "mentor" ? "导师账号" : "学号"}
         error={fieldErrors.username}
         inputProps={{
           value: username,
           onChange: (event) => setUsername(event.target.value),
           type: "text",
-          inputMode: "numeric",
+          inputMode: account === "mentor" ? "text" : "numeric",
           autoComplete: "username",
           autoCapitalize: "none",
           autoCorrect: "off",
-          placeholder: "请输入学号",
-          maxLength: 20,
+          placeholder: account === "mentor" ? "请输入导师账号" : "请输入学号",
+          maxLength: account === "mentor" ? 64 : 20,
           disabled: loading,
         }}
       />

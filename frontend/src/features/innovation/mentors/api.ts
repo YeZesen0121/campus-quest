@@ -1,0 +1,46 @@
+import { apiRequest, type ApiRequestInit } from '@/lib/api';
+import { getAuthEpoch } from '@/lib/accessToken';
+import type { components } from '@/lib/api/schema';
+
+type Schema=components['schemas'];
+export type MentorFields=Required<Schema['MentorFields']>;
+export type MentorContent=Schema['MentorContent'];
+export type MentorProfile=Schema['MentorProfileResponse'];
+export type MentorSummary=Schema['PublicMentorSummary'];
+export type PublicMentor=Schema['PublicMentorResponse'];
+export type MentorAction=Schema['MentorActionResult'];
+export type MentorCreate=Schema['MentorCreateCommand'];
+export type MentorSave=Schema['MentorSaveCommand'];
+export type MentorVersion=Schema['MentorVersionCommand'];
+export type MentorConfirm=Schema['MentorConfirmCommand'];
+export type MentorConsent=Omit<MentorConfirm,'request_id'|'version'>;
+export type MaintenanceField=MentorConfirm['authorized_fields'][number];
+export type ContactChannel=Schema['ContactInput']['channel'];
+export type ProjectMentor=Schema['ProjectMentorResponse'];
+const own='/api/v1/ie/me/mentor';const operations='/api/v1/ie/operations/mentors';const publicPath='/api/v1/ie/mentors';
+const id=encodeURIComponent;
+async function request<T>(path:string,init?:ApiRequestInit):Promise<T> {
+  const epoch=getAuthEpoch();
+  const result=await apiRequest<T>(path,{signal:AbortSignal.timeout(15_000),...init,cache:'no-store'});
+  if(epoch!==getAuthEpoch())throw new DOMException('账号会话已改变','AbortError');
+  return result;
+}
+export const getOwnMentor=()=>request<Schema['MentorProfileReadResponse']>(own);
+export const getOperationsMentors=(offset=0)=>request<Schema['MentorOperationsListResponse']>(`${operations}?limit=20&offset=${offset}`);
+export const getOperationsMentor=(mentorId:string)=>request<MentorProfile>(`${operations}/${id(mentorId)}`);
+export const createMentor=(body:MentorCreate)=>request<MentorAction>(operations,{method:'POST',body});
+export const saveMentor=(mentorId:string,body:MentorSave)=>request<MentorAction>(`${operations}/${id(mentorId)}`,{method:'PATCH',body});
+export const confirmMentor=(body:MentorConfirm)=>request<MentorAction>(`${own}/confirm`,{method:'POST',body});
+export const rejectMentor=(body:MentorVersion)=>request<MentorAction>(`${own}/reject`,{method:'POST',body});
+export const withdrawMentor=(body:MentorVersion)=>request<MentorAction>(`${own}/withdraw`,{method:'POST',body});
+export const setMentorContactState=(body:Schema['MentorContactStateCommand'])=>request<MentorAction>(`${own}/contact-state`,{method:'POST',body});
+export const setMentorScope=(body:Schema['MentorScopeCommand'])=>request<MentorAction>(`${own}/maintenance-scope`,{method:'POST',body});
+export const revokeMentorContact=(body:Schema['MentorRevokeContactCommand'])=>request<MentorAction>(`${own}/revoke-contact`,{method:'POST',body});
+export const getPublicMentors=(query:URLSearchParams)=>request<Schema['PublicMentorListResponse']>(`${publicPath}?${query}`);
+export const getPublicMentor=(mentorId:string)=>request<PublicMentor>(`${publicPath}/${id(mentorId)}`);
+export const readMentorContacts=(mentorId:string,version:number)=>request<Schema['MentorContactsResponse']>(`${publicPath}/${id(mentorId)}/contacts`,{method:'POST',body:{expected_public_version:version}});
+export const getOwnMentorLinks=(params?:URLSearchParams)=>request<Schema['ProjectMentorListResponse']>(`${own}/project-links${params?`?${params}`:''}`);
+export const getProjectMentorLinks=(projectId:string,params?:URLSearchParams)=>request<Schema['ProjectMentorListResponse']>(`/api/v1/ie/me/project-drafts/${id(projectId)}/mentors${params?`?${params}`:''}`);
+export const createProjectMentorLink=(projectId:string,body:Schema['ProjectMentorCreateCommand'])=>request<ProjectMentor>(`/api/v1/ie/me/project-drafts/${id(projectId)}/mentors`,{method:'POST',body});
+export const actOnProjectMentorLink=(linkId:string,action:'accept'|'reject'|'revoke',body:MentorVersion)=>request<ProjectMentor>(`/api/v1/ie/mentor-links/${id(linkId)}/${action}`,{method:'POST',body});
+export const getPublicProjectMentors=(projectId:string)=>request<Schema['PublicProjectMentorsResponse']>(`/api/v1/ie/projects/${id(projectId)}/mentors`);

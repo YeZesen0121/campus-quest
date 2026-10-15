@@ -36,6 +36,12 @@ function apiError(
 }
 
 describe("describeAuthError branches by code", () => {
+  test("mentor errors describe an account instead of a student number", () => {
+    const denied = describeAuthError(apiError("AUTHENTICATION_REQUIRED", "unknown"), "mentor");
+    assert.equal(denied.summary, "导师账号或密码不正确");
+    const invalid = describeAuthError(apiError("VALIDATION_ERROR", "invalid", {username: ["missing"]}), "mentor");
+    assert.equal(invalid.fieldErrors.username, "请输入导师账号");
+  });
   test("auth-mapped codes get stable zh-CN copy regardless of the message", () => {
     const messages = ["该学号不在注册白名单中，无法注册", "server reworded", ""];
     for (const message of messages) {

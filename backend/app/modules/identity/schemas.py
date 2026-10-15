@@ -71,7 +71,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Student login: student number + password (spec §5.6)."""
+    """Password login: account identifier + password; route fixes the role."""
 
     username: str
     password: str

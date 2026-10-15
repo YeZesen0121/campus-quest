@@ -52,6 +52,9 @@ from app.modules.identity import models as identity_models  # noqa: E402, F401
 from app.modules.innovation import (  # noqa: E402, F401
     evidence_models as innovation_evidence_models,
 )
+from app.modules.innovation import (  # noqa: E402, F401
+    mentor_models as innovation_mentor_models,
+)
 from app.modules.innovation import models as innovation_models  # noqa: E402, F401
 from app.modules.innovation import (  # noqa: E402, F401
     recruitment_models as innovation_recruitment_models,

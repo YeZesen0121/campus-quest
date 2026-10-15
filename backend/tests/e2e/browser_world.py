@@ -271,7 +271,9 @@ async def _seed() -> dict[str, Any]:
         # (CQ_E2E_STAFF2), and the operations admin (CQ_E2E_ADMIN).
         from cryptography.fernet import Fernet
 
+        from app.core.security import hash_password
         from app.modules.identity.enums import Role as SeedRole
+        from app.modules.identity.enums import UserStatus as SeedStatus
         from app.modules.identity.models import User as UserRow
         from app.modules.identity.totp import encrypt_totp_secret
 
@@ -301,6 +303,20 @@ async def _seed() -> dict[str, Any]:
             (browser_teacher2, browser_teacher2_secret),
             (browser_admin, browser_admin_secret),
         )
+        # R5's separate suite opts in to an explicitly simulated identity.
+        # Mentor consent, publication and delegation are always exercised
+        # through product flows, never fabricated by this world builder.
+        browser_mentor = (
+            UserRow(
+                username=f"e2e-mentor-{label_run}@school.edu",
+                password_hash=hash_password(DEFAULT_PASSWORD),
+                nickname=f"模拟导师{label_run[:4]}",
+                role=SeedRole.MENTOR,
+                status=SeedStatus.ACTIVE,
+            )
+            if os.environ.get("CQ_E2E_MENTOR_WORLD") == "1"
+            else None
+        )
         async with factory() as db:
             author_row = await db.get(UserRow, author.user_id)
             assert author_row is not None
@@ -309,6 +325,8 @@ async def _seed() -> dict[str, Any]:
             author_nickname = author_row.nickname
             for user_row, _ in answerable_staff:
                 db.add(user_row)
+            if browser_mentor is not None:
+                db.add(browser_mentor)
             await db.flush()
             for user_row, secret in answerable_staff:
                 db.add(
@@ -362,8 +380,6 @@ async def _seed() -> dict[str, Any]:
         # primary student already holds claims A and B and the
         # actionable-claim quota (3) must stay open for
         # task-claim.spec's UI claim.
-        from app.core.security import hash_password
-        from app.modules.identity.enums import UserStatus as SeedStatus
         from app.modules.points.models import PointReservation, RewardRedemption
         from app.modules.submissions.models import Submission as SubmissionRow
         from app.modules.system.models import SystemSetting
@@ -522,6 +538,12 @@ async def _seed() -> dict[str, Any]:
             "bad_csv": bad_csv,
             "broker_depth_before": await broker.llen(_BROKER_QUEUE_KEY),
         }
+        if browser_mentor is not None:
+            world["mentor"] = {
+                "id": str(browser_mentor.id),
+                "username": browser_mentor.username,
+                "password": DEFAULT_PASSWORD,
+            }
         world_path = Path(tmpdir) / "world.json"
         world_path.write_text(json.dumps(world), encoding="utf-8")
 
@@ -583,6 +605,11 @@ async def _seed() -> dict[str, Any]:
             "CQ_E2E_ADMIN": f"{browser_admin.username}:{DEFAULT_PASSWORD}",
             "CQ_E2E_ADMIN_TOTP_SECRET": browser_admin_secret,
         }
+        if browser_mentor is not None:
+            world["env"]["CQ_E2E_MENTOR"] = (
+                f"{browser_mentor.username}:{DEFAULT_PASSWORD}"
+            )
+            world["env"]["CQ_E2E_MENTOR_ID"] = str(browser_mentor.id)
         return world
     finally:
         await broker.aclose()
@@ -626,6 +653,8 @@ async def _clean(world_path: str) -> dict[str, Any]:
                 user_ids.append(uuid.UUID(world[optional_member]))
         if "author" in world:
             user_ids.append(uuid.UUID(world["author"]["id"]))
+        if "mentor" in world:
+            user_ids.append(uuid.UUID(world["mentor"]["id"]))
         # Tasks the teacher suite created through the REAL UI (the
         # create -> import -> publish flow) exist only as rows — sweep
         # them by owner (the browser staff teachers) so clean_world's

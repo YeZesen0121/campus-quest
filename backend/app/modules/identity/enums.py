@@ -15,6 +15,7 @@ class Role(StrEnum):
     STUDENT = "STUDENT"
     TEACHER = "TEACHER"
     ADMIN = "ADMIN"
+    MENTOR = "MENTOR"
 
 
 class UserStatus(StrEnum):

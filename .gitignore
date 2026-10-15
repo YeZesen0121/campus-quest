@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
 dist/
 build/
 *.egg-info/
@@ -45,3 +49,6 @@ frontend/e2e/.certs/
 
 # e2e-only MinIO TLS cert (infra/scripts/gen-e2e-minio-cert.sh output)
 infra/e2e-certs/
+
+# Local implementation and verification logs; never product data.
+.local/

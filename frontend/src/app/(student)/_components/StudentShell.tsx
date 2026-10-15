@@ -143,11 +143,11 @@ export function StudentShell({ children }: { children: ReactNode }) {
           <div className="alert alert-warning" role="alert">
             <p>
               <span className="alert-marker" aria-hidden="true">!</span>
-              学生工作区仅对学生账号开放，当前登录的是教师或管理员账号。
+              学生工作区仅对学生账号开放，当前登录的是{gate.kind === "mentor-guidance" ? "导师" : "教师或管理员"}账号。
             </p>
             <p>
               <Link className="btn btn-primary" href={gate.workspacePath}>
-                前往教师工作台
+                {gate.kind === "mentor-guidance" ? "前往我的导师档案" : "前往教师工作台"}
               </Link>
             </p>
           </div>

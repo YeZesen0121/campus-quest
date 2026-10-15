@@ -149,6 +149,8 @@ playwright-e2e:
 	# per entry, all matches logged) fails the gate. No hard-coded
 	# watch list left to drift.
 	cd frontend && node scripts/assert-e2e-no-skips.mjs
+	# The consent world is separate so existing identity-count fixtures stay stable.
+	cd frontend && CQ_E2E=1 CQ_E2E_MENTOR_WORLD=1 npx playwright test innovation-mentors.spec.ts --project=chromium
 
 release-gate: release-test-db release-evidence-scanner backend-unit backend-integration backend-worker \
               backend-e2e migration-verify frontend-typecheck frontend-lint \
@@ -172,3 +174,4 @@ visual-regression:
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-navigation-visual.spec.ts --project=chromium
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-recruitment-visual.spec.ts --project=chromium
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-talents-visual.spec.ts --project=chromium
+	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 CQ_E2E_MENTOR_WORLD=1 npx playwright test innovation-mentors.spec.ts --project=chromium

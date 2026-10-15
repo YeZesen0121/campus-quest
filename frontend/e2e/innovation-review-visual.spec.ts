@@ -27,7 +27,7 @@ test("achievement review visual: owner proof workspace, operator queue and campu
   await page.getByRole("button", { name: "新建项目草稿", exact: true }).click();
   for (const [label, value] of Object.entries({ 项目名称: "成果核实示例项目", 项目简介: "校园循环利用调研与原型验证。", 项目方向: "环境保护", 项目阶段: "原型验证", 团队现状: "示例团队" })) await page.getByLabel(label, { exact: true }).fill(value);
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   await page.getByRole("link", { name: "管理成果草稿", exact: true }).click();
   await page.getByRole("button", { name: "新建成果草稿", exact: true }).click();
   await page.getByLabel("成果名称", { exact: true }).fill("校园循环利用原型");

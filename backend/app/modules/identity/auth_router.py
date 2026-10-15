@@ -1,8 +1,8 @@
 # backend/app/modules/identity/auth_router.py
-"""Student authentication routes (spec §5; backend-engineering §3).
+"""Public authentication routes (spec §5; backend-engineering §3).
 
 Single responsibility: the unauthenticated entry surface — phone OTP
-challenges, registration, student login, refresh rotation, logout, and
+challenges, registration, student/mentor login, refresh rotation, logout, and
 password reset. Every route is thin — validate transport input, call a
 service, serialize the public DTO — and owns no persistence logic. The
 cookie/CSRF helpers, rate-limit enforcement, typed-exception mapping,
@@ -130,6 +130,21 @@ async def login(
 ) -> TokenPairResponse:
     await _enforce_rate_limit(limiter, "auth:login", body.username.strip().lower())
     tokens = await sessions.login_student(db, body.username, body.password)
+    return _token_pair_response(response, tokens, settings)
+
+
+@router.post("/auth/mentor/login", response_model=TokenPairResponse)
+async def login_mentor(
+    body: LoginRequest,
+    response: Response,
+    sessions: SessionsDep,
+    settings: AppSettings,
+    limiter: LimiterDep,
+    db: DbSession,
+) -> TokenPairResponse:
+    # Share the account bucket: switching login doors cannot reset attempts.
+    await _enforce_rate_limit(limiter, "auth:login", body.username.strip().lower())
+    tokens = await sessions.login_mentor(db, body.username, body.password)
     return _token_pair_response(response, tokens, settings)
 
 

@@ -8,7 +8,7 @@ async function openAchievements(page: Page) {
   await page.getByRole("button", { name: "新建项目草稿", exact: true }).click();
   await page.getByLabel("项目名称", { exact: true }).fill(`成果所属项目 ${Date.now()}`);
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   await page.getByRole("link", { name: "管理成果草稿", exact: true }).click();
   await page.getByRole("button", { name: "新建成果草稿", exact: true }).click();
 }

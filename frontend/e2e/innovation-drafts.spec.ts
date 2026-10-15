@@ -28,7 +28,7 @@ test("private draft: create, reload, edit and keyboard-save on mobile", async ({
   await page.getByLabel("团队现状", { exact: true }).fill("两位同学共同整理问题。");
   await page.getByRole("button", { name: "保存草稿", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   await page.getByRole("button", { name: "返回草稿列表", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: `编辑项目：${title}`, exact: true }).click();
@@ -36,7 +36,7 @@ test("private draft: create, reload, edit and keyboard-save on mobile", async ({
   await expect(page.getByLabel("项目阶段", { exact: true })).toHaveValue("调研中");
   await page.getByLabel("团队现状", { exact: true }).fill("已完成第一轮访谈。");
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   await page.getByRole("button", { name: "返回草稿列表", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: `编辑项目：${title}`, exact: true }).click();
@@ -49,7 +49,7 @@ test("private draft: a stale save preserves local input while reading the latest
   const title = `并发编辑草稿 ${Date.now()}`;
   await startDraft(page, title);
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   const other = await page.context().newPage();
   try {
     await other.goto(`${BASE_URL}/profile/project-drafts`);
@@ -57,7 +57,7 @@ test("private draft: a stale save preserves local input while reading the latest
     await expect(other.getByLabel("项目名称", { exact: true })).toHaveValue(title);
     await page.getByLabel("项目简介", { exact: true }).fill("第一处保存的版本。");
     await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-    await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+    await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
     await other.getByLabel("项目简介", { exact: true }).fill("另一处尚未保存的内容。");
     await other.getByRole("button", { name: "保存草稿", exact: true }).click();
     await expect(other.getByRole("region", { name: "项目草稿编辑器" }).getByRole("alert")).toContainText("你的未保存内容已保留");
@@ -90,7 +90,7 @@ test("private draft: retrying a lost create response reuses the request key", as
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
   await expect(page.getByRole("region", { name: "项目草稿编辑器" }).getByRole("alert")).toContainText("尚未确认保存结果");
   await page.getByRole("button", { name: "保存草稿", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("草稿已保存，仅自己可见。");
+  await expect(page.getByRole("status", { name: "项目草稿保存状态", exact: true })).toHaveText("草稿已保存，仅自己可见。");
   expect(requestIds).toHaveLength(2);
   expect(requestIds[1]).toBe(requestIds[0]);
   await page.getByRole("button", { name: "返回草稿列表", exact: true }).click();
