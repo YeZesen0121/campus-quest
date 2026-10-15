@@ -1,6 +1,6 @@
 # R5 导师库验证回执
 
-2026-10-15 11:28 UTC，本地门禁全部通过；正在完成分支提交和最终提交审阅。以下是实际结果，不表示远端CI或人工业务验收。
+2026-10-15 11:33 UTC，本地实施与门禁完成，功能及基线精确提交563d1fb已获独立APPROVE，无未关闭Critical/Important。以下是实际结果，不表示远端CI、人工业务验收或合并批准。
 
 ## 隔离与范围
 
@@ -62,12 +62,16 @@ G19工件补记：按照既有 `innovation-checkpoint-verification.md` 的限定
 
 ## 独立评审与持久体验
 
-两轮独立审阅冻结TREE `ff157d0da7413ce2b1056372ef1e8361ed1fc77d`、`0b3309d9bd3187ddce6e6b89dd72c3b2ada0584d`，均相对基线。首轮审计和锁序Important已有RED/GREEN；第二轮无新业务阻塞，指出误stage backend/.coverage，已仅移出index并补ignore，保留当前采集数据。完整TREE `137efe49edb0fdf709f1d5ac0a001911ad90adcb`及增量TREE `f157620b12505b5d05699f6227c71cf694aeb7ac`均无新Critical/Important；最终exact-head审阅仍待进行。
+两轮独立审阅冻结TREE `ff157d0da7413ce2b1056372ef1e8361ed1fc77d`、`0b3309d9bd3187ddce6e6b89dd72c3b2ada0584d`，均相对基线。首轮审计和锁序Important已有RED/GREEN；第二轮无新业务阻塞，指出误stage backend/.coverage，已仅移出index并补ignore，保留当前采集数据。完整TREE `137efe49edb0fdf709f1d5ac0a001911ad90adcb`及增量TREE `f157620b12505b5d05699f6227c71cf694aeb7ac`均无新Critical/Important。随后精确提交 `563d1fba34488eb510c1f75890abe68278923f5d`独立审阅APPROVE：核对干净Git、所有最终报告、574份冻结源/260份后端已测源、五组无更新比较、正式地板及历史失败记录，未关闭Critical/Important为0。其后收口仅改计划、交接和本验证文档。
+
+原生分支提交：功能 `536543a`；独立旧基线 `563d1fb`，后者严格只有四张旧PNG和走查记录。本回执的后续提交仅记录完成状态；实际最终HEAD以Git为准。保留R5 worktree及分支，没有推送、创建PR或合并main。
 
 独立验收审计指出手工卡片先撤回会阻断后续搜索邀请，且初始环境没有已获资格的项目负责人。文档已补20250003申请、模拟管理员鲜TOTP审批、通过既有招募公开项目及最后撤回的顺序；只读复审确认无新流程阻塞，没有预先授资格或同意挂名。
 
 独立dev最新快照为 `20261015T100115-f78a37`，10:01–10:04 UTC重新Prepare/Start/Verify退出0（`.runtime/dev-logs/20261015T100336-start-3291fb.log`、`20261015T100347-verify-74a658.log`），体验入口为 `https://127.0.0.1:3306`，API为8306。独立只读浏览器容器的运营/导师/浏览者UI登录与刷新3项通过（`dev-logs/login-refresh-final.log`）。Windows Web200；启动后首次readiness503，随后三次均HTTP200且PG/Redis为ok，原2秒探针阈值未改变（`windows-ready-final.log`）。10:11:48 UTC核对574份应用/迁移/前端源与配置文件：当前工作树、冻结清单及dev快照hash完全一致（`source-freeze-final.log`）；后续只改E2E夹具、覆盖率工件与证据文档。
 
 10:57:25 UTC再次核对current/freeze/dev574文件，以及后端独立全套所测app/alembic260文件，SHA全部一致（`dev-logs/source-freeze-precommit.log`）。第一次辅助检查因清单路径前缀过滤错误得到backend0而退出1，保留为`source-freeze-precommit-filter-red.log`；修正为实际`backend/app`、`backend/alembic`前缀后得到260且退出0，没有改产品。11:23 UTC持久dev所有权/status退出0，Windows Web/API再次均200、PG/Redis均ok（`dev-logs/20261015T112332-status-dfb9ee.log`、`readiness-precommit.log`）。同轮只读UI Git核对status为空、HEAD仍4ace255，未修改UI工作目录和服务。
+
+所有门禁结束后，仅对owned `campusquest-r5`执行Stop，退出0，保留测试数据卷（`logs/stack-stop-20261015T112715.log`）。持久`campusquest-r5-dev`继续运行；11:29:58 UTC在停止测试服务后再次检查，Web/API均200且PG/Redis均ok（`dev-logs/readiness-after-test-stop.log`）。后续测试须按README重新Start自己的测试项目，不借用UI或dev服务。
 
 初始化仅账号和运营资格，profile0/consent0；没有预先导师确认或项目同意。dev普通Verify保留体验者暂停/撤权状态，fresh-seed检查初始状态；真实PG六项状态回归通过（`dev-verify-state-green.log`），finally恢复原值。体验步骤和明确标注的模拟账号见 `docs/qa/r5-mentor-acceptance.md`。本地检查不表示远端CI、真实学校身份核验或owner合并批准。
