@@ -109,9 +109,9 @@ Files: OpenAPI快照/生成类型、test matrix、`docs/quality/innovation-colla
 - [x] `run.ps1 backend ruff format --check app tests alembic`、`ruff check app tests alembic`、`mypy`；`pytest tests/unit -q`、`pytest tests/integration -m integration -q`（真实 smoke flags）及 `pytest tests/e2e -q`。
 - [x] `run.ps1 python ../infra/r6/verify-migrations.py`；OpenAPI dump/类型生成及新鲜度、全部矩阵 checker、前后端覆盖率棘轮走正式命令。
 - [x] frontend `typecheck`、`lint`、`check:css`、`test:unit`、`build`；完整 browser/visual/no-skip/cleanup，记录完整输出和实际退出码，不宣称远端CI。
-- [ ] 按 requesting-code-review 对最终源码做独立评审；修复发现并重跑受影响门禁，记录精确 commit 和结论。
+- [x] 按 requesting-code-review 对最终源码做独立评审；修复发现并重跑受影响门禁，记录精确 commit 和结论。
 - [x] 操作指南覆盖 R1–R6 一页速查及七类角色，含找回邀请、无资格转交、冲突、待审、提前查阅、结果未知、岗位恢复、档案更正及回避协调；步骤和截图在稳定真实 UI 核对，凭据另存。
-- [ ] 完整逐项验收审计；仅本地提交，明确未运行的远端 CI/未推送/未合并与源码状态。
+- [x] 完整逐项验收审计；仅本地提交，明确未运行的远端 CI/未推送/未合并与源码状态。
 
 ## 自审记录（2026-10-19）
 
@@ -133,3 +133,5 @@ Files: OpenAPI快照/生成类型、test matrix、`docs/quality/innovation-colla
 - 转让衔接核对（待实现）：现有 `AchievementEvidence` 没有上传者字段；list/read/remove/complete及ReviewService所选材料均只按项目/成果归属。任务4须增加不可变上传者和上传时 ownership_generation，ProjectDraft每次转让递增ownership_generation，明确证明授权也绑定该代。仅 `uploaded_by == current_owner` 或 `project+user+evidence` 会在同人以后重新接任时复活未选旧授权，不满足C11/C13/C20；必须用当前代过滤清单、读取、finalize、删除及成果复用。移交只授予明确读取/使用范围，旧上传合同/对象key/资格快照不得转交。
 
 - 2026-10-19T17:28Z：按实际证据更新任务3–5及任务6前三项复选框：真实PG权限/竞态、转让证明/摘要/终态、生命周期与十四项R6浏览器均已验证；不是最终全站验收。任务6的完整视觉及任务7继续开放：默认全部projects第三轮255通过/1项R4加载失败/46配置skip，no-skip未执行；新R6回避说明须独立视觉参考并重新无update验证，其余后端/视觉完整链仍进行。
+
+- 最终本地收口：全部Task1–7适用交付均已完成。完整默认302收集/256通过/46具名豁免/零失败及原同锁no-skip0；导师最终10项、其余全部专用视觉、后端1296/1599/124/51、迁移/契约/审计及前端静态/771单测/覆盖率/build均0。指南七角色20图及32链接核验完成。实际实施commit `9f5c03e3e8812b291c54e15e6153ef889144c2ba`、TREE `65d3427dcf3b5830a6123a55136a2eb35baf8ed0`获独立整体及前端/指南专项APPROVE。随后仅文档收口，再核对实际文档HEAD与干净状态；无push/merge/PR或远端CI结论。

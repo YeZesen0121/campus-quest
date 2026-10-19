@@ -1,8 +1,8 @@
-# R6 实施验证账本（本地门禁完成，最终提交评审待记录）
+# R6 实施验证账本（本地验证完成）
 
-## 当前验收摘要（2026-10-19T19:54Z）
+## 当前验收摘要（最终实施提交已独立批准）
 
-下文为过程账本，旧的“进行中/待修”描述对应各自当时状态。F1–F6已修并经原评审者源码关闭，适用本地门禁均有实际GREEN：1296单测、1599真实集成、124 worker、51后端e2e、原覆盖率棘轮、迁移、契约、审计、前端771单测及build、完整默认浏览器与各专用视觉world。第四轮默认302收集，256 passed/46具名豁免/零失败或flaky，原同锁no-skip及外层退出0。其后R3/导师专用视觉case修正均另行完整GREEN，产品及runner仍与冻结TREE `6f8f28148c521f555b348f0272382c08246d13fd`一致。导师最新完整10项/9.7m、最新typecheck/lint已退出0；指南20张原始截图及32个本地链接核验通过。最终实际提交独立评审及本地提交状态仍待下面收口，不代表远端CI或owner合并验收。
+下文为过程账本，旧的“进行中/待修”描述对应各自当时状态。F1–F6已修并经原评审者关闭，适用本地门禁均有实际GREEN：1296单测、1599真实集成、124 worker、51后端e2e、原覆盖率棘轮、迁移、契约、审计、前端771单测及build、完整默认浏览器与各专用视觉world。第四轮默认302收集，256 passed/46具名豁免/零失败或flaky，原同锁no-skip及外层退出0。其后R3/导师专用视觉case修正均另行完整GREEN，产品及runner仍与冻结TREE `6f8f28148c521f555b348f0272382c08246d13fd`一致。导师最新完整10项/9.7m、最新typecheck/lint及最终26矩阵已退出0；指南20张原始截图及32个本地链接核验通过。实际实施提交`9f5c03e3e8812b291c54e15e6153ef889144c2ba`已获独立整体及前端/指南专项APPROVE；随后仅文档收口，最终文档HEAD须另核对。不代表远端CI、上线或owner合并验收。
 
 | 范围 | 当前实际结果 | 日志 |
 | --- | --- | --- |
@@ -16,8 +16,9 @@
 | backend coverage（F5后全套重新采集） | fresh unit1296、完整integration1599及worker124，同一app及greenlet/thread collector累积；全部模块原棘轮通过，innovation97.8，退出0；地板/exclude/epsilon未改 | `20261019T180616-python-245496.log`；前置`153738-backend-127100.log`、`172502-backend-187738.log`、`180052-backend-243722.log` |
 | F5专用材料选择API | RED五项缺路由405；修后5 passed，退出0。格式、全Ruff、mypy243文件、OpenAPI/types及frontend typecheck通过；包含手机无资格owner的27项混合浏览器全部GREEN | `20261019T150652-backend-116166.log`、`151637-backend-119182.log`、`151607-backend-119070.log`、`151622-backend-119126.log`、`151722-backend-119219.log`、`151742-python-119243.log`、`151813-frontend-119267.log`、`151856-frontend-119314.log`、`152004-playwright-119356.log` |
 | R6四张新视觉参考 | 逐图检查已完成；四项无update及axe/44px/溢出断言全部通过，退出0 | `20261019T153558-visual-126211.log` |
-| 首轮完整Chromium | 238 passed / 9 failed / 46 skipped，54.9m，退出1；资格fixture污染、旧导航预期及动画中途测量已修测试，GREEN待跑；未执行no-skip守卫 | `20261019T140749-playwright-99326.log` |
-| 整体独立TREE评审 | 历史With fixes中的F5/F6及中途F1–F4均经原评审者源码关闭；当前仍欠最终实际commit整体APPROVE | `innovation-collaboration-review.md` |
+| 首轮完整Chromium | 238 passed / 9 failed / 46 skipped，54.9m，退出1；资格fixture污染、旧导航预期及动画中途测量后续已修并通过完整full4；原轮未执行no-skip守卫 | `20261019T140749-playwright-99326.log` |
+| 历史独立TREE评审 | With fixes中的F5/F6及中途F1–F4均经原评审者源码关闭；当时尚非最终实际commit批准，最终结论见下一行 | `innovation-collaboration-review.md` |
+| 最终实际commit独立评审 | 实施commit `9f5c03e3e8812b291c54e15e6153ef889144c2ba`、TREE `65d3427dcf3b5830a6123a55136a2eb35baf8ed0`，独立整体及前端/指南专项均APPROVE，无未关闭问题；之后仅文档收口 | `innovation-collaboration-review.md`；本地`final-local-source-audit.json` |
 | 首轮全站9处失败修正及F5 | 27项混合浏览器全部通过、零skip、13.9m；仍不能替代最终默认全部projects | `20261019T152004-playwright-119356.log` |
 | 第三轮默认全部projects | 255 passed / 1 failed / 46 configured skips，1.0h，退出1；Firefox/WebKit共8项通过，R6十四项功能通过。唯一失败为R4第二次详情导航后5秒仍为加载壳，后续受控修正见下一行；本轮报告保留，未执行no-skip | `20261019T161911-node-165404.log`、`final-all-projects-3-report.json` |
 | 最终默认全部projects及原no-skip | 302收集，256 passed/46具名配置豁免/0 unexpected/0 flaky，3748.08s（62m28s），Playwright0→保存新鲜report→同锁原no-skip0→外层0；含Chromium248功能及Firefox/WebKit8 smoke。不是零skip，也未用focused报告补过 | `20261019T180659-node-245524.log`、`final-all-projects-4-report.json`；wrapper SHA `64bbdf37cf26aba794d64f7d8ee8d0500c7a174e23f0f1643698810a38cd7ff1` |
@@ -25,6 +26,7 @@
 | 当前前端静态、单测、覆盖率和构建 | typecheck、lint、CSS、771项单测、覆盖率95.85/92.01/90.77及生产build全部退出0；CSS保留3项已有deadCSS提示 | `151856-frontend-119314.log`、`153433-frontend-126129.log`、`154235-frontend-128219.log`、`155317-frontend-148076.log`、`155508-frontend-149512.log`、`155632-frontend-150520.log` |
 | R3改动后的前端静态复核 | 新R4同步及R3专用视觉断言后，typecheck、全lint和26矩阵全部退出0；未变动app源码及原覆盖率地板。后续导师测试测量修正的静态另跑，当前未冒用此结果 | `192228-frontend-282205.log`、`191628-frontend-280104.log`、`191906-python-281092.log` |
 | 最终测试源码静态复核 | 导师测量修正后，typecheck及全lint退出0；未修改产品、配置、fixtures或原覆盖率地板 | `195129-frontend-288175.log`、`195159-frontend-288218.log` |
+| 最终矩阵及源码工件审计 | 26份矩阵退出0；native审计确认与冻结产品/runner相同、61旧PNG字节不变/总67参考、20图、原覆盖率地板不变、tracked runtime为0；保存实际实施TREE及文档收口TREE，后者相对已批准实施提交仅有docs改动 | `195345-python-288265.log`、`final-local-source-audit.json` |
 | 核心旧视觉 | 残留修后无update重跑16 passed/2.4m/退出0；原61张PNG SHA全部相同。此前15过1失败保留诊断 | `20261019T161628-visual-164137.log`、`154316-visual-128336.log`；`final-baseline-integrity.json` |
 | R6完整回避说明及成果核实视觉 | 旧operator空队列断言172106真实失败；逐图及固定源码复核后新增独立R6参考，旧61PNG未改。修后完整1用例、5屏参考无update通过、45.9s（整轮1.6m）、退出0，含axe；不声称被替代的旧operator参考也通过 | `20261019T175901-visual-242864.log`；旧`172106-visual-186093.log`、`r6-review-baseline-provenance.json`及独立评审记录 |
 | 导航视觉 | 1 passed、15.8s、退出0，无update | `20261019T180505-visual-244672.log` |
@@ -36,7 +38,7 @@
 | UI后端清理补全 | 原五项GREEN后，F6真实对象拒绝/中途失败两项RED再修；当前8项组合全部GREEN/74.32s/退出0，原整体评审者源码关闭F6 | `154535-backend-129649.log`、`155429-backend-149006.log`、`155934-backend-153346.log`、`160122-backend-154012.log`、`160926-backend-158584.log`、`161318-backend-159947.log` |
 | 全矩阵、迁移及契约新鲜度 | 26矩阵通过；临时专用数据库覆盖R5旧数据→0042升级/降级/升级及alembic check；OpenAPI及生成类型前后SHA一致 | `160852-python-158561.log`、`161019-python-159620.log`、`161201-python-159776.log`、`161259-frontend-159900.log` |
 | 后端静态及依赖审计 | 551文件formatcheck、全Ruff、mypy243文件退出0；pip无已知漏洞；npm无未豁免high/critical，沿用5项既有开发链豁免（复审日2027-01-07） | `161541-backend-164056.log`、`161245-backend-159856.log`、`160824-backend-158537.log`、`161452-python-163971.log`、`161520-frontend-164003.log` |
-| 最终实际提交独立评审及本地提交 | 待记录；本地门禁及20图已完成，无push、merge或远端CI结论 | 见独立评审记录及handover |
+| 本地提交边界 | 实施commit已提交并独立APPROVE；文档收口后的精确HEAD再由原整体评审者核对，最后原生Git检查干净。未push、merge、创建PR或运行远端CI | 见独立评审记录、handover及本会话最终回复 |
 
 完整runner输出均保留于 `infra/r6/.runtime/logs/`。未运行的后续步骤不能因链中前一步通过而视为通过。
 
@@ -76,7 +78,7 @@ full4后以native Git逐项比较冻结TREE：`backend/`、`frontend/src/`及`in
 - 格式/Ruff初次因未先格式化及长字符串失败：`102620-backend-6555.log`；格式化后16处长字符串/函数名超限：`102706-backend-6667.log`。修正后Ruff完整输出通过：`102800-backend-6723.log`。新一轮专项仍运行，不能提前报通过。
 - 当前实现含owner代、上传者与本代逐份grant、不可变转让候选/收据、状态摘要重确认、最小结果重试/分页、主动查阅先审计后读且返回前再验、选中证明只读/复用、原子移交/岗位关闭/联系撤销/未确认邀请失效。生命周期、UI、指南及最终全量门禁仍未完成。
 
-本文件记录本地证据，不代表 R6 已完成、用户已验收或远端 CI 成功。工作树 `C:/Users/111/Documents/CodexWorktrees/campusquest-r6-collaboration`，分支 `codex/r6-collaboration`，基础 `5813bb4e83ec328229b1b26b2edff1ef40abdef7`。未推送、未合并。完整 stdout/stderr 与各层退出码在忽略目录 `infra/r6/.runtime/logs/`。
+本文件记录本地实现及验证，不代表用户产品验收、上线或远端CI成功。工作树 `C:/Users/111/Documents/CodexWorktrees/campusquest-r6-collaboration`，分支 `codex/r6-collaboration`，基础 `5813bb4e83ec328229b1b26b2edff1ef40abdef7`，已批准实施commit及后续文档HEAD边界见当前摘要。未推送、未合并。完整stdout/stderr与各层退出码在忽略目录 `infra/r6/.runtime/logs/`。
 
 ## 隔离与基础
 
