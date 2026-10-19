@@ -29,6 +29,8 @@
  * the create response or the audit trail) until that wiring lands.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -90,6 +92,12 @@ import { Button } from "@/components/ui/button";
 export function SystemAdmin() {
   return (
     <>
+      <nav className="campus-admin-nav" aria-label="系统分区">
+        <a href="#admin-settings">系统参数</a>
+        <a href="#admin-templates">通知模板</a>
+        <a href="#admin-failures">投递失败</a>
+        <a href="#admin-repairs">具名修复</a>
+      </nav>
       <SettingsSection />
       <TemplatesSection />
       <FailuresSection />
@@ -135,9 +143,9 @@ function SettingsSection() {
   }, []);
 
   return (
-    <section className="section" aria-label="系统设置">
+    <section className="section" aria-label="系统设置" id="admin-settings" data-admin-return="settings" tabIndex={-1}>
       <div className="section-head">
-        <h2 className="section-title">系统设置</h2>
+        <h2 className="section-title">系统参数</h2>
         <Button variant="ghost" onClick={refresh}>
           刷新
         </Button>
@@ -147,7 +155,8 @@ function SettingsSection() {
       ) : phase.kind === "error" ? (
         <SectionError error={phase.error} onRetry={refresh} retryLabel="重新加载" />
       ) : (
-        <div className="workbench-columns">
+        <div className="campus-admin-settings">
+          <div className="campus-admin-setting-columns" aria-hidden="true"><span>参数</span><span>当前值</span><span>说明</span><span>操作</span></div>
           {SETTING_KEY_VIEWS.map((view) => (
             <SettingKeyCard
               key={view.key}
@@ -187,21 +196,20 @@ function SettingKeyCard({
   onApplied: () => void;
 }) {
   return (
-    <div className="panel moderation-panel">
-      <h4 className="section-title">{view.title}</h4>
-      <p className="field-hint">{view.hint}</p>
+    <div className="panel moderation-panel campus-admin-setting-row">
+      <h3 className="section-title">{view.title}</h3>
       <div className="fact-rows">
-        <div className="fact-row">
+        <div className="fact-row" data-setting-fact="current">
           <span className="fact-label">当前值</span>
           <span className="fact-value">{settingValueText(view.key, item.value)}</span>
         </div>
         {effectiveTerm !== null ? (
-          <div className="fact-row">
+          <div className="fact-row" data-setting-fact="effective">
             <span className="fact-label">生效学期</span>
             <span className="fact-value">{effectiveTerm}</span>
           </div>
         ) : null}
-        <div className="fact-row">
+        <div className="fact-row" data-setting-fact="version">
           <span className="fact-label">版本</span>
           <span className="fact-value">
             {settingVersionText(item.version, item.updated_at, (iso) =>
@@ -210,12 +218,16 @@ function SettingKeyCard({
           </span>
         </div>
       </div>
-      <SettingKeyEditor
+      <p className="field-hint campus-admin-setting-hint"><span className="fact-label">说明</span><span>{view.hint}</span></p>
+      <details className="campus-admin-setting-editor">
+        <summary className="btn btn-secondary" aria-label={`修改${view.title}`}>修改</summary>
+        <SettingKeyEditor
         key={`${item.key}:${item.value ?? "unset"}:${item.version ?? "0"}`}
         view={view}
         item={item}
         onApplied={onApplied}
-      />
+        />
+      </details>
     </div>
   );
 }
@@ -453,6 +465,7 @@ function ConfirmSettingDialog({
   onConfirm: (reason: string | undefined) => Promise<void>;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="settings"]'));
   const [reason, setReason] = useState("");
 
   /** Blank-after-trim is OMITTED (None is legal server-side), never sent. */
@@ -472,7 +485,7 @@ function ConfirmSettingDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <DialogTitle id="setting-confirm-title">{title}</DialogTitle>
         <p className="report-target">
@@ -507,6 +520,9 @@ function ConfirmSettingDialog({
           </div>
         ) : null}
         <DialogFooter>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+            取消
+          </Button>
           <Button
             variant="primary"
             onClick={() => void onConfirm(reasonToSend)}
@@ -515,9 +531,6 @@ function ConfirmSettingDialog({
           >
             {busy ? <span className="spinner" aria-hidden="true" /> : null}
             <span>确认修改</span>
-          </Button>
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            取消
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -578,18 +591,19 @@ function TemplatesSection() {
       : null;
 
   return (
-    <section className="section" aria-label="通知模板管理">
+    <section className="section" aria-label="通知模板管理" id="admin-templates">
       <div className="section-head">
         <h2 className="section-title">通知模板</h2>
       </div>
       <p className="field-hint">
-        模板暂无查询接口：创建后在此处继续管理；历史模板的 ID 可在审计日志中检索，
-        通过下方「按 ID 管理」编辑（title/body 全量替换，版本号自动 +1）。
-        不安全语法或未知占位符会被服务端以 422 拒绝并原样提示。
+        创建模板，或从审计日志取得模板 ID 后管理；下表仅展示本次会话处理过的模板。
+        停用后恢复后续通知的默认文案，不会停止该渠道发送。
+        更新会整段替换标题与正文，版本 +1；不安全语法与未知占位符会被拒绝。
       </p>
-      <div className="workbench-columns">
+      <div className="workbench-columns cq-divided-sections">
         <form className="panel moderation-panel" onSubmit={onCreate} noValidate>
-          <h4 className="section-title">创建模板</h4>
+          <h3 className="section-title">创建模板</h3>
+          <div className="form-grid">
           <div className="field">
             <label className="field-label" htmlFor="template-event">事件类型</label>
             <select
@@ -621,6 +635,7 @@ function TemplatesSection() {
                 </option>
               ))}
             </select>
+          </div>
           </div>
           <div className="field">
             <label className="field-label" htmlFor="template-title">标题</label>
@@ -680,19 +695,19 @@ function TemplatesSection() {
                 <th scope="col">事件 / 渠道</th>
                 <th scope="col">标题</th>
                 <th scope="col">版本</th>
-                <th scope="col">状态</th>
+                <th scope="col" className="cq-status-cell">状态</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td className="mono">{row.id}</td>
-                  <td className="mono">
+                  <td className="mono" data-label="模板 ID">{row.id}</td>
+                  <td className="mono" data-label="事件 / 渠道">
                     {row.event_type} / {row.channel}
                   </td>
-                  <td>{row.title}</td>
-                  <td className="meta-num">v{row.version}</td>
-                  <td>
+                  <td data-label="标题">{row.title}</td>
+                  <td className="meta-num" data-label="版本">v{row.version}</td>
+                  <td className="cq-status-cell" data-label="状态">
                     <span className={`badge badge-${row.enabled ? "success" : "muted"}`}>
                       {row.enabled ? "启用" : "停用"}
                     </span>
@@ -759,7 +774,7 @@ function TemplateByIdPanel({
 
   return (
     <div className="panel moderation-panel">
-      <h4 className="section-title">按 ID 管理</h4>
+      <h3 className="section-title">按 ID 管理</h3>
       <div className="field">
         <label className="field-label" htmlFor="template-by-id">模板 ID</label>
         <input
@@ -810,7 +825,7 @@ function TemplateByIdPanel({
       ) : null}
       <div className="dialog-actions">
         <Button
-          variant="primary"
+          variant="secondary"
           onClick={() => void run("update")}
           disabled={busy !== null}
           aria-busy={busy === "update"}
@@ -893,7 +908,7 @@ function FailuresSection() {
   }, [items.length, loadingMore]);
 
   return (
-    <section className="section" aria-label="通知投递失败">
+    <section className="section" aria-label="通知投递失败" id="admin-failures">
       <div className="section-head">
         <h2 className="section-title">通知投递失败</h2>
         <Button
@@ -907,8 +922,7 @@ function FailuresSection() {
         </Button>
       </div>
       <p className="field-hint">
-        投递失败的通知及其服务端安全错误摘要（错误信息已由后端做安全处理，不含敏感内容）。
-        卡在发送中的投递可通过下方「具名修复」强制失败。
+        仅展示失败通知的安全错误摘要，不含原始消息或收件人资料。卡住的投递可从「具名修复」处理。
       </p>
       {phase === "loading" ? (
         <SectionSkeleton lines={5} />
@@ -940,16 +954,16 @@ function FailuresSection() {
               <tbody>
                 {items.map((row) => (
                   <tr key={row.id}>
-                    <td className="mono">{row.event_key}</td>
-                    <td>{row.channel}</td>
-                    <td className="meta-num">{row.attempts}</td>
-                    <td className="mono">{row.last_error ?? "—"}</td>
-                    <td>
+                    <td className="mono" data-label="事件">{row.event_key}</td>
+                    <td data-label="渠道">{row.channel}</td>
+                    <td className="meta-num" data-label="尝试次数">{row.attempts}</td>
+                    <td className="mono" data-label="最后错误">{row.last_error ?? "—"}</td>
+                    <td data-label="计划时间">
                       <time className="notif-time" dateTime={row.scheduled_at}>
                         {formatDeadlineDateTime(parseServerInstant(row.scheduled_at))}
                       </time>
                     </td>
-                    <td>
+                    <td data-label="投递 ID">
                       <span className="mono" title="投递 ID（用于强制失败修复）">
                         {row.id}
                       </span>
@@ -988,15 +1002,14 @@ function FailuresSection() {
 
 function RepairsSection() {
   return (
-    <section className="section" aria-label="具名状态修复">
+    <section className="section" aria-label="具名状态修复" id="admin-repairs">
       <div className="section-head">
         <h2 className="section-title">具名状态修复</h2>
       </div>
       <p className="field-hint">
-        仅用于异常状态的人工修复；每次操作都会记入审计日志，原因必填。
-        与当前状态冲突时服务端返回 409，请刷新数据后重试。
+        只用于异常状态，原因必填并记录审计；与当前状态冲突时先重新读取。
       </p>
-      <div className="workbench-columns">
+      <div className="workbench-columns cq-divided-sections">
         <RepairForm kind="release-assignment" />
         <RepairForm kind="force-fail" />
       </div>
@@ -1056,11 +1069,11 @@ function RepairForm({ kind }: { kind: "release-assignment" | "force-fail" }) {
 
   return (
     <form className="panel moderation-panel" onSubmit={onSubmit} noValidate>
-      <h4 className="section-title">{isRelease ? "释放占用中的任务单元" : "强制失败卡住的投递"}</h4>
+      <h3 className="section-title">{isRelease ? "释放占用中的任务单元" : "强制失败卡住的投递"}</h3>
       <p className="field-hint">
         {isRelease
-          ? "将悬空处于 OCCUPIED 状态的任务单元放回 AVAILABLE（不改动领取历史）。仅当占用已悬空时可用；正常占用会被服务端以 409 拒绝。"
-          : "将卡在 SENDING 状态的通知投递标记为 FAILED（消息与历史不变）。非 SENDING 状态会被服务端以 409 拒绝。"}
+          ? "将悬空的 OCCUPIED 任务单元放回 AVAILABLE，保留领取历史；正常占用不可释放。"
+          : "仅将卡在 SENDING 的投递标为 FAILED，保留消息与历史；其他状态不可操作。"}
       </p>
       <div className="field">
         <label className="field-label" htmlFor={`repair-id-${kind}`}>

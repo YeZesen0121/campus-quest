@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ClaimDetailView } from "@/features/submissions/ClaimDetailView";
 
 export const metadata: Metadata = {
-  title: "我的任务 · CampusQuest",
+  title: "我的任务 · 华师令",
   description: "任务领取详情：分配的平台与关键词、提交、校验与修改进度",
 };
 

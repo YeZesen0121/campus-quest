@@ -5,20 +5,17 @@
  * cost/stock/term-limit/time-window / disable) plus the REWARD_REVIEW
  * grant lifecycle (W3's scoped delegation, reason mandatory both ways).
  *
- * Frozen-contract read surface (see adminApi's module note): the
- * catalogue LISTING is the student `GET /rewards` — ENABLED items only.
- * A just-disabled row is therefore held from its admin verdict and keeps
- * rendering (with 已下架 state) until the next reload; on reload it is
- * gone from the listing. There is no admin catalogue view endpoint.
+ * The existing admin catalogue lists enabled and disabled rows with
+ * server offset pagination. Decisions still replace rows with server
+ * verdicts; refresh reads the same authorized management surface.
  *
- * Edit discipline (the backend's presence semantics): absent field =
- * unchanged, explicit null clears a nullable bound. The edit dialog
- * manages ONLY the fields the student listing carries — prefilling
- * fulfillment_instructions / requires_manual_review is impossible, so
- * they stay ABSENT on edit (never blindly clobbered); they are
- * settable at create.
+ * Edit discipline: use the authorized catalogue's known values and a
+ * diff-only PATCH. Explicit null clears a held nullable value; untouched
+ * values stay absent. Review policy remains create-only in this UI.
  */
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -32,17 +29,17 @@ import {
   SectionSkeleton,
 } from "@/components/ui/sectionStates";
 import { formatDeadlineDateTime, parseServerInstant } from "@/lib/time";
+import { hasMorePages, mergeOffsetPage } from "@/lib/offsetPages";
 import { toDatetimeLocalValue } from "./teacherView";
 
 import {
   createRewardItem,
   disableRewardItem,
   grantRewardReview,
-  listRewardCatalogue,
+  listAdminRewardItems,
   revokeRewardReview,
   updateRewardItem,
   type AdminRewardItemDto,
-  type RewardCatalogueDto,
 } from "./adminApi";
 import {
   adminReasonReady,
@@ -57,10 +54,10 @@ import {
   type RewardFormValues,
 } from "./adminView";
 
-export function RewardsAdmin() {
+export function RewardsAdmin({ heading }: { heading: ReactNode }) {
   return (
     <>
-      <RewardCatalogue />
+      <RewardCatalogue heading={heading} />
       <ReviewGrants />
     </>
   );
@@ -68,30 +65,37 @@ export function RewardsAdmin() {
 
 // --- catalogue -----------------------------------------------------------------------------
 
-type Row =
-  | { source: "catalogue"; row: RewardCatalogueDto }
-  | { source: "verdict"; row: AdminRewardItemDto };
+type Row = { source: "catalogue" | "verdict"; row: AdminRewardItemDto };
+const CATALOGUE_PAGE_LIMIT = 20;
 
 function rowId(row: Row): string {
   return row.row.id;
 }
 import { Button } from "@/components/ui/button";
 
-function RewardCatalogue() {
+function RewardCatalogue({ heading }: { heading: ReactNode }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<unknown>(null);
   const [reloadSeed, setReloadSeed] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<unknown>(null);
+  const readEpoch = useRef(0);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<RewardEditSource | null>(null);
   const [disabling, setDisabling] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listRewardCatalogue().then(
+    const epoch = ++readEpoch.current;
+    listAdminRewardItems({ limit: CATALOGUE_PAGE_LIMIT }).then(
       (page) => {
-        if (!cancelled) {
+        if (!cancelled && epoch === readEpoch.current) {
           setRows(page.items.map((row) => ({ source: "catalogue", row }) as Row));
+          setTotal(page.total);
+          setMoreError(null);
+          setLoadingMore(false);
           setPhase("ready");
         }
       },
@@ -104,25 +108,48 @@ function RewardCatalogue() {
     );
     return () => {
       cancelled = true;
+      readEpoch.current += 1;
     };
   }, [reloadSeed]);
 
   /** Replace a row with its admin VERDICT (patterns §3 — server state at boundaries). */
   const onVerdict = useCallback((verdict: AdminRewardItemDto) => {
+    setEditing(null);
+    setDisabling(null);
     setRows((previous) =>
       previous.map((entry) => (rowId(entry) === verdict.id ? { source: "verdict", row: verdict } : entry)),
     );
+    setPhase("loading");
+    setReloadSeed((seed) => seed + 1);
   }, []);
 
-  const onCreated = useCallback((verdict: AdminRewardItemDto) => {
+  const onCreated = useCallback(() => {
     setCreating(false);
-    setRows((previous) => [...previous, { source: "verdict", row: verdict }]);
+    setPhase("loading");
+    setReloadSeed((seed) => seed + 1);
   }, []);
+
+  async function loadMore() {
+    if (loadingMore || phase !== "ready") return;
+    const epoch = readEpoch.current;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const page = await listAdminRewardItems({ limit: CATALOGUE_PAGE_LIMIT, offset: rows.length });
+      if (epoch !== readEpoch.current) return;
+      setRows((previous) => mergeOffsetPage(previous, page.items.map((row) => ({ source: "catalogue", row }) as Row), rowId));
+      setTotal(page.total);
+    } catch (cause) {
+      if (epoch === readEpoch.current) setMoreError(cause);
+    } finally {
+      if (epoch === readEpoch.current) setLoadingMore(false);
+    }
+  }
 
   return (
-    <section className="section" aria-label="奖励目录">
-      <div className="section-head">
-        <h2 className="section-title">奖励目录</h2>
+    <section className="section" aria-label="奖励目录" data-admin-return="rewards" tabIndex={-1}>
+      <div className="section-head campus-admin-rewards-heading">
+        {heading}
         <div className="row-actions">
           <Button
             variant="ghost"
@@ -141,10 +168,7 @@ function RewardCatalogue() {
           </Button>
         </div>
       </div>
-      <p className="field-hint">
-        目录读取使用学生端列表（仅显示上架项目）；下架后的项目不再出现在列表中，直至重新上架。
-        积分/库存/限购/时间窗的调整只影响之后的兑换请求，已创建的兑换保持原快照。
-      </p>
+
       {phase === "loading" ? (
         <SectionSkeleton lines={6} />
       ) : phase === "error" ? (
@@ -168,7 +192,7 @@ function RewardCatalogue() {
                 <th scope="col">库存</th>
                 <th scope="col">学期限购</th>
                 <th scope="col">可用时间窗</th>
-                <th scope="col">状态</th>
+                <th scope="col" className="cq-status-cell">状态</th>
                 <th scope="col">操作</th>
               </tr>
             </thead>
@@ -192,6 +216,18 @@ function RewardCatalogue() {
         </div>
       )}
 
+      {phase === "ready" ? <p className="list-footer">共 {total} 项奖励，已显示 {rows.length} 项</p> : null}
+      {phase === "ready" && hasMorePages(rows.length, total) ? (
+        <div className="load-more">
+          <Button variant="secondary" disabled={loadingMore} aria-busy={loadingMore} onClick={() => void loadMore()}>加载更多（{rows.length}/{total}）</Button>
+          {moreError !== null ? <SectionError error={moreError} onRetry={() => void loadMore()} /> : null}
+        </div>
+      ) : null}
+
+      <p className="field-hint">
+        管理目录包含上架与下架项目。
+        积分/库存/限购/时间窗的调整只影响之后的兑换请求，已创建的兑换保持原快照。
+      </p>
       {creating ? (
         <RewardFormDialog
           title="新建奖励"
@@ -235,24 +271,22 @@ function CatalogueRow({
   onDisable: () => void;
 }) {
   const row = entry.row;
-  // The student listing carries enabled items only; the verdict row
-  // carries the server's own enabled flag (kept visible after 下架).
-  const enabled = entry.source === "verdict" ? entry.row.enabled : true;
+  const enabled = row.enabled;
   const stock = row.stock === null ? "不限" : String(row.stock);
   const limit = row.per_user_term_limit === null ? "不限" : String(row.per_user_term_limit);
   return (
     <tr>
-      <td className="staff-cell-title">{row.name}</td>
-      <td className="meta-num">{row.point_cost}</td>
-      <td className="meta-num">{stock}</td>
-      <td className="meta-num">{limit}</td>
-      <td>{windowText}</td>
-      <td>
+      <td className="staff-cell-title" data-label="名称">{row.name}</td>
+      <td className="meta-num" data-label="积分">{row.point_cost}</td>
+      <td className="meta-num" data-label="库存">{stock}</td>
+      <td className="meta-num" data-label="学期限购">{limit}</td>
+      <td data-label="可用时间窗">{windowText}</td>
+      <td className="cq-status-cell" data-label="状态">
         <span className={`badge badge-${enabled ? "success" : "muted"}`}>
           {enabled ? "上架" : "已下架"}
         </span>
       </td>
-      <td>
+      <td data-label="操作">
         <div className="row-actions">
           <Button variant="secondary" onClick={onEdit}>
             编辑
@@ -287,6 +321,7 @@ function RewardFormDialog({
   onDone: (verdict: AdminRewardItemDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="rewards"]'));
   const [values, setValues] = useState<RewardFormValues>(initial);
   const [errors, setErrors] = useState<RewardFormErrors>({});
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -361,7 +396,7 @@ function RewardFormDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="reward-form-title">{title}</DialogTitle>
@@ -449,8 +484,6 @@ function RewardFormDialog({
             </div>
           </div>
           {errors.window !== undefined ? <p className="field-error">{errors.window}</p> : null}
-          {showCreateFields ? (
-            <>
               <div className="field">
                 <label className="field-label" htmlFor="reward-description">描述（选填）</label>
                 <textarea
@@ -475,6 +508,7 @@ function RewardFormDialog({
                   disabled={busy}
                 />
               </div>
+            {showCreateFields ? (
               <div className="field">
                 <label className="field-hint">
                   <input
@@ -486,12 +520,7 @@ function RewardFormDialog({
                   需要人工审核兑换
                 </label>
               </div>
-            </>
-          ) : (
-            <p className="field-hint">
-              编辑仅管理目录读取到的字段（名称/积分/库存/限购/时间窗/描述）；发放说明与审核标记在创建时设置，编辑不会改动。
-            </p>
-          )}
+            ) : <p className="field-hint">编辑保留未改动字段；兑换审核规则沿用原设定，不在这里调整。</p>}
           <div className="field">
             <label className="field-label" htmlFor="reward-reason">操作原因</label>
             <textarea
@@ -523,12 +552,12 @@ function RewardFormDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>{submitLabel}</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>
@@ -547,6 +576,7 @@ function DisableRewardDialog({
   onDone: (verdict: AdminRewardItemDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="rewards"]'));
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -593,7 +623,7 @@ function DisableRewardDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="reward-disable-title">下架奖励</DialogTitle>
@@ -629,12 +659,12 @@ function DisableRewardDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="danger" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>确认下架</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>
@@ -652,18 +682,15 @@ function ReviewGrants() {
         <h2 className="section-title">兑换审阅授权</h2>
       </div>
       <p className="field-hint">
-        将全局兑换审阅权限授予教师（被授权教师可处理兑换审核队列）；撤销立即生效。
-        教师的用户 ID 可在「用户与账户」页查询；授权与撤销的记录见审计日志。
+        按教师用户 ID 授予或撤销全局兑换审阅权限，撤销立即生效。
       </p>
-      <div className="workbench-columns">
-        <GrantForm mode="grant" />
-        <GrantForm mode="revoke" />
-      </div>
+      <GrantForm />
     </section>
   );
 }
 
-function GrantForm({ mode }: { mode: "grant" | "revoke" }) {
+function GrantForm() {
+  const [mode, setMode] = useState<"grant" | "revoke">("grant");
   const [teacherId, setTeacherId] = useState("");
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -710,8 +737,8 @@ function GrantForm({ mode }: { mode: "grant" | "revoke" }) {
       : null;
 
   return (
-    <form className="panel moderation-panel" onSubmit={onSubmit} noValidate>
-      <h4 className="section-title">{mode === "grant" ? "授予审阅权限" : "撤销审阅权限"}</h4>
+    <form className="campus-admin-review-grant" onSubmit={onSubmit} noValidate>
+      <div className="campus-admin-review-grant-grid">
       <div className="field">
         <label className="field-label" htmlFor={`grant-teacher-${mode}`}>
           教师用户 ID
@@ -733,6 +760,17 @@ function GrantForm({ mode }: { mode: "grant" | "revoke" }) {
         />
       </div>
       <div className="field">
+        <label className="field-label" htmlFor="reward-grant-mode">授权操作</label>
+        <select id="reward-grant-mode" className="input" value={mode} disabled={busy || done} onChange={event => {
+          setMode(event.target.value as "grant" | "revoke");
+          setFieldError(null);
+          setError(null);
+        }}>
+          <option value="grant">授予审阅权限</option>
+          <option value="revoke">撤销审阅权限</option>
+        </select>
+      </div>
+      <div className="field campus-admin-review-grant-reason">
         <label className="field-label" htmlFor={`grant-reason-${mode}`}>
           操作原因
         </label>
@@ -751,13 +789,15 @@ function GrantForm({ mode }: { mode: "grant" | "revoke" }) {
           disabled={busy || done}
           required
         />
+        <p className="field-hint">将写入审计日志。</p>
         {fieldError !== null ? <p className="field-error">{fieldError}</p> : null}
+      </div>
       </div>
       {done ? (
         <div className="alert alert-success" role="status">
           <p>
             {mode === "grant" ? "已授予审阅权限。" : "已撤销审阅权限。"}
-            （授权状态无查询接口；可在审计日志中核对操作记录）
+            可在审计日志中核对操作记录。
           </p>
         </div>
       ) : null}
@@ -775,12 +815,12 @@ function GrantForm({ mode }: { mode: "grant" | "revoke" }) {
       <div className="dialog-actions">
         <Button
           type="submit"
-          variant={mode === "grant" ? "primary" : "danger"}
+          variant="secondary"
           disabled={busy || done}
           aria-busy={busy}
         >
           {busy ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>{mode === "grant" ? "确认授予" : "确认撤销"}</span>
+          <span>确认操作</span>
         </Button>
         {done ? (
           <Button

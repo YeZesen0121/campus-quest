@@ -32,17 +32,17 @@ function ApplicationPage({ offset, onPage }: { offset: number; onPage: (offset: 
   if (state.status === "loading") return <div role="status" aria-label="正在读取资格申请队列"><SectionSkeleton lines={6} /></div>;
   if (state.status === "error") return <SectionError error={state.error} onRetry={retry} />;
   return <section className="section" aria-label="负责人资格申请队列">
-    <div className="section-head"><h2 className="section-title">等待开通的资格申请</h2><Button variant="ghost" onClick={retry}>刷新申请队列</Button></div>
+    <div className="section-head"><h2 className="section-title">等待开通</h2><Button variant="ghost" onClick={retry}>刷新申请队列</Button></div>
     <p className="field-hint">列表不包含姓名、学号、专业或年级。明确查看申请后才读取四项资料快照，并记录敏感读取审计。</p>
     {state.data.items.length === 0 ? <EmptyState title="暂无等待开通的资格申请" hint="学生保存负责人资料并申请后，会出现在这里。" /> : <>
       <div className="table-scroll">
         <table className="staff-table" aria-label="负责人资格申请列表">
-          <thead><tr><th scope="col">申请账号</th><th scope="col">申请时间</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead>
+          <thead><tr><th scope="col">申请账号</th><th scope="col">申请时间</th><th scope="col" className="cq-status-cell">状态</th><th scope="col">操作</th></tr></thead>
           <tbody>{state.data.items.map((application) => <tr key={application.user_id}>
-            <td className="staff-cell-title mono">{application.user_id}</td>
-            <td><time dateTime={application.requested_at}>{formatDeadlineDateTime(parseServerInstant(application.requested_at))}</time></td>
-            <td>{completed.includes(application.user_id) ? "已开通" : "等待开通"}</td>
-            <td><Button variant="secondary" disabled={completed.includes(application.user_id)} onClick={() => setSelected(application.user_id)}>查看申请</Button></td>
+            <td className="staff-cell-title mono" data-label="申请账号">{application.user_id}</td>
+            <td data-label="申请时间"><time dateTime={application.requested_at}>{formatDeadlineDateTime(parseServerInstant(application.requested_at))}</time></td>
+            <td className="cq-status-cell" data-label="状态"><span className="badge">{completed.includes(application.user_id) ? "已开通" : "等待开通"}</span></td>
+            <td data-label="操作"><Button variant="secondary" disabled={completed.includes(application.user_id)} onClick={() => setSelected(application.user_id)}>查看申请</Button></td>
           </tr>)}</tbody>
         </table>
       </div>
@@ -102,11 +102,14 @@ function ApplicationDetail({ initial, onApproved }: { initial: OwnerQualificatio
     } finally { if (current()) setBusy(false); }
   }
 
-  return <section className="panel form ie-draft-form ie-draft-remote" aria-label="负责人资格申请详情">
-    <h2 className="section-title">申请资料快照</h2>
-    <p role="status" aria-label="申请开通状态">{record.status === "APPROVED" ? "负责人资格已开通" : "等待管理员开通"}</p>
-    <p className="field-hint">这是学生明确提交的第 {record.profile_version} 版资料快照。开通负责人资格不会核实成果，也不会授予运营、教师或管理员权限。</p>
-    <dl>{OWNER_FIELDS.map(({ key, label }) => <div key={key}><dt className="field-label">{label}</dt><dd>{record.profile[key]}</dd></div>)}</dl>
+  return <section className="panel form ie-draft-form ie-draft-remote campus-admin-selected-detail campus-admin-qualification" aria-label="负责人资格申请详情">
+    <div className="campus-admin-detail-heading">
+      <h2 className="section-title">申请资料快照</h2>
+      <p role="status" aria-label="申请开通状态" className="badge">{record.status === "APPROVED" ? "负责人资格已开通" : "等待管理员开通"}</p>
+    </div>
+      <p className="field-hint">已显式读取本申请的第 {record.profile_version} 版资料快照；敏感读取将被审计。</p>
+      <dl>{OWNER_FIELDS.map(({ key, label }) => <div key={key}><dt className="field-label">{label}</dt><dd>{record.profile[key]}</dd></div>)}</dl>
+    <p className="field-hint campus-source-note">开通负责人资格不会核实成果，也不会授予运营、教师或管理员权限。</p>
     {error ? <div className="alert alert-error" role="alert"><p>{error.message}</p>{error.requestId ? <p className="req-id">请求 ID：{error.requestId}</p> : null}</div> : null}
     {message ? <p role="status" aria-label="管理员资格操作结果" className="alert alert-success">{message}</p> : null}
     <div className="ie-draft-actions">
@@ -124,8 +127,8 @@ function ApplicationDetail({ initial, onApproved }: { initial: OwnerQualificatio
         <DialogTitle id="owner-qualification-confirm-title">开通负责人资格</DialogTitle>
         <p className="field-hint">确认依据刚才查看的资料快照，为{record.profile.name}开通负责人资格？此操作将记入审计日志，成果仍需单独核实。</p>
         <DialogFooter>
-          <Button disabled={busy} aria-busy={busy} onClick={() => void approve()}>{busy ? <span className="spinner" aria-hidden="true" /> : null}确认开通</Button>
           <Button variant="secondary" disabled={busy} onClick={() => setConfirm(false)}>取消</Button>
+          <Button disabled={busy} aria-busy={busy} onClick={() => void approve()}>{busy ? <span className="spinner" aria-hidden="true" /> : null}确认开通</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

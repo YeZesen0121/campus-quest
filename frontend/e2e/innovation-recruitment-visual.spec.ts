@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { API_URL, BASE_URL, ensureStudentLogin, expect, mintToken, test } from "./fixtures";
+import { captureOwnedVisual, API_URL, BASE_URL, ensureStudentLogin, expect, mintToken, test } from "./fixtures";
+import { captureR6Evidence } from "./collaboration-screenshots";
 import type { Page } from "@playwright/test";
 
 test.skip(process.env.CQ_E2E !== "1" || process.env.CQ_VISUAL !== "1" || process.env.CQ_E2E_FIXED_LABELS !== "1", "separate Linux pinned-font R3 visual world");
@@ -9,8 +10,9 @@ async function stable(page: Page, modal = false) {
   // Sample the product only after its accessible heading has rendered.
   if (modal) await expect(page.getByRole("dialog", { name: "发布招募", exact: true })).toBeVisible();
   else await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } *, *::before, *::after { animation: none !important; transition: none !important; }' });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } *, *::before, *::after { animation: none !important; transition: none !important; }' });
   await page.evaluate(() => document.fonts.ready);
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 }
@@ -33,34 +35,38 @@ test("R3 visual: owner form, consent preview and public project/recruitment", as
   await page.getByRole("button", { name: "编辑招募：学习研究伙伴", exact: true }).click();
   const editor = page.getByRole("region", { name: "招募岗位编辑器" });
   await expect(editor.getByLabel("微信", { exact: true })).toHaveValue("demo_partner");
-  await stable(page); await expect(editor).toHaveScreenshot("recruitment-owner-form.png", { maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, editor, "recruitment-owner-form.png");
+  await captureR6Evidence(page, editor, test.info().outputPath("guide-recruitment-owner-form.png"));
   await page.setViewportSize({ width: 390, height: 844 });
   await editor.getByRole("button", { name: "预览发布招募", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "发布招募", exact: true });
   await expect(dialog).toContainText("授权微信：demo_partner");
-  await stable(page, true); await expect(dialog).toHaveScreenshot("recruitment-mobile-consent.png", { maxDiffPixelRatio: 0.01 });
+  await stable(page, true); await captureOwnedVisual(page, dialog, "recruitment-mobile-consent.png");
   await page.keyboard.press("Escape");
   await expect(editor.getByRole("button", { name: "预览发布招募", exact: true })).toBeFocused();
   const published = await page.request.post(`${API_URL}/ie/me/project-drafts/${project.id}/recruitments/${recruitment.id}/publish`, { headers, data: { version: recruitment.version, request_id: crypto.randomUUID() } }); expect(published.status()).toBe(200);
   await page.goto(`${BASE_URL}/innovation/recruitments/${recruitment.id}`);
   await expect(page.getByRole("article", { name: "校内招募详情" })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("body")).not.toContainText("demo_partner");
-  await stable(page); await expect(page).toHaveScreenshot("recruitment-mobile-detail.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, page.getByRole("main"), "recruitment-mobile-detail.png");
   await page.getByRole("button", { name: "查看联系方式", exact: true }).click();
   const contacts = page.getByRole("region", { name: "授权联系方式" });
   await expect(contacts).toContainText("demo_partner");
-  await stable(page); await expect(contacts).toHaveScreenshot("recruitment-authorized-contact.png", { maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, contacts, "recruitment-authorized-contact.png");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${BASE_URL}/innovation/projects/${project.id}`);
   await expect(page.getByRole("article", { name: "校内项目详情" })).toContainText("负责人发布的招募版本（免审）");
-  await stable(page); await expect(page).toHaveScreenshot("recruitment-project-detail.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  // R6 adds an independently loaded, consent-scoped member section. Capture
+  // its resolved empty state, keeping the pre-R6 reference unchanged.
+  await expect(page.getByRole("region", { name: "本人同意公开的项目成员" })).toContainText("暂无本人同意公开的成员");
+  await stable(page); await captureOwnedVisual(page, page.getByRole("main"), "recruitment-project-detail-r6.png");
   const current = (await published.json()).current;
   const closed = await page.request.post(`${API_URL}/ie/me/project-drafts/${project.id}/recruitments/${recruitment.id}/close`, { headers, data: { version: current.version, request_id: crypto.randomUUID() } }); expect(closed.status()).toBe(200);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE_URL}/innovation/recruitments/${recruitment.id}`);
   await expect(page.getByRole("main").getByRole("alert")).toContainText("不存在");
   await expect(page.locator("body")).not.toContainText("demo_partner");
-  await stable(page); await expect(page).toHaveScreenshot("recruitment-mobile-closed.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, page.getByRole("main"), "recruitment-mobile-closed.png");
 });
 
 test("R3 visual: filtered empty and unavailable recruitment", async ({ page }) => {
@@ -68,8 +74,8 @@ test("R3 visual: filtered empty and unavailable recruitment", async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE_URL}/innovation/recruitments?q=不存在的模拟岗位`);
   await expect(page.getByRole("region", { name: "校内招募岗位" })).toContainText("暂无符合条件的招募");
-  await stable(page); await expect(page).toHaveScreenshot("recruitment-mobile-empty.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, page.getByRole("main"), "recruitment-mobile-empty.png");
   await page.goto(`${BASE_URL}/innovation/recruitments/00000000-0000-4000-8000-000000000000`);
   await expect(page.getByRole("main").getByRole("alert")).toContainText("不存在");
-  await stable(page); await expect(page).toHaveScreenshot("recruitment-mobile-unavailable.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await stable(page); await captureOwnedVisual(page, page.getByRole("main"), "recruitment-mobile-unavailable.png");
 });

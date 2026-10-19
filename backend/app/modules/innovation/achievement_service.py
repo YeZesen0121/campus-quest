@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -20,6 +21,7 @@ from app.modules.innovation.achievement_schemas import (
     AchievementDraftResponse,
     AchievementDraftUpdate,
 )
+from app.modules.innovation.collaboration_common import require_project_editor
 from app.modules.innovation.models import AchievementDraft, ProjectDraft
 from app.modules.innovation.owner_service import _require_student
 from app.modules.innovation.workflow_guards import require_editable
@@ -45,13 +47,23 @@ def _not_found() -> BusinessError:
 
 
 class AchievementDraftService:
-    def __init__(self, *, clock: Clock, audit: AuditLogWriter | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        audit: AuditLogWriter | None = None,
+        project_access: Literal["OWNER", "EDITOR"] = "OWNER",
+    ) -> None:
         self._clock = clock
         self._audit = audit if audit is not None else AuditLogWriter()
+        self._project_access = project_access
 
     async def _owned_parent(
         self, db: AsyncSession, *, actor: Actor, project_id: UUID
     ) -> None:
+        if self._project_access == "EDITOR":
+            await require_project_editor(db, actor, project_id)
+            return
         await _require_student(db, actor)
         parent = await db.scalar(
             select(ProjectDraft.id)

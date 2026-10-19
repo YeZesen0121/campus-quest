@@ -161,12 +161,17 @@ test.describe("student registration and login", () => {
     await expect(page.getByText("1/16")).toBeVisible();
   });
 
-  test("password recovery keeps enumeration-free copy", async ({ page }) => {
+  test("password recovery keeps enumeration-free copy", async ({ page }, testInfo) => {
     await page.goto(`${BASE_URL}/forgot-password`);
     await page.getByLabel("学号").fill(freshStudentNumber()); // unknown username
     await page.getByRole("button", { name: "获取验证码", exact: true }).click();
 
     // Uniform copy for every identifier class — never "user not found".
     await expect(page.getByText("如果该用户名对应的账号存在且已绑定手机号")).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0); });
+      await page.screenshot({ path: testInfo.outputPath(`recovery-confirmation-${width}.png`), fullPage: true, animations: 'disabled' });
+    }
   });
 });

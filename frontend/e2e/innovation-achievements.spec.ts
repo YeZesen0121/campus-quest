@@ -17,6 +17,24 @@ const editor = (page: Page) => page.getByRole("region", { name: "成果草稿编
 const save = (page: Page) => page.getByRole("button", { name: "保存成果草稿", exact: true });
 const saved = (page: Page) => expect(editor(page).getByRole("status")).toHaveText("成果草稿已保存，仅自己可见。");
 
+test("private achievements: project section navigation returns to the project list", async ({ page }) => {
+  await ensureStudentLogin(page);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await openAchievements(page);
+    await page.getByRole("button", { name: "返回成果列表", exact: true }).click();
+    const achievementsUrl = page.url();
+    const projects = page.getByRole("navigation", { name: "本人双创管理" }).getByRole("link", { name: "我的项目", exact: true });
+    await projects.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(`${BASE_URL}/profile/project-drafts`);
+    await expect(page.getByRole("heading", { name: "我的项目", exact: true })).toBeVisible();
+    await page.goto(achievementsUrl);
+    await projects.click();
+    await expect(page).toHaveURL(`${BASE_URL}/profile/project-drafts`);
+  }
+});
+
 test("private achievements: mobile keyboard, literal preview, persistence and multiple works", async ({ page }, testInfo) => {
   await ensureStudentLogin(page);
   await page.setViewportSize({ width: 390, height: 844 });

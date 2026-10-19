@@ -113,7 +113,7 @@ export function TaskDiscovery() {
       <ul className="task-grid" aria-label="可领取的任务">
         {items.map((card) => (
           <li key={card.id}>
-            <TaskCard card={card} nowMs={now} />
+            <TaskCard card={card} nowMs={now} headingLevel={2} />
           </li>
         ))}
       </ul>

@@ -7,7 +7,7 @@ export default function InnovationOperationsPage() {
   return <>
     <div className="page-head">
       <h1 className="page-title">双创运营授权</h1>
-      <p className="page-subtitle">由管理员指定和撤回运营学生，所有操作记入审计日志。</p>
+      <p className="page-subtitle">选择账号，读取当前授权后授予或撤回。</p>
     </div>
     <OperationsGrantAdmin />
   </>;

@@ -15,15 +15,9 @@
  * 409s carry the frozen-registry `CONFLICT` code (registered Plan 08
  * T9) — branch through `describeAdminMutationError` in `adminView`.
  *
- * Listing-surface honesty (frozen contract, UI mirrors it):
- * - the reward catalogue READ the rewards page mounts is still the
- *   student listing `GET /rewards` (enabled items only); the admin
- *   listing `GET /admin/rewards` (disabled rows included) and the
- *   template listing `GET /admin/notification-templates` exist in the
- *   generated contract (T10 gap-fill) but no page consumes them yet —
- *   wiring them is a separately-scoped UI change; disable responses
- *   are held client-side so a just-disabled row keeps rendering its
- *   verdict;
+ * Listing surfaces: the admin reward page consumes the existing
+ * `GET /admin/rewards` contract, including disabled rows and offset paging.
+ * The student catalogue wrapper remains its separate student capability.
  * - NotificationTemplates gained an admin listing in the contract
  *   (T10); the template panel still edits by id from the create
  *   response / audit trail until a page consumes the listing.
@@ -215,8 +209,8 @@ export function toggleWhitelistEntry(
 
 /**
  * The catalogue listing (GET /rewards — the STUDENT surface; enabled
- * items only, server-computed window verdict). The admin catalogue view
- * does not exist in the frozen contract; this is its read surface.
+ * items only, server-computed window verdict). Kept separate from the
+ * existing administrator management listing below.
  */
 export function listRewardCatalogue(
   init: { signal?: AbortSignal } = {},
@@ -224,6 +218,16 @@ export function listRewardCatalogue(
   return apiRequest<Schemas["RewardsListResponse"]>("/api/v1/rewards", {
     signal: init.signal,
   });
+}
+
+/** Authorized management catalogue, including disabled rows (existing API). */
+export function listAdminRewardItems(
+  query: PageQuery = {},
+): Promise<Schemas["AdminRewardItemListResponse"]> {
+  return apiRequest<Schemas["AdminRewardItemListResponse"]>(
+    `/api/v1/admin/rewards${pagination(query)}`,
+    { signal: query.signal },
+  );
 }
 
 /** Create one ENABLED catalogue row (POST /admin/rewards; reason rides the audit). */

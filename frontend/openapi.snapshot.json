@@ -941,7 +941,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectDraftResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ProjectDraftResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProjectCreationReplayResponse"
+                    }
+                  ],
+                  "title": "Response Create Draft Api V1 Ie Me Project Drafts Post"
                 }
               }
             }
@@ -5807,6 +5815,1988 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PublicProjectMentorsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/targets/resolve": {
+      "post": {
+        "tags": [
+          "innovation collaboration"
+        ],
+        "summary": "Resolve Target",
+        "operationId": "resolve_target_api_v1_ie_collaboration_targets_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetResolveCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ie/me/collaborations": {
+      "get": {
+        "tags": [
+          "innovation collaboration"
+        ],
+        "summary": "List Mine",
+        "operationId": "list_mine_api_v1_ie_me_collaborations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/collaborators": {
+      "get": {
+        "tags": [
+          "innovation collaboration"
+        ],
+        "summary": "List Project",
+        "operationId": "list_project_api_v1_ie_me_project_drafts__project_id__collaborators_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "innovation collaboration"
+        ],
+        "summary": "Invite",
+        "operationId": "invite_api_v1_ie_me_project_drafts__project_id__collaborators_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationInviteCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaborations/{collaboration_id}/{action}": {
+      "post": {
+        "tags": [
+          "innovation collaboration"
+        ],
+        "summary": "Act",
+        "operationId": "act_api_v1_ie_collaborations__collaboration_id___action__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "collaboration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Collaboration Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "accept",
+                "reject",
+                "revoke"
+              ],
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollaborationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "innovation collaboration text"
+        ],
+        "summary": "Read",
+        "operationId": "read_api_v1_ie_collaboration_projects__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "innovation collaboration text"
+        ],
+        "summary": "Save",
+        "operationId": "save_api_v1_ie_collaboration_projects__project_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationProjectSaveCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/achievements": {
+      "post": {
+        "tags": [
+          "innovation achievement drafts"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_v1_ie_collaboration_projects__project_id__achievements_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AchievementDraftCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AchievementDraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "innovation achievement drafts"
+        ],
+        "summary": "List Owned",
+        "operationId": "list_owned_api_v1_ie_collaboration_projects__project_id__achievements_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AchievementDraftListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/achievements/{achievement_id}": {
+      "get": {
+        "tags": [
+          "innovation achievement drafts"
+        ],
+        "summary": "Get Owned",
+        "operationId": "get_owned_api_v1_ie_collaboration_projects__project_id__achievements__achievement_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "achievement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Achievement Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AchievementDraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "innovation achievement drafts"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_v1_ie_collaboration_projects__project_id__achievements__achievement_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "achievement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Achievement Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollaborationAchievementSaveCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceAchievementSaveResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_v1_ie_collaboration_projects__project_id__recruitments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentDraftCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentDraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "List Owned",
+        "operationId": "list_owned_api_v1_ie_collaboration_projects__project_id__recruitments_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentDraftListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}": {
+      "get": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Get Owned",
+        "operationId": "get_owned_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentDraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Update",
+        "operationId": "update_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentDraftUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentDraftResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}/publish": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Publish",
+        "operationId": "publish_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}/close": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Close",
+        "operationId": "close_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__close_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}/reopen": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Reopen",
+        "operationId": "reopen_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__reopen_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}/confirm-active": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Confirm Active",
+        "operationId": "confirm_active_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__confirm_active_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecruitmentVersionCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/collaboration/projects/{project_id}/recruitments/{recruitment_id}/revoke-contact": {
+      "post": {
+        "tags": [
+          "innovation recruitment"
+        ],
+        "summary": "Revoke Contact",
+        "operationId": "revoke_contact_api_v1_ie_collaboration_projects__project_id__recruitments__recruitment_id__revoke_contact_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "recruitment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recruitment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeRecruitmentContactCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecruitmentActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/collaboration-projects": {
+      "get": {
+        "tags": [
+          "innovation collaboration queries"
+        ],
+        "summary": "Personal",
+        "operationId": "personal_api_v1_ie_me_collaboration_projects_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "OWNER",
+                "MANAGER",
+                "MEMBER"
+              ],
+              "type": "string",
+              "default": "OWNER",
+              "title": "Role"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalProjectListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/projects/{project_id}/members": {
+      "get": {
+        "tags": [
+          "innovation collaboration queries"
+        ],
+        "summary": "Members",
+        "operationId": "members_api_v1_ie_projects__project_id__members_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProjectMembersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/transfer-proofs": {
+      "get": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "Proof Choices",
+        "operationId": "proof_choices_api_v1_ie_me_project_drafts__project_id__transfer_proofs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferProofChoicesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/transfers": {
+      "post": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "Create",
+        "operationId": "create_api_v1_ie_me_project_drafts__project_id__transfers_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/transfers": {
+      "get": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "List Mine",
+        "operationId": "list_mine_api_v1_ie_me_transfers_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/transfers/{transfer_id}": {
+      "get": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "Summary",
+        "operationId": "summary_api_v1_ie_transfers__transfer_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transfer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/transfers/{transfer_id}/{action}": {
+      "post": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "Act",
+        "operationId": "act_api_v1_ie_transfers__transfer_id___action__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transfer Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "accept",
+                "reject",
+                "cancel"
+              ],
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/transfers/{transfer_id}/evidence/{evidence_id}": {
+      "get": {
+        "tags": [
+          "innovation transfer"
+        ],
+        "summary": "Evidence",
+        "operationId": "evidence_api_v1_ie_transfers__transfer_id__evidence__evidence_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Transfer Id"
+            }
+          },
+          {
+            "name": "evidence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Evidence Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/lifecycle": {
+      "get": {
+        "tags": [
+          "innovation lifecycle"
+        ],
+        "summary": "State",
+        "operationId": "state_api_v1_ie_me_project_drafts__project_id__lifecycle_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/introduction/preview": {
+      "post": {
+        "tags": [
+          "innovation lifecycle"
+        ],
+        "summary": "Preview",
+        "operationId": "preview_api_v1_ie_me_project_drafts__project_id__introduction_preview_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntroductionPreviewCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntroductionPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/introduction/publish": {
+      "post": {
+        "tags": [
+          "innovation lifecycle"
+        ],
+        "summary": "Publish",
+        "operationId": "publish_api_v1_ie_me_project_drafts__project_id__introduction_publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntroductionPublishCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ie/me/project-drafts/{project_id}/{action}": {
+      "post": {
+        "tags": [
+          "innovation lifecycle"
+        ],
+        "summary": "Act",
+        "operationId": "act_api_v1_ie_me_project_drafts__project_id___action__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "complete",
+                "resume"
+              ],
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecycleCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResult"
                 }
               }
             }
@@ -11449,6 +13439,353 @@
         "title": "ClaimResponse",
         "description": "A claim on the owner's own surface (spec §8, §42): the assigned\nunit's platform/keyword appear here and nowhere else student-facing."
       },
+      "ClosingRecruitment": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role_name": {
+            "type": "string",
+            "title": "Role Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role_name",
+          "version"
+        ],
+        "title": "ClosingRecruitment"
+      },
+      "CollaborationAchievementSaveCommand": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Description"
+          },
+          "work_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Work Url"
+          },
+          "award_text": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Award Text"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "work_url",
+          "award_text",
+          "version",
+          "request_id"
+        ],
+        "title": "CollaborationAchievementSaveCommand"
+      },
+      "CollaborationInviteCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "target_ref": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Ref"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "MEMBER"
+            ],
+            "title": "Kind"
+          },
+          "public_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Name"
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "target_ref",
+          "kind"
+        ],
+        "title": "CollaborationInviteCommand"
+      },
+      "CollaborationListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollaborationResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "CollaborationListResponse"
+      },
+      "CollaborationProjectSaveCommand": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Summary"
+          },
+          "direction": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Direction"
+          },
+          "stage": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Stage"
+          },
+          "team_status": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Team Status"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "summary",
+          "direction",
+          "stage",
+          "team_status",
+          "version",
+          "request_id"
+        ],
+        "title": "CollaborationProjectSaveCommand"
+      },
+      "CollaborationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "project_title": {
+            "type": "string",
+            "title": "Project Title"
+          },
+          "project_summary": {
+            "type": "string",
+            "title": "Project Summary"
+          },
+          "project_direction": {
+            "type": "string",
+            "title": "Project Direction"
+          },
+          "target_nickname": {
+            "type": "string",
+            "title": "Target Nickname"
+          },
+          "is_target": {
+            "type": "boolean",
+            "title": "Is Target"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "MEMBER"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED"
+            ],
+            "title": "Status"
+          },
+          "public_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Name"
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project_title",
+          "project_summary",
+          "project_direction",
+          "target_nickname",
+          "is_target",
+          "kind",
+          "status",
+          "public_name",
+          "division",
+          "version",
+          "expires_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CollaborationResponse"
+      },
+      "CollaborationVersionCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version"
+        ],
+        "title": "CollaborationVersionCommand"
+      },
       "CollaboratorAddRequest": {
         "properties": {
           "permissions": {
@@ -12095,6 +14432,11 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only",
+            "default": false
           }
         },
         "type": "object",
@@ -12439,6 +14781,137 @@
         ],
         "title": "InnovationCapabilitiesResponse"
       },
+      "IntroductionFields": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Summary"
+          },
+          "direction": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Direction"
+          },
+          "stage": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Stage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "summary",
+          "direction",
+          "stage"
+        ],
+        "title": "IntroductionFields"
+      },
+      "IntroductionPreviewCommand": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/IntroductionFields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "fields"
+        ],
+        "title": "IntroductionPreviewCommand"
+      },
+      "IntroductionPreviewResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/IntroductionFields"
+          },
+          "source_kind": {
+            "type": "string",
+            "enum": [
+              "ACHIEVEMENT",
+              "RECRUITMENT"
+            ],
+            "title": "Source Kind"
+          },
+          "next_revision": {
+            "type": "integer",
+            "title": "Next Revision"
+          },
+          "can_publish": {
+            "type": "boolean",
+            "title": "Can Publish"
+          },
+          "preview_digest": {
+            "type": "string",
+            "title": "Preview Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "version",
+          "fields",
+          "source_kind",
+          "next_revision",
+          "can_publish",
+          "preview_digest"
+        ],
+        "title": "IntroductionPreviewResponse"
+      },
+      "IntroductionPublishCommand": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "fields": {
+            "$ref": "#/components/schemas/IntroductionFields"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "preview_digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Preview Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "fields",
+          "request_id",
+          "preview_digest"
+        ],
+        "title": "IntroductionPublishCommand"
+      },
       "InvalidateRewardLockRequest": {
         "properties": {
           "reason": {
@@ -12454,6 +14927,151 @@
         ],
         "title": "InvalidateRewardLockRequest",
         "description": "Cancel the provisional reward lock (spec §11.3). The reviewer\nreason is mandatory — it lands on the append-only audit rows."
+      },
+      "LifecycleCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "confirmation_digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Confirmation Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "confirmation_digest"
+        ],
+        "title": "LifecycleCommand"
+      },
+      "LifecycleResult": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "COMPLETED"
+            ],
+            "title": "Lifecycle"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "introduction_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction Revision"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "applied_version": {
+            "type": "integer",
+            "title": "Applied Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "lifecycle",
+          "version",
+          "introduction_revision",
+          "replayed",
+          "applied_version"
+        ],
+        "title": "LifecycleResult"
+      },
+      "LifecycleStateResponse": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "COMPLETED"
+            ],
+            "title": "Lifecycle"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "introduction_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction Revision"
+          },
+          "closing_recruitments": {
+            "items": {
+              "$ref": "#/components/schemas/ClosingRecruitment"
+            },
+            "type": "array",
+            "title": "Closing Recruitments"
+          },
+          "public_consequence": {
+            "type": "string",
+            "enum": [
+              "RETAIN_PRIOR_PUBLIC",
+              "PRIVATE",
+              "SOURCE_RESTRICTED"
+            ],
+            "title": "Public Consequence"
+          },
+          "can_transition": {
+            "type": "boolean",
+            "title": "Can Transition"
+          },
+          "confirmation_digest": {
+            "type": "string",
+            "title": "Confirmation Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "lifecycle",
+          "version",
+          "introduction_revision",
+          "closing_recruitments",
+          "public_consequence",
+          "can_transition",
+          "confirmation_digest"
+        ],
+        "title": "LifecycleStateResponse"
       },
       "LoginRequest": {
         "properties": {
@@ -13995,6 +16613,129 @@
         "title": "PasswordResetRequest",
         "description": "Confirm a password reset with the OTP code and a new password."
       },
+      "PersonalProjectListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PersonalProjectSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "PersonalProjectListResponse"
+      },
+      "PersonalProjectSummary": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "collaboration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collaboration Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "MANAGER",
+              "MEMBER"
+            ],
+            "title": "Role"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "public_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Name"
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "can_publish_recruitment": {
+            "type": "boolean",
+            "title": "Can Publish Recruitment"
+          },
+          "can_open_public": {
+            "type": "boolean",
+            "title": "Can Open Public"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_id",
+          "collaboration_id",
+          "role",
+          "title",
+          "summary",
+          "direction",
+          "public_name",
+          "division",
+          "can_edit",
+          "can_publish_recruitment",
+          "can_open_public"
+        ],
+        "title": "PersonalProjectSummary"
+      },
       "PhoneChallengeRequest": {
         "properties": {
           "phone": {
@@ -14139,6 +16880,28 @@
         "title": "PointsAdjustmentResponse",
         "description": "The posted ADMIN_ADJUSTMENT entry: ranking-neutral by\nconstruction (affects_ranking=false; no ranking-affecting\nadjustment operation exists)."
       },
+      "ProjectCreationReplayResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ownership": {
+            "type": "string",
+            "const": "TRANSFERRED",
+            "title": "Ownership",
+            "default": "TRANSFERRED"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "ProjectCreationReplayResponse",
+        "description": "Former creators can reconcile a request without current project access."
+      },
       "ProjectDraftCreate": {
         "properties": {
           "request_id": {
@@ -14244,6 +17007,14 @@
             "type": "string",
             "title": "Team Status"
           },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "COMPLETED"
+            ],
+            "title": "Lifecycle"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -14268,6 +17039,7 @@
           "direction",
           "stage",
           "team_status",
+          "lifecycle",
           "version",
           "created_at",
           "updated_at"
@@ -14440,6 +17212,49 @@
           "created_at"
         ],
         "title": "ProjectMentorResponse"
+      },
+      "ProjectWorkspaceResponse": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/ProjectDraftResponse"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "MANAGER"
+            ],
+            "title": "Role"
+          },
+          "can_publish_recruitment": {
+            "type": "boolean",
+            "title": "Can Publish Recruitment"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          },
+          "applied_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft",
+          "role",
+          "can_publish_recruitment"
+        ],
+        "title": "ProjectWorkspaceResponse"
       },
       "PublicAchievementContent": {
         "properties": {
@@ -14776,6 +17591,41 @@
         ],
         "title": "PublicProjectListResponse"
       },
+      "PublicProjectMember": {
+        "properties": {
+          "public_name": {
+            "type": "string",
+            "title": "Public Name"
+          },
+          "division": {
+            "type": "string",
+            "title": "Division"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "public_name",
+          "division"
+        ],
+        "title": "PublicProjectMember"
+      },
+      "PublicProjectMembersResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicProjectMember"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PublicProjectMembersResponse"
+      },
       "PublicProjectMentorsResponse": {
         "properties": {
           "items": {
@@ -14819,9 +17669,44 @@
             "type": "string",
             "enum": [
               "ACHIEVEMENT",
-              "RECRUITMENT"
+              "RECRUITMENT",
+              "INTRODUCTION"
             ],
             "title": "Source Kind"
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "COMPLETED"
+            ],
+            "title": "Lifecycle"
+          },
+          "introduction_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction Revision"
+          },
+          "introduction_source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ACHIEVEMENT",
+                  "RECRUITMENT"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction Source"
           },
           "achievement_count": {
             "type": "integer",
@@ -14840,6 +17725,9 @@
           "direction",
           "stage",
           "source_kind",
+          "lifecycle",
+          "introduction_revision",
+          "introduction_source",
           "achievement_count",
           "recruitment_count"
         ],
@@ -18550,6 +21438,46 @@
         ],
         "title": "TalentVersionCommand"
       },
+      "TargetResolveCommand": {
+        "properties": {
+          "account": {
+            "type": "string",
+            "pattern": "^[0-9]{6,20}$",
+            "title": "Account"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account"
+        ],
+        "title": "TargetResolveCommand"
+      },
+      "TargetResponse": {
+        "properties": {
+          "target_ref": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Ref"
+          },
+          "nickname": {
+            "type": "string",
+            "title": "Nickname"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_ref",
+          "nickname",
+          "expires_at"
+        ],
+        "title": "TargetResponse"
+      },
       "TaskCardResponse": {
         "properties": {
           "id": {
@@ -19564,6 +22492,562 @@
         "title": "TotpSetupResponse",
         "description": "A freshly generated TOTP credential, displayed exactly once (§5.8)."
       },
+      "TransferClosingRecruitment": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reference"
+          },
+          "role_name": {
+            "type": "string",
+            "title": "Role Name"
+          },
+          "status": {
+            "type": "string",
+            "const": "OPEN",
+            "title": "Status"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reference",
+          "role_name",
+          "status",
+          "deadline_at"
+        ],
+        "title": "TransferClosingRecruitment"
+      },
+      "TransferCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "confirmation_digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Confirmation Digest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "version",
+          "confirmation_digest"
+        ],
+        "title": "TransferCommand"
+      },
+      "TransferCreate": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "target_ref": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Ref"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Evidence Ids"
+          },
+          "allow_preview": {
+            "type": "boolean",
+            "title": "Allow Preview"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "target_ref",
+          "evidence_ids",
+          "allow_preview"
+        ],
+        "title": "TransferCreate"
+      },
+      "TransferListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransferResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TransferListResponse"
+      },
+      "TransferProof": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "CHECKING",
+              "READY",
+              "REJECTED"
+            ],
+            "title": "State"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "sha256",
+          "size",
+          "content_type",
+          "state",
+          "removed"
+        ],
+        "title": "TransferProof"
+      },
+      "TransferProofChoice": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "achievement_title": {
+            "type": "string",
+            "title": "Achievement Title"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "achievement_title",
+          "content_type",
+          "size"
+        ],
+        "title": "TransferProofChoice"
+      },
+      "TransferProofChoicesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransferProofChoice"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "TransferProofChoicesResponse"
+      },
+      "TransferRelationship": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reference"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "MEMBER",
+              "MENTOR"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "division": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Division"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "TEXT_AND_RECRUITMENT",
+              "PUBLIC_NAME_ONLY",
+              "MENTOR_DISPLAY_ONLY"
+            ],
+            "title": "Scope"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reference",
+          "kind",
+          "name",
+          "division",
+          "scope"
+        ],
+        "title": "TransferRelationship"
+      },
+      "TransferResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "project_title": {
+            "type": "string",
+            "title": "Project Title"
+          },
+          "counterpart_nickname": {
+            "type": "string",
+            "title": "Counterpart Nickname"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACCEPTED",
+              "REJECTED",
+              "CANCELED",
+              "EXPIRED",
+              "INVALIDATED"
+            ],
+            "title": "Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "is_target": {
+            "type": "boolean",
+            "title": "Is Target"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "initial_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmation_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Digest"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/TransferProof"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "allow_preview": {
+            "type": "boolean",
+            "title": "Allow Preview",
+            "default": false
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blockers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project_title",
+          "counterpart_nickname",
+          "status",
+          "version",
+          "is_target",
+          "expires_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TransferResponse"
+      },
+      "TransferSummary": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "stage": {
+            "type": "string",
+            "title": "Stage"
+          },
+          "team_status": {
+            "type": "string",
+            "title": "Team Status"
+          },
+          "project_version": {
+            "type": "integer",
+            "title": "Project Version"
+          },
+          "ownership_generation": {
+            "type": "integer",
+            "title": "Ownership Generation"
+          },
+          "achievement_count": {
+            "type": "integer",
+            "title": "Achievement Count"
+          },
+          "manager_count": {
+            "type": "integer",
+            "title": "Manager Count"
+          },
+          "member_count": {
+            "type": "integer",
+            "title": "Member Count"
+          },
+          "mentor_count": {
+            "type": "integer",
+            "title": "Mentor Count"
+          },
+          "open_recruitment_count": {
+            "type": "integer",
+            "title": "Open Recruitment Count"
+          },
+          "state_digest": {
+            "type": "string",
+            "title": "State Digest"
+          },
+          "lifecycle": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "COMPLETED"
+            ],
+            "title": "Lifecycle",
+            "default": "ACTIVE"
+          },
+          "snapshot_version": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Snapshot Version",
+            "default": 1
+          },
+          "relationships": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransferRelationship"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relationships"
+          },
+          "closing_recruitments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransferClosingRecruitment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Recruitments"
+          },
+          "introduction_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Introduction Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "summary",
+          "direction",
+          "stage",
+          "team_status",
+          "project_version",
+          "ownership_generation",
+          "achievement_count",
+          "manager_count",
+          "member_count",
+          "mentor_count",
+          "open_recruitment_count",
+          "state_digest"
+        ],
+        "title": "TransferSummary"
+      },
       "UploadCompleteRequest": {
         "properties": {
           "intent_id": {
@@ -20295,6 +23779,28 @@
           "case_version"
         ],
         "title": "WithdrawCommand"
+      },
+      "WorkspaceAchievementSaveResult": {
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/AchievementDraftResponse"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "applied_version": {
+            "type": "integer",
+            "title": "Applied Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "replayed",
+          "applied_version"
+        ],
+        "title": "WorkspaceAchievementSaveResult"
       },
       "app__modules__innovation__review_schemas__ReviewQueueResponse": {
         "properties": {

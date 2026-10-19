@@ -16,7 +16,7 @@ export default function TeacherTasksPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">任务管理</h1>
-        <p className="page-subtitle">我创建与协作的任务，含草稿与全部状态</p>
+        <p className="page-subtitle">管理自己负责或获协作权限的任务。</p>
       </div>
       <TeacherTasksView />
     </>

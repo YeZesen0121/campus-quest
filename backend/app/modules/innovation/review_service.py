@@ -13,6 +13,7 @@ from app.modules.audit.service import AuditLogWriter
 from app.modules.identity.events import Actor
 from app.modules.innovation.achievement_service import _not_found
 from app.modules.innovation.evidence_models import AchievementEvidence
+from app.modules.innovation.evidence_scope import evidence_scope
 from app.modules.innovation.evidence_service import _conflict
 from app.modules.innovation.models import (
     AchievementDraft,
@@ -274,6 +275,7 @@ class AchievementReviewService:
                     AchievementEvidence.achievement_id == achievement_id,
                     AchievementEvidence.state == "READY",
                     AchievementEvidence.removed_at.is_(None),
+                    evidence_scope(actor.user_id),
                 )
                 .order_by(AchievementEvidence.id)
                 .with_for_update()

@@ -16,9 +16,7 @@ export default function AdminWhitelistPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">注册白名单</h1>
-        <p className="page-subtitle">
-          批量导入先预览逐行校验结果，确认后一次性写入；冲突时整体不写入
-        </p>
+        <p className="page-subtitle">先预览逐行结果，再确认本次可导入的学号。</p>
       </div>
       <WhitelistAdmin />
     </>

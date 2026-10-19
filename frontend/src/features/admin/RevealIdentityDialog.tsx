@@ -17,6 +17,8 @@
  *   identities, and the audit row is written server-side on every call.
  */
 import { useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -49,6 +51,7 @@ export function RevealIdentityDialog({
   const [busy, setBusy] = useState(false);
   /** Identity exists in state ONLY after a successful reveal call. */
   const [revealed, setRevealed] = useState<RevealIdentityDto | null>(null);
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,6 +85,7 @@ export function RevealIdentityDialog({
       }}
     >
       <DialogContent
+        {...dialogFocus}
         asChild
         aria-labelledby="reveal-identity-title"
         onPointerDownOutside={(event) => {
@@ -136,6 +140,13 @@ export function RevealIdentityDialog({
           ) : null}
           {error !== null ? <SectionError error={error} /> : null}
           <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={onCancel}
+              disabled={busy}
+            >
+              {revealed !== null ? "关闭" : "取消"}
+            </Button>
             {revealed === null ? (
               <Button
                 type="submit"
@@ -147,13 +158,6 @@ export function RevealIdentityDialog({
                 <span>确认揭示身份</span>
               </Button>
             ) : null}
-            <Button
-              variant="secondary"
-              onClick={onCancel}
-              disabled={busy}
-            >
-              {revealed !== null ? "关闭" : "取消"}
-            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -9,7 +9,8 @@ test("R1 navigation visual: campus landing, mobile full menu and logout confirma
   const grant = await page.request.put(`${API_URL}/admin/ie/operations-grants/${process.env.CQ_E2E_STUDENT_ID!}`, { headers, data: { version: 0, enabled: true, reason: "独立 R1 视觉世界" } });
   expect(grant.status()).toBe(200);
   await ensureStudentLogin(page);
-  const pinFonts = async () => { await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } .mono { font-family: "Liberation Mono", monospace !important; } *, *::before, *::after { animation: none !important; transition: none !important; }' }); };
+  const pinFonts = async () => { await expect(page.locator('nextjs-portal [data-nextjs-dialog-overlay]')).toHaveCount(0); await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } .mono { font-family: "Liberation Mono", monospace !important; } *, *::before, *::after { animation: none !important; transition: none !important; } nextjs-portal { display: none !important; }' });
+  await page.evaluate(() => document.fonts.ready); };
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${BASE_URL}/innovation`);
   await expect(page.getByRole("region", { name: "校内已核实成果" })).toContainText("暂无可浏览的成果");
@@ -23,7 +24,7 @@ test("R1 navigation visual: campus landing, mobile full menu and logout confirma
   await expect(page).toHaveScreenshot("innovation-mobile-full-menu.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");
-  await page.getByRole("link", { name: "我的账户", exact: true }).click();
+  await page.getByRole("navigation", { name: "主导航", exact: true }).filter({ visible: true }).getByRole("link", { name: "我的", exact: true }).click();
   await expect(page.getByRole("region", { name: "我的成长", exact: true }).getByText("累计获得", { exact: true })).toBeVisible();
   const logoutSection = page.getByRole("region", { name: "退出当前账号", exact: true });
   await logoutSection.scrollIntoViewIfNeeded();

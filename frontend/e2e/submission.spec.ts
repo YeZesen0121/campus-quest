@@ -39,8 +39,9 @@
  * ever renders on the page — the upload URL is transient request state.
  */
 import { readFile } from "node:fs/promises";
+import { request as playwrightRequest } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { expect, readSourceTagPaint, test } from "./fixtures";
 
 import { mintToken, ensureStudentLogin, runRankingJob, runValidationJob } from "./fixtures";
 
@@ -148,6 +149,23 @@ async function browserGetBytes(
 test.describe("student submission", () => {
   test.beforeEach(async ({ page }) => {
     await loginAsStudent(page);
+  });
+
+  test("final claim submission exposes its disabled action before file selection", async ({ page }, info) => {
+    await page.goto(CLAIM_URL!);
+    const panel = page.getByRole('region', { name: '提交数据文件', exact: true });
+    await expect(panel).toBeVisible();
+    const start = panel.getByRole('button', { name: '开始上传', exact: true });
+    await expect(start).toBeVisible();
+    await expect(start).toBeDisabled();
+    await expect(page.locator('#submission-file')).toHaveValue('');
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({width, height:900});
+      await expect.soft(start, 'Disabled upload label remains readable without a translucent white wash').toHaveCSS('opacity', '1');
+      expect.soft((await readSourceTagPaint(start)).ink, 'Disabled action uses the same readable auxiliary ink as its waiting status').toBe((await readSourceTagPaint(panel.locator('.upload-phase-line'))).ink);
+      await page.screenshot({path:info.outputPath(`claim-disabled-${width}.png`),fullPage:true});
+      await start.screenshot({path:info.outputPath(`claim-disabled-control-${width}.png`)});
+    }
   });
 
   test("claim detail shows the assigned unit and never another student's", async ({ page }) => {
@@ -327,9 +345,41 @@ test.describe("browser upload evidence (PR #2 final acceptance)", () => {
 
   test(
     "UI claim -> verbatim-echo PUT -> 412 replay -> post-finalize overwrite rejected -> readback == pinned bytes -> approve",
-    { timeout: 240_000 },
-    async ({ page, request }) => {
+    async ({ page, request }, testInfo) => {
+      // This expanded journey performs three real uploads/worker jobs and
+      // twenty diagnostic captures. Bind its own budget through the actual
+      // Playwright API; a TestDetails.timeout property is ignored.
+      test.setTimeout(240_000);
       await loginAsStudent(page);
+
+      // Review commands belong to a teacher client, separate from student
+      // reads and storage evidence. Send each command once and dispose its
+      // request lifetime; no transport retry or timeout change.
+      const teacherDecision = async (id: string, action: "revision-required" | "approve", data?: { note: string }) => {
+        const teacherClient = await playwrightRequest.newContext({
+          extraHTTPHeaders: { Authorization: `Bearer ${mintToken(TEACHER_ID!)}` },
+        });
+        try {
+          const response = await teacherClient.post(`${API_URL}/teacher/submissions/${id}/${action}`, { data });
+          expect(response.ok(), await response.text()).toBe(true);
+          return await response.json() as { claim_status: string; reward_lock_status?: string; points_granted?: number };
+        } finally {
+          await teacherClient.dispose();
+        }
+      };
+
+      const captureWork = async (state: string) => {
+        for (const width of [320, 390, 800, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.addStyleTag({ content: ':root{--font-sans:"Noto Sans CJK SC",sans-serif;--font-display:"Noto Serif CJK SC",serif;--font-mono:"Liberation Mono",monospace}' });
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations)).map(animation => animation.finished.catch(() => undefined)));
+          });
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          await page.screenshot({ path: testInfo.outputPath(`${state}-${width}.png`), fullPage: true });
+        }
+      };
 
       // --- claim through the REAL task page --------------------------
       const claimResponse = page.waitForResponse(
@@ -343,6 +393,24 @@ test.describe("browser upload evidence (PR #2 final acceptance)", () => {
       const claim = (await (await claimResponse).json()) as { claim_id: string };
       await page.goto(`${BASE_URL}/claims/${claim.claim_id}`);
       await expect(page.locator(".upload-panel")).toBeVisible();
+      await captureWork("claimed");
+
+      // This same real claim now covers failure -> re-upload -> review ->
+      // revision -> completion. It owns the existing evidence task pool;
+      // no second shared-task mutation or synthetic UI state is introduced.
+      if (!BAD_CSV) throw new Error("The isolated world's invalid CSV is required");
+      const failedComplete = page.waitForResponse(response =>
+        response.url().includes("/api/v1/submissions/upload-complete") && response.status() === 200,
+      );
+      await page.locator("#submission-file").setInputFiles(BAD_CSV);
+      await page.getByRole("button", { name: "开始上传" }).click();
+      const failedSubmission = await (await failedComplete).json() as { id: string };
+      runValidationJob(failedSubmission.id);
+      await expect(page.getByText("提交未通过校验，请修正")).toBeVisible({ timeout: 120_000 });
+      await expect(page.locator(".report-errors")).toBeVisible();
+      await captureWork("validation-failed");
+      await page.getByRole("button", { name: "重新上传文件" }).click();
+      await expect(page.locator("#submission-file")).toBeEnabled();
 
       // --- the page's own upload: capture the signing contract -------
       // (the URL itself never renders — spec §40; the test reads it from
@@ -447,16 +515,26 @@ test.describe("browser upload evidence (PR #2 final acceptance)", () => {
       const readBack = await browserGetBytes(page, downloadUrl);
       expect(readBack.equals(pinned)).toBe(true);
 
-      // --- teacher approve (real API) -> student-visible state -------
-      const approved = await request.post(
-        `${API_URL}/teacher/submissions/${submission.id}/approve`,
-        { headers: { Authorization: `Bearer ${mintToken(TEACHER_ID!)}` } },
+      await captureWork("under-review");
+      const revisionDecision = await teacherDecision(submission.id, "revision-required", { note: "补齐说明后重新提交。" });
+      expect(revisionDecision.claim_status).toBe("REVISION_REQUIRED");
+      expect(revisionDecision.reward_lock_status).toBe("PROVISIONAL");
+      await page.goto(`${BASE_URL}/claims/${claim.claim_id}`);
+      await expect(page.getByText("老师已退回修改，奖励档位已保留。")).toBeVisible();
+      await expect(page.getByRole("region", { name: "奖励状态" })).toContainText("当前仍可获得 100 积分");
+      await captureWork("revision-required");
+      const revisedComplete = page.waitForResponse(response =>
+        response.url().includes("/api/v1/submissions/upload-complete") && response.status() === 200,
       );
-      expect(approved.ok(), await approved.text()).toBe(true);
-      const decision = (await approved.json()) as {
-        claim_status: string;
-        points_granted: number;
-      };
+      await page.locator("#submission-file").setInputFiles(GOOD_CSV!);
+      await page.getByRole("button", { name: "开始上传" }).click();
+      const revisedSubmission = await (await revisedComplete).json() as { id: string };
+      expect(revisedSubmission.id).not.toBe(submission.id);
+      runValidationJob(revisedSubmission.id);
+      await expect(page.getByText("已提交，等待老师审核").first()).toBeVisible({ timeout: 120_000 });
+
+      // --- teacher approves the NEW revision (real API) -> student state ---
+      const decision = await teacherDecision(revisedSubmission.id, "approve");
       expect(decision.claim_status).toBe("COMPLETED");
       expect(decision.points_granted).toBe(100);
 
@@ -466,6 +544,7 @@ test.describe("browser upload evidence (PR #2 final acceptance)", () => {
       await expect(page.getByText("任务已完成，积分已发放。")).toBeVisible({
         timeout: 30_000,
       });
+      await captureWork("completed");
 
       // The wallet strip shows the earned delta (seeded 100 + 100).
       await page.goto(`${BASE_URL}/rewards`);

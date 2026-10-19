@@ -13,12 +13,10 @@
 import Link from "next/link";
 
 import {
-  ClockIcon,
   RarityEpicIcon,
   RarityLegendaryIcon,
   RarityNormalIcon,
   RarityRareIcon,
-  SlotsIcon,
 } from "@/components/shell/navIcons";
 
 import type { TaskCardDto } from "./api";
@@ -36,22 +34,28 @@ export interface TaskCardProps {
   card: TaskCardDto;
   /** Island clock (epoch ms) — display-only countdown source. */
   nowMs: number;
+  /** Discovery follows its route h1; dashboard cards follow a section h2. */
+  headingLevel?: 2 | 3;
 }
 
-export function TaskCard({ card, nowMs }: TaskCardProps) {
+export function TaskRarity({ rarity }: { rarity: ReturnType<typeof rarityView> }) {
+  const RarityGlyph = RARITY_GLYPHS[rarity.rarity];
+  return <span className="task-card-rarity" data-rarity={rarity.rarity}>
+    <RarityGlyph />{rarity.label}
+  </span>;
+}
+
+export function TaskCard({ card, nowMs, headingLevel = 3 }: TaskCardProps) {
   const rarity = rarityView(card.rarity);
   const deadline = deadlineView(card, nowMs);
-  const RarityGlyph = RARITY_GLYPHS[rarity.rarity];
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <article className="task-card" data-rarity={rarity.rarity}>
       <div className="task-card-head">
-        <h3 className="task-card-title">
+        <Heading className="task-card-title">
           <Link href={`/tasks/${card.id}`}>{card.title}</Link>
-        </h3>
-        <span className="task-card-rarity" data-rarity={rarity.rarity}>
-          <RarityGlyph />
-          {rarity.label}
-        </span>
+        </Heading>
+        <TaskRarity rarity={rarity} />
       </div>
 
       <p className="task-card-reward">
@@ -62,17 +66,13 @@ export function TaskCard({ card, nowMs }: TaskCardProps) {
 
       <div className="task-card-meta">
         <span className="task-card-meta-item" suppressHydrationWarning>
-          <ClockIcon />
           {deadline.line}
         </span>
         <span className="task-card-meta-item meta-num">
-          <SlotsIcon />
           {availabilityText(card.assignments_available)}
         </span>
-        <span className="task-card-meta-item" suppressHydrationWarning>
-          {ratingText(card.rating)}
-        </span>
       </div>
+      <p className="task-card-rating">{ratingText(card.rating)}</p>
 
       {deadline.urgency === "near" ? (
         <span className="badge badge-warning">临近截止</span>

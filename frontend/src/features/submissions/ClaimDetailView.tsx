@@ -151,7 +151,7 @@ export function ClaimDetailView({ claimId }: { claimId: string }) {
 
   if (phase === "loading") {
     return (
-      <div className="claim-detail">
+      <div className="claim-detail student-claim-view">
         <span className="skeleton skeleton-line" style={{ width: "55%" }} />
         <span className="skeleton skeleton-line" data-width="narrow" />
         <span className="skeleton skeleton-block" />
@@ -161,7 +161,7 @@ export function ClaimDetailView({ claimId }: { claimId: string }) {
 
   if (phase === "denied") {
     return (
-      <div className="claim-detail">
+      <div className="claim-detail student-claim-view">
         <EmptyState
           title="仅学生账号可查看任务领取记录"
           hint="这个页面展示的是学生的任务领取与提交进度"
@@ -176,7 +176,7 @@ export function ClaimDetailView({ claimId }: { claimId: string }) {
 
   if (phase === "missing") {
     return (
-      <div className="claim-detail">
+      <div className="claim-detail student-claim-view">
         <EmptyState
           title="未找到这条领取记录"
           hint="它可能不属于当前登录的账号，或链接有误"
@@ -191,7 +191,7 @@ export function ClaimDetailView({ claimId }: { claimId: string }) {
 
   if (phase === "error" || claim === null) {
     return (
-      <div className="claim-detail">
+      <div className="claim-detail student-claim-view">
         <SectionError
           error={error}
           onRetry={() => {
@@ -234,13 +234,13 @@ function ClaimDetailReady({
   const revision = isRevisionClaim(claim.status);
 
   return (
-    <div className="claim-detail">
+    <div className="claim-detail student-claim-view">
       <Link className="link back-link" href="/tasks">
-        返回任务列表
+        <span aria-hidden="true">← </span>返回任务列表
       </Link>
-      <div>
-        <h1 className="task-detail-title">{claim.task_title}</h1>
+      <header className="student-work-heading">
         <div className="task-detail-badges">
+          <span>我的任务</span>
           <span className={`badge badge-${status.tone}`}>{status.label}</span>
           {urgency === "near" && !revision ? (
             <span className="badge badge-warning">临近截止</span>
@@ -249,8 +249,9 @@ function ClaimDetailReady({
             <span className="badge badge-danger">已截止</span>
           ) : null}
         </div>
+        <h1 className="task-detail-title">{claim.task_title}</h1>
         <ClaimSteps status={claim.status} />
-      </div>
+      </header>
 
       {/* Plan 11 mid-pass review P1: when a revision is required, the
           revision context comes FIRST and owns the visual priority —
@@ -259,31 +260,34 @@ function ClaimDetailReady({
 
       <section className="claim-panel" aria-label="分配给你的任务单元">
         <h2 className="claim-panel-title">分配给你的任务单元</h2>
-        <div className="assignment-grid">
+        <dl className="assignment-grid">
           <div className="assignment-item">
-            <span className="assignment-label">平台</span>
-            <span className="assignment-value">{claim.platform}</span>
+            <dt className="assignment-label">平台</dt>
+            <dd className="assignment-value">{claim.platform}</dd>
           </div>
           <div className="assignment-item">
-            <span className="assignment-label">关键词</span>
-            <span className="assignment-value mono">{claim.keyword}</span>
+            <dt className="assignment-label">关键词</dt>
+            <dd className="assignment-value mono">{claim.keyword}</dd>
           </div>
           <div className="assignment-item">
-            <span className="assignment-label">领取时间</span>
-            <span className="assignment-value">
+            <dt className="assignment-label">领取时间</dt>
+            <dd className="assignment-value">
               {formatDeadlineDateTime(parseServerInstant(claim.claimed_at))}
-            </span>
+            </dd>
           </div>
+        </dl>
+        <div className="assignment-bottom">
+          <div className="claim-deadline-facts">
+            <p className="deadline-line" data-urgency={urgency} suppressHydrationWarning>
+              截止 {formatDeadlineSummary(deadlineMs, nowMs)}
+            </p>
+            <p className="progress-note" suppressHydrationWarning>
+              超过截止时间后至 {formatDeadlineDateTime(graceMs)} 仍可提交，积分按实际提交时间结算。
+            </p>
+          </div>
+          <RewardStatus claim={claim} nowMs={nowMs} />
         </div>
-        <p className="deadline-line" data-urgency={urgency} suppressHydrationWarning>
-          截止 {formatDeadlineSummary(deadlineMs, nowMs)}
-        </p>
-        <p className="progress-note" suppressHydrationWarning>
-          超过截止时间后至 {formatDeadlineDateTime(graceMs)} 仍可提交，积分按实际提交时间结算。
-        </p>
       </section>
-
-      <RewardStatus claim={claim} nowMs={nowMs} />
 
       {isSubmittable(claim.status) ? (
         <UploadPanel claimId={claim.claim_id} onClaimChanged={onClaimChanged} />
@@ -406,7 +410,7 @@ function AbandonControl({
         </div>
       ) : (
         <p>
-          <Button variant="secondary" onClick={() => setConfirming(true)}>
+          <Button variant="ghost" onClick={() => setConfirming(true)}>
             放弃任务
           </Button>
         </p>

@@ -6,7 +6,7 @@ Tasks 1–3 的真实 PG/HTTP 与存储扫描验证见工作区 `.local-dev/logs
 | 编号 | 规约预期 | 验证位置 | 状态 |
 | --- | --- | --- | --- |
 | A01 | 普通学生无负责人资格，无经历/文件/联系也可开启；默认隐藏 | `tests/integration/innovation/test_talent_lifecycle.py::test_new_student_can_publish_without_work_or_contact` | 已覆盖 |
-| A02 | 保存不改公开版；旧发布重放不恢复关闭 | `tests/integration/innovation/test_talent_lifecycle.py::test_saved_changes_remain_private_and_replay_cannot_reopen` | 已覆盖 |
+| A02 | 保存不改公开版；旧发布重放不恢复关闭 | `tests/integration/innovation/test_talent_lifecycle.py::test_saved_changes_remain_private_and_replay_cannot_reopen`；`frontend/e2e/innovation-talents.spec.ts`（私稿确已保存，具体公开读取完成后验证隔离；受控6秒响应RED→GREEN，原DOM/API时限不改） | 已覆盖 |
 | A03 | 暂不接洽与开关分离，仍能公开 | `tests/integration/innovation/test_public_talents.py::test_literal_search_all_tags_and_cooperation_filters`；`tests/integration/innovation/test_talent_contacts.py::test_revoking_last_contact_keeps_profile_visible_and_empty_authorization` | 已覆盖 |
 | A04 | 标签/建议私有且去重，字面关键词、多标签全部匹配/分页 | `tests/integration/innovation/test_talent_lifecycle.py::test_tag_suggestions_are_private_deduplicated_requests`；`tests/integration/innovation/test_public_talents.py::test_literal_search_all_tags_and_cooperation_filters`；`tests/integration/innovation/test_public_talents.py::test_pagination_ties_are_stable_and_tag_filters_are_bounded` | 已覆盖 |
 | A05 | PDF/PNG/JPEG、10MiB/10库存/5公开，整批替换可用 | `tests/unit/innovation/test_talent_file_schemas.py`；`tests/integration/innovation/test_talent_files.py::test_five_public_files_can_all_be_replaced_before_closing_old_version`；`tests/integration/innovation/test_talent_file_races.py::test_concurrent_upload_intents_cannot_exceed_ten_records` | 已覆盖 |

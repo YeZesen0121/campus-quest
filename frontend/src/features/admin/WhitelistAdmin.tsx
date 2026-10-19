@@ -18,6 +18,8 @@
  * audit rows when present); disable still asks for one.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -130,23 +132,14 @@ function WhitelistImport() {
     <section className="section" aria-label="白名单批量导入">
       <div className="section-head">
         <h2 className="section-title">批量导入</h2>
-        {phase.kind === "preview" || phase.kind === "confirming" ? (
-          <Button
-            variant="ghost"
-            onClick={reset}
-            disabled={phase.kind === "confirming"}
-          >
-            重新编辑
-          </Button>
-        ) : null}
+
       </div>
       <p className="field-hint">
-        每行一个学号（6-20 位 ASCII 数字，不接受全角形式）。导入前先预览逐行校验结果，确认后一次性写入；
-        若与已有白名单冲突则整体不写入。
+        每行一个 6–20 位半角数字学号，保留前导 0；导入不会创建账号。冲突时整批不写入。
       </p>
 
       {phase.kind === "idle" || phase.kind === "previewing" ? (
-        <form className="panel" onSubmit={onPreview}>
+        <form className="panel campus-admin-filter" onSubmit={onPreview}>
           <div className="field">
             <label className="field-label" htmlFor="whitelist-import-content">
               导入内容
@@ -196,9 +189,9 @@ function WhitelistImport() {
                   const code = whitelistCodeView(decision.code);
                   return (
                     <tr key={`${decision.row_number}-${decision.student_number ?? "x"}`}>
-                      <td>第 {decision.row_number} 行</td>
-                      <td className="mono">{decision.student_number ?? "—"}</td>
-                      <td>
+                      <td data-label="行号">第 {decision.row_number} 行</td>
+                      <td className="mono" data-label="学号">{decision.student_number ?? "—"}</td>
+                      <td data-label="判定">
                         <span className={`badge badge-${code.tone}`}>{code.label}</span>
                       </td>
                     </tr>
@@ -229,6 +222,13 @@ function WhitelistImport() {
                 <span className="spinner" aria-hidden="true" />
               ) : null}
               <span>确认导入 {phase.preview.importable.length} 行</span>
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={reset}
+              disabled={phase.kind === "confirming"}
+            >
+              重新编辑
             </Button>
           </div>
         </div>
@@ -364,7 +364,7 @@ function WhitelistEntries() {
       : null;
 
   return (
-    <section className="section" aria-label="白名单条目">
+    <section className="section" aria-label="白名单条目" data-admin-return="whitelist" tabIndex={-1}>
       <div className="section-head">
         <h2 className="section-title">白名单条目</h2>
         <Button
@@ -400,7 +400,7 @@ function WhitelistEntries() {
               <thead>
                 <tr>
                   <th scope="col">学号</th>
-                  <th scope="col">状态</th>
+                  <th scope="col" className="cq-status-cell">状态</th>
                   <th scope="col">加入时间</th>
                   <th scope="col">停用时间</th>
                   <th scope="col">操作</th>
@@ -409,20 +409,20 @@ function WhitelistEntries() {
               <tbody>
                 {items.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="mono">{entry.student_number}</td>
-                    <td>
+                    <td className="mono" data-label="学号">{entry.student_number}</td>
+                    <td className="cq-status-cell" data-label="状态">
                       <span
                         className={`badge badge-${entry.enabled ? "success" : "muted"}`}
                       >
                         {entry.enabled ? "启用" : "停用"}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="加入时间">
                       <time className="notif-time" dateTime={entry.created_at}>
                         {formatDeadlineDateTime(parseServerInstant(entry.created_at))}
                       </time>
                     </td>
-                    <td>
+                    <td data-label="停用时间">
                       {entry.disabled_at !== null ? (
                         <time className="notif-time" dateTime={entry.disabled_at}>
                           {formatDeadlineDateTime(parseServerInstant(entry.disabled_at))}
@@ -431,7 +431,7 @@ function WhitelistEntries() {
                         "—"
                       )}
                     </td>
-                    <td>
+                    <td data-label="操作">
                       <div className="row-actions">
                         {entry.enabled ? (
                           <Button
@@ -487,6 +487,7 @@ function WhitelistEntries() {
           </p>
         </div>
       ) : null}
+      <p className="campus-source-note" role="note" aria-label="白名单停用影响">停用白名单会阻止该学号注册；已注册账号不受影响，账号处理需到“用户与账户”单独操作。</p>
       {disabling !== null ? (
         <WhitelistDisableDialog entry={disabling} onDone={onToggled} onCancel={() => setDisabling(null)} />
       ) : null}
@@ -504,6 +505,7 @@ function WhitelistDisableDialog({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="whitelist"]'));
   const [reason, setReason] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -548,7 +550,7 @@ function WhitelistDisableDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="whitelist-disable-title">停用白名单条目</DialogTitle>
@@ -578,12 +580,12 @@ function WhitelistDisableDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="danger" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>确认停用</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>

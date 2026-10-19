@@ -12,7 +12,7 @@ import {
 } from "@/features/profile/profileTabs";
 
 export const metadata: Metadata = {
-  title: "我的档案 · CampusQuest",
+  title: "我的档案 · 华师令",
   description: "成长数据、获得的荣誉与个人信息",
 };
 
@@ -33,18 +33,20 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const params = await searchParams;
   const raw = params.tab;
   const tab = parseProfileTab(Array.isArray(raw) ? raw[0] : raw);
+  const isGrowthTab = tab === "growth";
 
   return (
-    <>
+    <div className={isGrowthTab ? "profile-page student-growth-page" : "profile-page"}>
       <div className="page-head">
         <h1 className="page-title">我的档案</h1>
-        <p className="page-subtitle">成长数据、获得的荣誉与个人信息</p>
-        <nav className="ie-draft-actions" aria-label="本人双创管理">
-          <Link className="section-link" href="/profile/project-drafts">我的项目</Link>
-          <Link className="section-link" href="/profile/owner-profile">负责人资料与资格</Link>
-          <Link className="section-link" href="/profile/talent-profile">我的人才档案</Link>
-        </nav>
+        <p className="page-subtitle">{isGrowthTab ? "每一次完成，都是成长的一部分。" : "成长数据、获得的荣誉与个人信息"}</p>
       </div>
+      <nav className="ie-draft-actions" aria-label="本人双创管理">
+        <Link className="section-link" href="/profile/collaboration">协作与交接{isGrowthTab ? <span aria-hidden="true"> →</span> : null}</Link>
+        <Link className="section-link" href="/profile/project-drafts">我的项目{isGrowthTab ? <span aria-hidden="true"> →</span> : null}</Link>
+        <Link className="section-link" href="/profile/owner-profile">负责人资料与资格{isGrowthTab ? <span aria-hidden="true"> →</span> : null}</Link>
+        <Link className="section-link" href="/profile/talent-profile">我的人才档案{isGrowthTab ? <span aria-hidden="true"> →</span> : null}</Link>
+      </nav>
       <nav className="tab-bar" aria-label="个人主页分区">
         {PROFILE_TABS.map((item) => (
           <Link
@@ -57,17 +59,15 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </Link>
         ))}
       </nav>
-      {tab === "growth" ? (
+      {isGrowthTab ? (
         <GrowthView />
       ) : (
-        <>
-          <AvatarSection />
-          <AccountSettings />
-        </>
+        <AccountSettings avatar={<AvatarSection />} />
       )}
+
       <section className="section" aria-label="退出当前账号">
-        <Button asChild variant="secondary" block><Link href="/logout" prefetch={false}>退出登录</Link></Button>
+        <Button asChild variant="secondary"><Link href="/logout" prefetch={false}>退出登录</Link></Button>
       </section>
-    </>
+    </div>
   );
 }

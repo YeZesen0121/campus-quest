@@ -8,7 +8,9 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    FetchedValue,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -26,6 +28,7 @@ class AchievementDraft(Base):
 
     __tablename__ = "ie_achievement_drafts"
     __table_args__ = (
+        UniqueConstraint("id", "project_id", name="uq_ie_achievement_project_identity"),
         UniqueConstraint(
             "project_id",
             "creation_request_id",
@@ -176,10 +179,21 @@ class OwnerQualification(Base):
 class ProjectDraft(Base):
     __tablename__ = "ie_project_drafts"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["public_introduction_id", "id"],
+            ["ie_project_introductions.id", "ie_project_introductions.project_id"],
+            name="fk_ie_project_introduction",
+            use_alter=True,
+        ),
+        CheckConstraint("lifecycle IN ('ACTIVE','COMPLETED')", name="lifecycle_valid"),
+        CheckConstraint(
+            "introduction_moderation_state IN ('NORMAL','TAKEN_DOWN')",
+            name="introduction_moderation_valid",
+        ),
         UniqueConstraint(
-            "owner_user_id",
+            "creator_user_id",
             "creation_request_id",
-            name="uq_ie_project_drafts_owner_request",
+            name="uq_ie_project_drafts_creator_request",
         ),
         CheckConstraint(
             "char_length(title) BETWEEN 1 AND 120 AND btrim(title) <> ''",
@@ -190,6 +204,9 @@ class ProjectDraft(Base):
         CheckConstraint("char_length(stage) <= 80", name="stage_length"),
         CheckConstraint("char_length(team_status) <= 1000", name="team_status_length"),
         CheckConstraint("version > 0", name="version_positive"),
+        CheckConstraint(
+            "ownership_generation > 0", name="ownership_generation_positive"
+        ),
         CheckConstraint(
             "char_length(creation_payload_fingerprint) = 64", name="fingerprint_length"
         ),
@@ -205,6 +222,17 @@ class ProjectDraft(Base):
         primary_key=True, server_default=text("gen_random_uuid()")
     )
     owner_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    ownership_generation: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    lifecycle: Mapped[str] = mapped_column(String(16), server_default=text("'ACTIVE'"))
+    introduction_moderation_state: Mapped[str] = mapped_column(
+        String(16), server_default=text("'NORMAL'")
+    )
+    public_introduction_id: Mapped[UUID | None]
+    # A database INSERT trigger fills legacy callers from the initial owner.
+    # UPDATE guards keep creation identity and its request fingerprint fixed.
+    creator_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), server_default=FetchedValue()
+    )
     creation_request_id: Mapped[UUID] = mapped_column()
     # Immutable first-create fingerprint, never recalculated from the edited draft.
     creation_payload_fingerprint: Mapped[str] = mapped_column(String(64))

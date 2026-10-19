@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import Clock
 from app.modules.audit.context import AuditContext
 from app.modules.identity.events import Actor
+from app.modules.innovation.collaboration_common import record_participation
 from app.modules.innovation.mentor_common import (
     active_accounts,
     conflict,
@@ -276,11 +277,15 @@ class MentorLinkService:
             # All link changes follow accounts -> project -> mentor -> link.
             # Withdrawal locks the mentor before links, and account locks
             # serialize it with this path before either takes a project lock.
-            await db.execute(
-                select(ProjectDraft.id)
+            current_owner = await db.scalar(
+                select(ProjectDraft.owner_user_id)
                 .where(ProjectDraft.id == identity.project_id)
                 .with_for_update()
             )
+            if current_owner != identity.owner_user_id:
+                raise conflict(
+                    "项目负责人已变化，请刷新后重新核对", kind="PROJECT_CHANGED"
+                )
             mentor = await db.scalar(
                 select(MentorProfile)
                 .where(MentorProfile.id == identity.mentor_id)
@@ -322,6 +327,14 @@ class MentorLinkService:
                 row.status = "REVOKED"
             else:
                 raise forbidden()
+            if action == "accept":
+                await record_participation(
+                    db,
+                    project_id=row.project_id,
+                    user_id=identity.user_id,
+                    kind="MENTOR",
+                    now=self.clock.now(),
+                )
             row.version += 1
             row.updated_at = self.clock.now()
             self.mentors.add_receipt(

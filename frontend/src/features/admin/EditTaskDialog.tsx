@@ -27,6 +27,8 @@
  * diff closes the dialog without a request.
  */
 import { useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -76,6 +78,7 @@ function EditTaskDialogInner({
   const [fieldErrors, setFieldErrors] = useState<TaskFormErrors>({});
   const [summary, setSummary] = useState<ReturnType<typeof describeEditError> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch);
 
   const frozen: ReadonlySet<TaskFormFieldKey> =
     task.status === "DRAFT" ? new Set() : POST_PUBLISH_FROZEN_FIELDS;
@@ -129,8 +132,8 @@ function EditTaskDialogInner({
         }
       }}
     >
-      <DialogContent asChild size="wide" aria-labelledby="edit-task-title">
-        <form onSubmit={onSubmit} noValidate>
+      <DialogContent {...dialogFocus} asChild size="wide" aria-labelledby="edit-task-title">
+        <form className="campus-task-dialog" onSubmit={onSubmit} noValidate>
           <DialogTitle id="edit-task-title">编辑任务</DialogTitle>
           <p className="field-hint">
             {task.status === "DRAFT"
@@ -150,6 +153,13 @@ function EditTaskDialogInner({
 
           <DialogFooter>
             <Button
+              variant="secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              取消
+            </Button>
+            <Button
               type="submit"
               variant="primary"
               disabled={submitting}
@@ -157,13 +167,6 @@ function EditTaskDialogInner({
             >
               {submitting ? <span className="spinner" aria-hidden="true" /> : null}
               <span>保存修改</span>
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              取消
             </Button>
           </DialogFooter>
         </form>

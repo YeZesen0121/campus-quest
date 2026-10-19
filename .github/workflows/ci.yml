@@ -426,6 +426,10 @@ jobs:
         working-directory: frontend
         run: npx playwright test innovation-talents-visual.spec.ts --project=chromium
 
+      - name: Innovation collaboration visual regression (4 baselines, no regen)
+        working-directory: frontend
+        run: npx playwright test innovation-collaboration-visual.spec.ts --project=chromium
+
       - name: Mentor consent journey and pixel regression (no regen)
         working-directory: frontend
         env:

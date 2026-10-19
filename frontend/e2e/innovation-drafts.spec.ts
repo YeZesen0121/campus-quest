@@ -21,7 +21,7 @@ test("private draft: create, reload, edit and keyboard-save on mobile", async ({
   await page.getByRole("button", { name: "新建项目草稿", exact: true }).click();
   await page.getByLabel("项目名称", { exact: true }).fill(title);
   await page.keyboard.press("Tab");
-  await expect(page.getByLabel("项目简介", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("项目方向", { exact: true })).toBeFocused();
   await page.getByLabel("项目简介", { exact: true }).fill("先从校园回收调研开始。");
   await page.getByLabel("项目方向", { exact: true }).fill("环保");
   await page.getByLabel("项目阶段", { exact: true }).fill("调研中");

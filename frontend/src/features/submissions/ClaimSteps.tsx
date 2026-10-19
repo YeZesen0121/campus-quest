@@ -16,8 +16,7 @@ export function ClaimSteps({ status }: { status: string }) {
   return (
     <ol className="claim-steps" aria-label="进度">
       {view.steps.map((step) => (
-        <li key={step.label} className="claim-step" data-state={step.state}>
-          <span className="claim-step-dot" aria-hidden="true" />
+        <li key={step.label} className="claim-step" data-state={step.state} aria-current={step.state === 'current' ? 'step' : undefined}>
           <span className="claim-step-label">{step.label}</span>
         </li>
       ))}

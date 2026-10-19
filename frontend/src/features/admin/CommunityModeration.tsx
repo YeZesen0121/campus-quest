@@ -20,7 +20,9 @@
  * nickname/id ride the report rows — the §23 moderator surface — and go
  * no further than this section.
  */
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -34,6 +36,7 @@ import {
   SectionSkeleton,
 } from "@/components/ui/sectionStates";
 import { useSession } from "@/features/auth/session";
+import { DividedSections } from "@/components/ui/dividedSections";
 import { hasMorePages, mergeOffsetPage } from "@/lib/offsetPages";
 import { formatDeadlineDateTime, parseServerInstant } from "@/lib/time";
 
@@ -62,14 +65,14 @@ export function CommunityModeration({ taskId }: { taskId: string }) {
     state.status === "authenticated" && state.me.role === "ADMIN";
 
   return (
-    <section className="section" aria-label="社区与举报">
+    <section className="section campus-teacher-community" aria-label="社区与举报" id="teacher-community">
       <div className="section-head">
-        <h3 className="section-title">社区与举报</h3>
+        <h2 className="section-title">评论与举报</h2>
       </div>
-      <div className="workbench-columns">
+      <DividedSections className="workbench-columns">
         <ModerationComments taskId={taskId} canReveal={canReveal} />
         <ReportQueue taskId={taskId} />
-      </div>
+      </DividedSections>
     </section>
   );
 }
@@ -93,6 +96,7 @@ function ModerationComments({
   const [reloadSeed, setReloadSeed] = useState(0);
   const [deleting, setDeleting] = useState<ModerationRowView | null>(null);
   const [revealing, setRevealing] = useState<ModerationRowView | null>(null);
+  const commentScope = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,10 +148,10 @@ function ModerationComments({
   }, []);
 
   return (
-    <div className="panel moderation-panel">
-      <h4 className="section-title">评论管理</h4>
+    <div className="panel moderation-panel" role="region" aria-label="评论管理列表" ref={commentScope} tabIndex={-1}>
+      <h3 className="section-title">评论管理</h3>
       <p className="field-hint">
-        匿名评论仅显示化名标识（匿名用户 + 追溯键）；列表不会自动加载任何身份信息，揭示身份是管理员的独立高权限操作。
+        匿名评论仅显示化名标识，不会自动加载身份信息。教师端不提供身份揭示；管理员须另行操作。
       </p>
       {phase === "loading" ? (
         <SectionSkeleton lines={4} />
@@ -199,7 +203,7 @@ function ModerationComments({
         </>
       )}
       {deleting !== null ? (
-        <ModerationDeleteDialog row={deleting} onDone={onDeleted} onCancel={() => setDeleting(null)} />
+        <ModerationDeleteDialog row={deleting} onDone={onDeleted} onCancel={() => setDeleting(null)} fallbackFocus={() => commentScope.current} />
       ) : null}
       {revealing !== null ? (
         <RevealIdentityDialog
@@ -225,6 +229,7 @@ function ModerationRow({
 }) {
   return (
     <li className="moderation-item" data-deleted={row.deleted ? "true" : "false"}>
+      <div className="campus-moderation-heading">
       <div className="comment-meta">
         <span className="comment-author">{row.authorDisplay}</span>
         {row.isAnonymous ? <span className="badge badge-info">匿名</span> : null}
@@ -235,17 +240,7 @@ function ModerationRow({
           {formatDeadlineDateTime(row.createdAtMs)}
         </time>
       </div>
-      {row.content !== null ? (
-        <p className="comment-content">{row.content}</p>
-      ) : (
-        <p className="comment-content">该评论已删除</p>
-      )}
       <div className="comment-actions">
-        {row.moderationKey !== null ? (
-          <span className="mono moderation-key" title="匿名追溯键（非身份信息）">
-            {row.moderationKey}
-          </span>
-        ) : null}
         {canReveal && row.isAnonymous ? (
           <Button variant="ghost" className="comment-action" onClick={onReveal}>
             揭示身份
@@ -257,6 +252,18 @@ function ModerationRow({
           </Button>
         ) : null}
       </div>
+      </div>
+        {row.moderationKey !== null ? (
+          <span className="mono moderation-key" title="匿名追溯键（非身份信息）">
+            {row.moderationKey}
+          </span>
+        ) : null}
+
+      {row.content !== null ? (
+        <p className="comment-content">{row.content}</p>
+      ) : (
+        <p className="comment-content">该评论已删除</p>
+      )}
     </li>
   );
 }
@@ -266,15 +273,18 @@ function ModerationDeleteDialog({
   row,
   onDone,
   onCancel,
+  fallbackFocus,
 }: {
   row: ModerationRowView;
   onDone: () => void;
   onCancel: () => void;
+  fallbackFocus: () => HTMLElement | null;
 }) {
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, fallbackFocus);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -307,6 +317,7 @@ function ModerationDeleteDialog({
       }}
     >
       <DialogContent
+        {...dialogFocus}
         asChild
         aria-labelledby="moderation-delete-title"
         onPointerDownOutside={(event) => {
@@ -342,12 +353,12 @@ function ModerationDeleteDialog({
           </div>
           {error !== null ? <SectionError error={error} /> : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="danger" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>确认删除</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>
@@ -411,7 +422,7 @@ function ReportQueue({ taskId }: { taskId: string }) {
 
   return (
     <div className="panel moderation-panel">
-      <h4 className="section-title">举报队列</h4>
+      <h3 className="section-title">举报队列</h3>
       {phase === "loading" ? (
         <SectionSkeleton lines={4} />
       ) : phase === "error" ? (

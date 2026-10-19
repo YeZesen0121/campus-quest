@@ -2,7 +2,7 @@ import { getAuthEpoch, onAuthEpochChange } from "@/lib/accessToken";
 import type { RecruitmentDto } from "./recruitmentApi";
 import type { RecruitmentForm } from "./recruitmentForm";
 
-export type RecruitmentRecovery = { epoch: number; record: RecruitmentDto | null; form: RecruitmentForm; newDefaults: RecruitmentForm };
+export type RecruitmentRecovery = { epoch: number; record: RecruitmentDto | null; form: RecruitmentForm; newDefaults: RecruitmentForm; remote?: RecruitmentDto | null };
 
 // Written by the mounted client editor only. Never serialize contact values
 // into browser storage, history, URLs or requests merely to retain input.

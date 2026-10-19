@@ -26,6 +26,7 @@
  *   staff login requires the fresh second factor.
  */
 import Link from "next/link";
+import { DividedSections } from "@/components/ui/dividedSections";
 import {
   useCallback,
   useEffect,
@@ -185,7 +186,8 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
       return <TotpDone />;
     }
     return (
-      <div className="totp-step">
+      <div className="totp-step auth-security-result">
+        <h2 className="section-title">保存恢复代码</h2>
         <div className="alert alert-warning" role="alert">
           <p>
             <strong>恢复代码只显示这一次。</strong>
@@ -199,12 +201,10 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
             </li>
           ))}
         </ol>
-        <div className="copy-row">
+        <div className="auth-security-actions">
           <CopyButton value={copyAllRecoveryCodesText(codes)} label="复制全部恢复代码" />
-        </div>
         {/* Not inside a form: an explicit action button, not a submit. */}
         <Button
-          block
           variant="primary"
           onClick={() =>
             setStep({ kind: "codes", view: confirmRecoveryCodesSeen(step.view) })
@@ -212,6 +212,7 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
         >
           我已妥善保存，完成绑定
         </Button>
+        </div>
       </div>
     );
   }
@@ -221,27 +222,27 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
   return (
     <form className="totp-step form" onSubmit={onConfirm} noValidate>
       <FormErrorSummary view={summary} />
+      <DividedSections className="auth-security-layout">
+      <section className="auth-security-panel">
+        <h2 className="section-title">1 · 在验证器中添加账号</h2>
       <div className="field">
-        <div className="field-head">
-          <span className="field-label">第 1 步：在验证器应用中添加账号</span>
-        </div>
         <p className="field-hint">
-          本页不生成二维码：请打开验证器应用（如系统自带动态口令、Google
+          请打开验证器应用（如系统自带动态口令、Google
           Authenticator），选择“手动输入”，按下方信息填写；或复制绑定链接，在支持的应用中打开。
         </p>
         <div className="secret-box">
+          {provisioning.accountLabel !== null ? (
+            <p className="secret-line">
+              <span className="secret-label">账号名称</span>
+              <span className="mono">{provisioning.accountLabel}</span>
+            </p>
+          ) : null}
           <p className="secret-line">
             <span className="secret-label">密钥</span>
             <span className="mono" data-testid="totp-secret">
               {provisioning.secret}
             </span>
           </p>
-          {provisioning.accountLabel !== null ? (
-            <p className="secret-line">
-              <span className="secret-label">名称</span>
-              <span className="mono">{provisioning.accountLabel}</span>
-            </p>
-          ) : null}
           <p className="secret-line">
             <span className="secret-label">绑定链接</span>
             <span className="mono" data-testid="totp-uri">
@@ -254,9 +255,12 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
           <CopyButton value={provisioning.otpauthUri} label="复制绑定链接" />
         </div>
       </div>
+      </section>
+      <section className="auth-security-panel">
+      <h2 className="section-title">2 · 输入动态验证码</h2>
       <AuthField
         name="totp_code"
-        label="第 2 步：输入验证器当前显示的动态验证码"
+        label="动态验证码"
         hint="6 位数字，每 30 秒变化一次；请输入当前正在显示的那一组。若反复失败，请重新打开邀请链接，从第 1 步重新开始绑定。"
         error={codeError}
         inputProps={{
@@ -277,7 +281,9 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
           disabled: confirming,
         }}
       />
-      <SubmitButton loading={confirming}>确认绑定</SubmitButton>
+      <SubmitButton loading={confirming} block={false}>确认绑定</SubmitButton>
+      </section>
+      </DividedSections>
     </form>
   );
 }
@@ -285,16 +291,16 @@ export function TotpSetup({ accessToken }: TotpSetupProps) {
 /** Terminal state: 2FA is live; the next stop is the staff login. */
 function TotpDone() {
   return (
-    <div className="totp-step">
+    <div className="totp-step auth-security-result">
+      <h2 className="section-title">绑定完成</h2>
       <div className="alert alert-success" role="status">
         <p>动态口令绑定完成，员工账号已激活。</p>
       </div>
-      <p className="auth-alt-action">
-        下一步：
-        <Link className="link" href="/staff/login">
+      <Button asChild>
+        <Link href="/staff/login">
           前往员工登录
         </Link>
-      </p>
+      </Button>
     </div>
   );
 }

@@ -10,6 +10,9 @@
  * field (see growthPresentation.ts's documented gap). The honors list is
  * read-only until that API lands.
  */
+import Link from "next/link";
+import { DiscoveryArrow } from "@/features/innovation/PublicDiscoveryFrame";
+
 import {
   EmptyState,
   SectionError,
@@ -24,7 +27,7 @@ export function GrowthView() {
   const { state, retry } = useSection(() => myGrowth(), "GET /api/v1/points/me/growth");
 
   return (
-    <section className="section" aria-label="我的成长">
+    <section className="section growth-view" aria-label="我的成长">
       <SectionHeading title="我的成长" />
       {state.status === "loading" ? <SectionSkeleton lines={5} /> : null}
       {state.status === "error" ? (
@@ -35,12 +38,12 @@ export function GrowthView() {
   );
 }
 
-function GrowthBody({ data }: { data: Parameters<typeof growthView>[0] }) {
+export function GrowthBody({ data }: { data: Parameters<typeof growthView>[0] }) {
   const view = growthView(data);
   return (
     <>
-      <div className="panel">
-        <div className="metric-row">
+      <div className="growth-overview">
+        <div className="metric-row growth-primary">
           <div className="metric">
             <span className="metric-label">本月积分</span>
             <span className="metric-value">{view.summary.monthPoints}</span>
@@ -48,27 +51,29 @@ function GrowthBody({ data }: { data: Parameters<typeof growthView>[0] }) {
           <div className="metric">
             <span className="metric-label">本月排名</span>
             <span className="metric-value">{view.summary.monthRankText}</span>
+            <Link className="section-link campus-inline-action growth-month-link" href="/rankings?period=monthly">查看月榜<DiscoveryArrow /></Link>
           </div>
           <div className="metric">
             <span className="metric-label">累计获得</span>
             <span className="metric-value">{view.summary.totalEarnedPoints}</span>
           </div>
         </div>
-        <div className="metric-row">
+        <div className="metric-row completion-metrics">
           <div className="metric">
             <span className="metric-label">完成任务</span>
             <span className="metric-value">{view.summary.completedCount}</span>
           </div>
           <div className="metric">
             <span className="metric-label">按时完成</span>
-            <span className="metric-value">{view.summary.onTimeText}</span>
+            <span className="metric-value">{view.summary.onTimeRatioPercent === null ? '—' : `${view.summary.onTimeRatioPercent}%`}</span>
+            <span className="metric-note">{view.summary.onTimeText}</span>
           </div>
           <div className="metric">
             <span className="metric-label">连续按时</span>
-            <span className="metric-value">{view.summary.streakText}</span>
+            <span className="metric-value">{data.current_streak}<span className="metric-unit"> 次</span></span>
           </div>
         </div>
-        <p className="progress-note">
+        <p className="progress-note best-month">
           历史最好月榜名次：
           {view.summary.bestRankText === null ? "暂无" : view.summary.bestRankText}
         </p>
@@ -85,12 +90,20 @@ function GrowthBody({ data }: { data: Parameters<typeof growthView>[0] }) {
           <ul className="honor-list">
             {view.honors.map((honor) => (
               <li key={honor.honorId} className="honor-row">
-                <span className="honor-name">{honor.name}</span>
-                <span className="honor-meta">
-                  <span className="honor-chip">{honor.typeLabel}</span>
-                  {honor.period !== null ? <span>{honor.period}</span> : null}
-                  <span>{honor.grantedLabel}</span>
+                <span className="growth-honor-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+                    <circle cx="12" cy="8" r="5" />
+                    <path d="m8 12-2 9 6-3 6 3-2-9" />
+                  </svg>
                 </span>
+                <div className="honor-copy">
+                  <span className="honor-name">{honor.name}</span>
+                  <span className="honor-meta">
+                    <span className="honor-chip">{honor.typeLabel}</span>
+                    {honor.period !== null ? <span>{honor.period}</span> : null}
+                  </span>
+                </div>
+                <span className="honor-date">{honor.grantedLabel}</span>
               </li>
             ))}
           </ul>

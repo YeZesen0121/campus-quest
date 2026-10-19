@@ -117,7 +117,7 @@ export function NotificationGallery() {
     <section className="section" aria-label="通知行">
       <h2 className="section-title">通知行 × 未读层级 × 事件类别</h2>
       <p className="progress-note">
-        未读 = 字重 + 白色微浮面（无粗边框、无新徽章）；已读 = 安静。图标瓦片左侧描边区分事件类别：审核（墨蓝）/ 截止（琥珀）/ 兑换（青绿）/ 系统（信息蓝），文字标签恒在。
+        未读保留很浅的底色与文字提示；事件类别仍有图形和文字，已读降低字重。标为已读的操作保留44px触区。
       </p>
       <ol className="notif-list">
         <GalleryRow item={UNREAD_REVIEW} />
@@ -127,7 +127,7 @@ export function NotificationGallery() {
         <GalleryRow item={READ_SYSTEM} />
       </ol>
       <p className="progress-note">
-        类别与结果是两个通道：兑换未通过保留兑换类别描边 + 危险色结果底。未知事件类型降级为通用条目（系统类别），长正文三行截断。
+        类别与结果分别呈现；未知事件类型降级为通用条目。长正文自然换行，完整保留审核意见及恢复说明。
       </p>
       <ol className="notif-list">
         <GalleryRow item={UNKNOWN_TYPE} />

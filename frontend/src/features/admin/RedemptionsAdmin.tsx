@@ -16,6 +16,8 @@
  * system; fulfill marks physical delivery complete).
  */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -116,9 +118,9 @@ export function RedemptionsAdmin() {
   );
 
   return (
-    <section className="section" aria-label="兑换审核队列">
+    <section className="section" aria-label="兑换审核队列" data-admin-return="redemptions" tabIndex={-1}>
       <div className="section-head">
-        <h2 className="section-title">兑换审核队列</h2>
+        <h2 className="section-title">待处理申请</h2>
         <Button
           variant="ghost"
           onClick={() => {
@@ -130,8 +132,7 @@ export function RedemptionsAdmin() {
         </Button>
       </div>
       <p className="field-hint">
-        队列按时间先后列出待审核的兑换申请；审核通过后即可标记发放完成。
-        拒绝必须填写原因（将通过通知送达申请者）。
+        当前队列列出待审核申请；本次批准的记录保留在页面，可继续确认发放。
       </p>
       {phase === "loading" ? (
         <SectionSkeleton lines={6} />
@@ -226,11 +227,11 @@ function QueueRow({
         <span className="meta-num review-tier">{row.points} 积分</span>
       </span>
       <span className="review-item-meta">
-        <span className={`badge badge-${status.tone}`}>{status.label}</span>
         <span>申请人：{row.requester_nickname ?? "—"}</span>
         <time className="notif-time" dateTime={row.created_at}>
           {formatDeadlineDateTime(parseServerInstant(row.created_at))}
         </time>
+        <span className={`badge badge-${status.tone}`}>{status.label}</span>
       </span>
     </button>
   );
@@ -251,7 +252,10 @@ function RedemptionDetail({
   const actions = redemptionActions(row.status);
   return (
     <div className="review-detail panel">
-      <h3 className="section-title">兑换详情</h3>
+      <div className="section-head">
+        <h3 className="section-title">兑换详情</h3>
+        <span className={`badge badge-${status.tone}`}>{status.label}</span>
+      </div>
       <div className="fact-rows">
         <div className="fact-row">
           <span className="fact-label">奖励</span>
@@ -280,12 +284,6 @@ function RedemptionDetail({
         <div className="fact-row">
           <span className="fact-label">兑换 ID</span>
           <span className="fact-value mono">{row.id}</span>
-        </div>
-        <div className="fact-row">
-          <span className="fact-label">状态</span>
-          <span className="fact-value">
-            <span className={`badge badge-${status.tone}`}>{status.label}</span>
-          </span>
         </div>
         {row.rejection_reason !== null ? (
           <div className="fact-row">
@@ -331,6 +329,10 @@ function RedemptionDetail({
       ) : (
         <p className="field-hint">该兑换已处理完成。</p>
       )}
+      <p className="campus-admin-redemption-policy" role="note">
+        所有兑换均需人工审核。批准后扣减冻结积分并进入待发放；拒绝释放冻结积分与占用名额。
+        实际发放需另行标记，拒绝原因会通知申请人。
+      </p>
     </div>
   );
 }
@@ -345,6 +347,7 @@ function ApproveDialog({
   onDone: (verdict: RedemptionReviewDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="redemptions"]'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -379,7 +382,7 @@ function ApproveDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <DialogTitle id="redemption-approve-title">通过兑换申请</DialogTitle>
         <p className="report-target">
@@ -396,6 +399,9 @@ function ApproveDialog({
           </div>
         ) : null}
         <DialogFooter>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+            取消
+          </Button>
           <Button
             variant="primary"
             onClick={() => void onConfirm()}
@@ -404,9 +410,6 @@ function ApproveDialog({
           >
             {busy ? <span className="spinner" aria-hidden="true" /> : null}
             <span>确认通过</span>
-          </Button>
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            取消
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -424,6 +427,7 @@ function RejectDialog({
   onDone: (verdict: RedemptionReviewDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="redemptions"]'));
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -468,7 +472,7 @@ function RejectDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="redemption-reject-title">拒绝兑换申请</DialogTitle>
@@ -506,12 +510,12 @@ function RejectDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="danger" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>确认拒绝</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>
@@ -530,6 +534,7 @@ function FulfillDialog({
   onDone: (verdict: RedemptionReviewDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="redemptions"]'));
   const [note, setNote] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -570,7 +575,7 @@ function FulfillDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="redemption-fulfill-title">标记已发放</DialogTitle>
@@ -600,12 +605,12 @@ function FulfillDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>确认发放</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>

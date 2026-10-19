@@ -22,7 +22,7 @@
  *   way to obtain a pending staff session.
  */
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 
 import { useSession } from "@/features/auth/session";
 import { TEACHER_LANDING_PATH } from "@/features/auth/workspace";
@@ -38,7 +38,13 @@ import { validatePassword } from "./validation";
 
 type StaffLoginFields = "email" | "password" | "totp_code";
 
+const subscribeToReadiness = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
 export function StaffLoginForm() {
+  // Like student/mentor login, the controlled SSR fields wait for handlers.
+  const ready = useSyncExternalStore(subscribeToReadiness, clientReady, serverReady);
   const router = useRouter();
   const { refresh: refreshSession } = useSession();
   const [values, setValues] = useState({ email: "", password: "", totp_code: "" });
@@ -61,6 +67,7 @@ export function StaffLoginForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!ready || loading) return;
     const email = values.email.trim(); // the backend lowercases/strips (§5.8)
     const errors: Partial<Record<StaffLoginFields, string>> = {
       email: validateStaffEmail(email) ?? undefined,
@@ -106,7 +113,7 @@ export function StaffLoginForm() {
           </p>
         </div>
       ) : null}
-      <form className="form" onSubmit={onSubmit} noValidate>
+      <form className="form" onSubmit={onSubmit} noValidate aria-busy={!ready || loading}>
         <FormErrorSummary view={summary} />
         <AuthField
           name="email"
@@ -121,7 +128,7 @@ export function StaffLoginForm() {
             autoCapitalize: "none",
             autoCorrect: "off",
             placeholder: "员工邮箱",
-            disabled: loading,
+            disabled: !ready || loading,
           }}
         />
         <AuthField
@@ -134,7 +141,7 @@ export function StaffLoginForm() {
             type: "password",
             autoComplete: "current-password",
             placeholder: "请输入密码",
-            disabled: loading,
+            disabled: !ready || loading,
           }}
         />
         <AuthField
@@ -153,10 +160,10 @@ export function StaffLoginForm() {
             spellCheck: false,
             placeholder: "6 位数字或恢复代码",
             maxLength: 11,
-            disabled: loading,
+            disabled: !ready || loading,
           }}
         />
-        <SubmitButton loading={loading}>登录</SubmitButton>
+        <SubmitButton loading={loading} disabled={!ready} block={false}>登录</SubmitButton>
       </form>
     </>
   );

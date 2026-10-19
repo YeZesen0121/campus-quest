@@ -274,8 +274,14 @@ describe("task card affordance pins (defect #5)", () => {
     assert.match(css, /\.task-card:has\(\.task-card-title a:focus-visible\)\s*{\s*border-color: var\(--primary\)/);
   });
 
-  test("rarity tints the card border + a faint wash; NORMAL stays neutral", () => {
-    for (const key of ["RARE", "EPIC", "LEGENDARY"] as const) {
+  test("approved rare and epic surfaces retain their tiers; NORMAL stays neutral", () => {
+    for (const key of ["RARE", "EPIC"] as const) {
+      const tier = key.toLowerCase();
+      assert.match(css, new RegExp(`\\.task-card\\[data-rarity="${key}"\\]\\s*{[^}]*border-color: var\\(--work-${tier}-border\\)[^}]*background: var\\(--work-${tier}-surface\\)`));
+    }
+    // The approved sample pins RARE/EPIC surfaces explicitly; the existing
+    // legendary wash remains, with four different non-color shape cues.
+    for (const key of ["LEGENDARY"] as const) {
       const pattern = `\\.task-card\\[data-rarity="${key}"\\]\\s*{[^}]*border-color: color-mix\\(in oklab, var\\(--rarity-${key.toLowerCase()}\\) [^)]+\\)[^}]*background: color-mix\\(in oklab, var\\(--rarity-${key.toLowerCase()}\\) \\d+%`;
       assert.match(css, new RegExp(pattern), `missing border+wash tint for ${key}`);
     }
@@ -290,10 +296,10 @@ describe("task card affordance pins (defect #5)", () => {
     assert.match(css, /\.task-card-rarity\[data-rarity="LEGENDARY"\]\s*{\s*color: var\(--rarity-legendary\)/);
   });
 
-  test("the title link reads as a link at rest (quiet underline)", () => {
+  test("the quiet title retains the stretched full-card hit area", () => {
     assert.match(
       css,
-      /\.task-card-title a\s*{[^}]*text-decoration-line: underline[^}]*text-decoration-color: var\(--border-strong\)/,
+      /\.task-card-title a::after\s*{[^}]*position: absolute[^}]*inset: 0/,
     );
   });
 

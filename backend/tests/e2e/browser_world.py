@@ -63,6 +63,7 @@ from app.modules.identity.models import (  # noqa: E402
 from tests.e2e.factories import (  # noqa: E402
     DEFAULT_PASSWORD,
     clean_world,
+    guard_reward_cleanup,
     seed_admin_confirmed_totp,
     seed_claim,
     seed_points_balance,
@@ -620,6 +621,7 @@ async def _clean(world_path: str) -> dict[str, Any]:
     from app.integrations.object_storage_s3 import S3ObjectStorage
     from app.modules.audit.models import AuditLog
     from app.modules.identity.models import StudentWhitelist, User
+    from app.modules.notifications.models import NotificationTemplate
     from app.modules.rankings.periods import business_day, business_month
     from app.modules.rankings.redis_projection import ALL_TIME_KEY
     from app.modules.submissions.models import UploadIntent
@@ -655,6 +657,10 @@ async def _clean(world_path: str) -> dict[str, Any]:
             user_ids.append(uuid.UUID(world["author"]["id"]))
         if "mentor" in world:
             user_ids.append(uuid.UUID(world["mentor"]["id"]))
+        for recorded_id in world.get("cleanup_user_ids", []):
+            user_id = uuid.UUID(recorded_id)
+            if user_id not in user_ids:
+                user_ids.append(user_id)
         # Tasks the teacher suite created through the REAL UI (the
         # create -> import -> publish flow) exist only as rows — sweep
         # them by owner (the browser staff teachers) so clean_world's
@@ -703,19 +709,40 @@ async def _clean(world_path: str) -> dict[str, Any]:
             )
             removed["drift_users"] = len(drift)
             user_ids.extend(row for row in drift if row not in user_ids)
-            await db.execute(
-                delete(StudentWhitelist).where(
-                    (StudentWhitelist.student_number.like(f"{register_prefix}%"))
-                    | (
-                        # the whitelist-import spec's confirmed row is a
-                        # 9-digit Date.now stamp — run-unique, never a
-                        # factory number (11+ digits) or the register
-                        # prefix (16 digits)
-                        StudentWhitelist.student_number.regexp_match("^[0-9]{9}$")
+            created_rewards = (
+                await db.scalars(
+                    select(AuditLog.target_id).where(
+                        AuditLog.actor_user_id.in_(user_ids),
+                        AuditLog.action == "REWARD_ITEM_CREATED",
+                        AuditLog.target_type == "reward_item",
                     )
                 )
+            ).all()
+            reward_item_ids = list(
+                {uuid.UUID(world["reward_item_id"])}
+                | {uuid.UUID(item_id) for item_id in created_rewards}
             )
-            await db.commit()
+            created_templates = (
+                await db.execute(
+                    select(AuditLog.target_id, AuditLog.before_snapshot).where(
+                        AuditLog.actor_user_id.in_(user_ids),
+                        AuditLog.action == "NOTIFICATION_TEMPLATE_UPSERTED",
+                        AuditLog.target_type == "notification_template",
+                    )
+                )
+            ).all()
+            # JSONB null and legacy SQL NULL both decode to Python None.
+            # Text edits always carry a non-null before snapshot.
+            template_ids = [
+                uuid.UUID(item_id)
+                for item_id, before_snapshot in created_templates
+                if before_snapshot is None
+            ]
+            # Reward refusal before recording cleanup intent. The complete
+            # graph transaction still runs before all external side effects.
+            await guard_reward_cleanup(
+                db, user_ids=user_ids, reward_item_ids=reward_item_ids
+            )
 
         # PR #6 final review P2 (task 4): ONE source list for the audit
         # cleanup — every account this run seeded or the specs created
@@ -730,32 +757,8 @@ async def _clean(world_path: str) -> dict[str, Any]:
         # end of the clean pins them empty.
         staff_actor_ids = list(user_ids)
         actor_target_ids = [str(user_id) for user_id in user_ids]
-        async with factory() as db:
-            removed["audit_rows"] = (
-                await db.execute(
-                    delete(AuditLog).where(
-                        or_(
-                            AuditLog.actor_user_id.in_(staff_actor_ids),
-                            AuditLog.target_id.in_(actor_target_ids),
-                        )
-                    )
-                )
-            ).rowcount
-            await db.commit()
-
-        # The settings spec's term edit is GLOBAL state: restore the
-        # pre-run row exactly (value, or the row's meaningful absence —
-        # "never configured here; use the deployment seed").
-        if "term_before" in world:
-            term_before = world["term_before"]
-            async with factory() as db:
-                term_row = await db.get(SystemSetting, "CURRENT_ACADEMIC_TERM")
-                if term_before is None:
-                    if term_row is not None:
-                        await db.delete(term_row)
-                elif term_row is not None:
-                    term_row.value = term_before
-                await db.commit()
+        # Keep ownership audit rows until resources and the graph are gone.
+        # A storage failure or a graph guard refusal must remain retryable.
 
         # S3 objects this run PUT (guarded: absent objects raise, §27).
         from app.modules.innovation.evidence_models import AchievementEvidence
@@ -809,19 +812,79 @@ async def _clean(world_path: str) -> dict[str, Any]:
                     )
                 ).all()
             )
-        for key in keys:
-            with contextlib.suppress(FileNotFoundError):
-                await asyncio.to_thread(storage.delete_object, object_key=key)
-                removed["objects"] += 1
+        # Cleanup starts only after this runner's writers have stopped.
+        # Persist every object key and actor before graph deletion, merging
+        # the previous intent on retries after a partial S3/audit failure.
+        keys = sorted(set(keys) | set(world.get("cleanup_object_keys", [])))
+        world["cleanup_object_keys"] = keys
+        world["cleanup_user_ids"] = sorted({str(value) for value in user_ids})
+        manifest_path = Path(world_path)
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{manifest_path.name}.cleanup-", dir=manifest_path.parent
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(world, handle, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, manifest_path)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
 
         honors_before = {uuid.UUID(t) for t in world["honors_before"]}
         await clean_world(
             factory,
             user_ids=user_ids,
             task_ids=task_ids,
-            reward_item_ids=[uuid.UUID(world["reward_item_id"])],
+            reward_item_ids=reward_item_ids,
             honor_ids_before=honors_before,
         )
+
+        # Complete graph guards have now succeeded and committed. A refusal
+        # above leaves S3, whitelist and global settings untouched. If any
+        # deletion below fails, manifest keys survive their deleted DB rows.
+        for key in keys:
+            with contextlib.suppress(FileNotFoundError):
+                await asyncio.to_thread(storage.delete_object, object_key=key)
+                removed["objects"] += 1
+
+        # Restore the exact pre-run value or its meaningful absence.
+        if "term_before" in world:
+            term_before = world["term_before"]
+            async with factory() as db:
+                term_row = await db.get(SystemSetting, "CURRENT_ACADEMIC_TERM")
+                if term_before is None:
+                    if term_row is not None:
+                        await db.delete(term_row)
+                elif term_row is not None:
+                    term_row.value = term_before
+                await db.commit()
+
+        async with factory() as db:
+            await db.execute(
+                delete(StudentWhitelist).where(
+                    StudentWhitelist.student_number.like(f"{register_prefix}%")
+                    # Preserve the established 9-digit whitelist-import
+                    # stamp scope; it excludes factory/register numbers.
+                    | StudentWhitelist.student_number.regexp_match("^[0-9]{9}$")
+                )
+            )
+            await db.execute(
+                delete(NotificationTemplate).where(
+                    NotificationTemplate.id.in_(template_ids)
+                )
+            )
+            removed["audit_rows"] = (
+                await db.execute(
+                    delete(AuditLog).where(
+                        or_(
+                            AuditLog.actor_user_id.in_(staff_actor_ids),
+                            AuditLog.target_id.in_(actor_target_ids),
+                        )
+                    )
+                )
+            ).rowcount
+            await db.commit()
 
         # Teardown regression (PR #6 task 4): with every removal done,
         # not one AuditLog row may still name THIS run as actor or as a

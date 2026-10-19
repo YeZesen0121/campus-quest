@@ -125,3 +125,12 @@ test("private blob downloads use temporary local URLs and generic names, never a
     assert.deepEqual(names, ["evidence.pdf", "evidence.png", "evidence.jpg"]); assert.equal(revoked.length, 3);
   } finally { URL.createObjectURL = create; URL.revokeObjectURL = revoke; if (descriptor) Object.defineProperty(globalThis, "document", descriptor); else Reflect.deleteProperty(globalThis, "document"); }
 });
+
+test("public publication dates include the business-zone year across the UTC year boundary", async () => {
+  const time = await import("../lib/time");
+  const format = (time as typeof time & { formatPublicationDateTime?: (instant: number, config?: typeof time.BUSINESS_TIME_CONFIG) => string }).formatPublicationDateTime;
+  assert.equal(typeof format, "function");
+  const instant = Date.UTC(2025, 11, 31, 18);
+  assert.equal(format!(instant), "2026年1月1日 02:00");
+  assert.equal(format!(instant, { locale: "zh-CN", timeZone: "UTC" }), "2025年12月31日 18:00");
+});

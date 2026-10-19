@@ -21,6 +21,8 @@
  * hands the CREATED task (the server echo) to the parent.
  */
 import { useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -65,6 +67,7 @@ function CreateTaskDialogInner({
   const [fieldErrors, setFieldErrors] = useState<TaskFormErrors>({});
   const [summary, setSummary] = useState<ReturnType<typeof describeTaskMutationError> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch);
 
   function setField<K extends TaskFormFieldKey>(key: K, value: TaskFormValues[K]) {
     setValues((previous) => ({ ...previous, [key]: value }));
@@ -108,8 +111,8 @@ function CreateTaskDialogInner({
         }
       }}
     >
-      <DialogContent asChild size="wide" aria-labelledby="create-task-title">
-        <form onSubmit={onSubmit} noValidate>
+      <DialogContent {...dialogFocus} asChild size="wide" aria-labelledby="create-task-title">
+        <form className="campus-task-dialog" onSubmit={onSubmit} noValidate>
           <DialogTitle id="create-task-title">新建任务</DialogTitle>
           <p className="field-hint">
             创建后任务为草稿状态：需要先在详情页导入任务单元，再通过发布校验。
@@ -126,6 +129,13 @@ function CreateTaskDialogInner({
 
           <DialogFooter>
             <Button
+              variant="secondary"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              取消
+            </Button>
+            <Button
               type="submit"
               variant="primary"
               disabled={submitting}
@@ -133,13 +143,6 @@ function CreateTaskDialogInner({
             >
               {submitting ? <span className="spinner" aria-hidden="true" /> : null}
               <span>创建草稿</span>
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              取消
             </Button>
           </DialogFooter>
         </form>

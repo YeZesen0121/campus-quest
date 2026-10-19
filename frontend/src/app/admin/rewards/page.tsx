@@ -13,14 +13,9 @@ export const metadata: Metadata = {
  */
 export default function AdminRewardsPage() {
   return (
-    <>
-      <div className="page-head">
+    <RewardsAdmin heading={<div className="page-head">
         <h1 className="page-title">奖励目录</h1>
-        <p className="page-subtitle">
-          奖励的积分 / 库存 / 学期限购 / 时间窗管理与下架；调整只影响之后的兑换
-        </p>
-      </div>
-      <RewardsAdmin />
-    </>
+        <p className="page-subtitle">维护上架奖励与兑换条件，调整只影响之后的新申请。</p>
+      </div>} />
   );
 }

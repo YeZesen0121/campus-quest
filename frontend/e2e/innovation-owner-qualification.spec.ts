@@ -75,6 +75,50 @@ test("owner qualification: student applies, admin confirms, account switch clear
     await viewOnlyPendingApplication(admin);
     const detail = admin.getByRole("region", { name: "负责人资格申请详情" });
     await expect(detail).toContainText("示例专业甲");
+    const compositionDifferences: string[] = [];
+    for (const width of [320, 390, 640, 800, 1440]) {
+      await admin.setViewportSize({ width, height: 900 });
+      await admin.evaluate(async () => { await document.fonts.ready; });
+      const pairs = await detail.locator("dl > div").evaluateAll((fields) => fields.map((field) => {
+        const label = field.querySelector("dt")!.getBoundingClientRect(), value = field.querySelector("dd")!.getBoundingClientRect();
+        return label.right <= value.left + 1 && Math.abs(label.top - value.top) <= 3;
+      }));
+      if (pairs.length !== 4 || !pairs.every(Boolean)) compositionDifferences.push(`${width}: four horizontal snapshot facts`);
+      const tops = await detail.locator("dl > div").evaluateAll(fields => [...new Set(fields.map(field => Math.round(field.getBoundingClientRect().top)))]);
+      if (tops.length !== (width < 1024 ? 4 : 2)) compositionDifferences.push(`${width}: source snapshot rows ${tops.length}`);
+      const snapshotGeometry = await detail.locator("dl").evaluate(dl => ({
+        width: dl.getBoundingClientRect().width, available: dl.parentElement!.clientWidth,
+        fields: [...dl.children].map(field => {
+          const key = field.querySelector("dt")!, value = field.querySelector("dd")!;
+          return { top: field.getBoundingClientRect().top, bottom: field.getBoundingClientRect().bottom, keyWidth: key.getBoundingClientRect().width, keyFont: getComputedStyle(key).fontSize, valueFont: getComputedStyle(value).fontSize, gap: parseFloat(getComputedStyle(field).columnGap) };
+        }),
+      }));
+      if (Math.abs(snapshotGeometry.width - Math.min(720, snapshotGeometry.available)) > 1) compositionDifferences.push(`${width}: source snapshot cap720:${snapshotGeometry.width}`);
+      if (!snapshotGeometry.fields.every(field => Math.abs(field.keyWidth - (width >= 1024 ? 90 : 80)) <= 1 && field.keyFont === "12px" && field.valueFont === "14px" && Math.abs(field.gap - (width >= 1024 ? 12 : 10)) <= 1)) compositionDifferences.push(`${width}: source snapshot key/value hierarchy:${JSON.stringify(snapshotGeometry.fields)}`);
+      const expectedPairGap = width < 640 ? 10 : 11;
+      const fields = snapshotGeometry.fields;
+      if (fields.length === 4) {
+        const gaps = width >= 1024 ? [fields[1].top - fields[0].bottom, fields[3].top - fields[2].bottom] : fields.slice(1).map((field, index) => field.top - fields[index].bottom);
+        const expected = width >= 1024 ? [11, 11] : [expectedPairGap, 0, expectedPairGap];
+        if (!gaps.every((gap, index) => Math.abs(gap - expected[index]) <= 1)) compositionDifferences.push(`${width}: source independent fact-pair gaps:${JSON.stringify(gaps)}`);
+      }
+      const primaryAccount = await queue.locator('tbody td').first().evaluate(node => getComputedStyle(node).fontSize);
+      if (primaryAccount !== `${width < 640 ? 14 : 13}px`) compositionDifferences.push(`${width}: primary application account ${primaryAccount}`);
+      const sourcePaint = await detail.evaluate(section => {
+        const header = section.querySelector('.campus-admin-detail-heading')!, status = header.querySelector('[aria-label="申请开通状态"]')!;
+        const note = Array.from(section.querySelectorAll('p')).find(node => node.textContent?.includes('不会核实成果'))!;
+        const style = getComputedStyle(note), canvas = document.createElement('canvas').getContext('2d')!;
+        const rgb = (color: string) => { canvas.clearRect(0, 0, 1, 1); canvas.fillStyle = color; canvas.fillRect(0, 0, 1, 1); return Array.from(canvas.getImageData(0, 0, 1, 1).data).join(','); };
+        return { statusAtEdge: Math.abs(status.getBoundingClientRect().right - header.getBoundingClientRect().right) < 1, font: style.fontSize, padding: style.padding, border: style.borderLeftWidth, borderInk: rgb(style.borderLeftColor), ground: rgb(style.backgroundColor), ink: rgb(style.color) };
+      });
+      if (!sourcePaint.statusAtEdge) compositionDifferences.push(`${width}: qualification state belongs at the heading edge`);
+      if (sourcePaint.font !== '14px' || sourcePaint.padding !== (width < 640 ? '9px 11px' : '10px 13px') || sourcePaint.border !== '2px' || sourcePaint.borderInk !== '175,186,164,255' || sourcePaint.ground !== '237,236,227,255' || sourcePaint.ink !== '69,72,63,255') compositionDifferences.push(`${width}: approved consequence note ${JSON.stringify(sourcePaint)}`);
+      if (await queue.locator('.cq-status-cell .badge').count() !== 1) compositionDifferences.push(`${width}: actual queue state uses the source compact tag`);
+      expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await admin.screenshot({ path: testInfo.outputPath("admin-qualification-selected-" + width + ".png"), fullPage: true });
+    }
+    await admin.setViewportSize({ width: 390, height: 844 });
+    expect(compositionDifferences, "approved selected qualification composition").toEqual([]);
     const open = detail.getByRole("button", { name: "开通负责人资格", exact: true });
     const dialog = admin.getByRole("dialog", { name: "开通负责人资格", exact: true });
     await open.click();

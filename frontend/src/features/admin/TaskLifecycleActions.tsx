@@ -12,7 +12,9 @@
  * typed envelope copy (e.g. publish gates answering VALIDATION_ERROR or
  * TASK_NOT_CLAIMABLE) instead of a client-side guess.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -53,6 +55,7 @@ export function TaskLifecycleActions({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [confirming, setConfirming] = useState<LifecycleActionView | null>(null);
+  const actionScope = useRef<HTMLDivElement>(null);
 
   async function run(action: LifecycleActionView) {
     if (pending !== null) {
@@ -71,7 +74,7 @@ export function TaskLifecycleActions({
   }
 
   return (
-    <div className={size === "compact" ? "row-actions" : "dialog-actions"}>
+    <div className={size === "compact" ? "row-actions" : "dialog-actions"} ref={actionScope} tabIndex={-1}>
       {actions.map((action) => (
         <Button
           key={action.verb}
@@ -100,6 +103,7 @@ export function TaskLifecycleActions({
         <LifecycleConfirmDialog
           action={confirming}
           busy={pending !== null}
+          fallbackFocus={() => actionScope.current}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             // `run` settles on both paths (typed errors render inline
@@ -118,12 +122,15 @@ function LifecycleConfirmDialog({
   busy,
   onCancel,
   onConfirm,
+  fallbackFocus,
 }: {
   action: LifecycleActionView;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  fallbackFocus: () => HTMLElement | null;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, fallbackFocus);
   return (
     <Dialog
       open
@@ -133,7 +140,7 @@ function LifecycleConfirmDialog({
         }
       }}
     >
-      <DialogContent aria-labelledby="lifecycle-confirm-title">
+      <DialogContent {...dialogFocus} aria-labelledby="lifecycle-confirm-title">
         <DialogTitle id="lifecycle-confirm-title">{action.confirmTitle}</DialogTitle>
         {action.buttonClass === "btn-danger" ? (
           <div className="alert alert-error" role="alert">
@@ -147,21 +154,20 @@ function LifecycleConfirmDialog({
         )}
         <DialogFooter>
           <Button
-            variant={BUTTON_VARIANT[action.buttonClass]}
-            onClick={onConfirm}
-            disabled={busy}
-            aria-busy={busy}
-            autoFocus
-          >
-            {busy ? <span className="spinner" aria-hidden="true" /> : null}
-            <span>{action.confirmLabel}</span>
-          </Button>
-          <Button
             variant="secondary"
             onClick={onCancel}
             disabled={busy}
           >
             取消
+          </Button>
+          <Button
+            variant={BUTTON_VARIANT[action.buttonClass]}
+            onClick={onConfirm}
+            disabled={busy}
+            aria-busy={busy}
+          >
+            {busy ? <span className="spinner" aria-hidden="true" /> : null}
+            <span>{action.confirmLabel}</span>
           </Button>
         </DialogFooter>
       </DialogContent>

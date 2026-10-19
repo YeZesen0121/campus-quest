@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { spawnSync } from "node:child_process";
 import { BACKEND_DIR, backendEnv } from "./global-setup";
-import { BASE_URL, API_URL, ensureStudentLogin, expect, loginThroughUi, mintToken, parseSeededAccount, staffLogin, test } from "./fixtures";
+import { readSourceTagPaint, BASE_URL, API_URL, ensureStudentLogin, expect, loginThroughUi, mintToken, parseSeededAccount, staffLogin, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 test.skip(process.env.CQ_E2E !== "1", "set CQ_E2E=1 with real PG, MinIO and ClamAV");
@@ -99,8 +99,15 @@ test("achievement review: private proof and every update reviewed across three a
     await owner.getByLabel("成果名称", { exact: true }).fill("校园回收核实原型");
     await owner.getByLabel("作品与阶段成果说明", { exact: true }).fill("首次提交的可操作原型。");
     const created = owner.waitForResponse((response) => response.request().method() === "POST" && /\/achievements$/.test(new URL(response.url()).pathname));
+    const reviewReads = ['workflow', 'evidence'].map(suffix => owner.waitForResponse(async response => {
+      const path = new URL(response.url()).pathname;
+      return response.request().method() === 'GET' && response.status() === 200 &&
+        path.startsWith(`/api/v1/ie/me/project-drafts/${projectId}/achievements/`) &&
+        path.endsWith(`/${suffix}`) && (await response.finished()) === null;
+    }));
     await owner.getByRole("button", { name: "保存成果草稿", exact: true }).click();
     const achievement = await (await created).json() as { id: string };
+    await Promise.all(reviewReads);
     await expect(panel(owner)).toContainText("尚未提交首次核实");
     // A failed signed PUT keeps its original retry key, but must not trap the
     // author after the upload intent is explicitly removed.
@@ -159,7 +166,7 @@ test("achievement review: private proof and every update reviewed across three a
       expect(submissions[1]).toEqual(submissions[0]);
     } finally { releaseWorkflow(); }
     await expect(panel(owner)).toContainText("等待首次核实");
-    await expect(panel(owner)).toBeFocused();
+    await expect(panel(owner).getByRole("region", { name: "成果核实操作", exact: true })).toBeFocused();
     await owner.unroute("**/api/v1/ie/me/project-drafts/*/achievements/*/workflow");
     await owner.unroute("**/api/v1/ie/me/project-drafts/*/achievements/*/submit");
     await expect(owner.getByLabel("成果名称", { exact: true })).toBeDisabled();
@@ -227,6 +234,36 @@ test("achievement review: private proof and every update reviewed across three a
     await expect(publicDetail).toContainText("已补充第一次验证结果。");
     await expect(publicDetail).not.toContainText("00998877"); await expect(publicDetail).not.toContainText("核实演示负责人");
     await expect(publicDetail.getByRole("button", { name: /证明/ })).toHaveCount(0);
+    const originalPublicViewport = viewer.viewportSize()!;
+    for (const width of [320, 390, 800, 1440]) {
+      await viewer.setViewportSize({ width, height: 900 });
+      await viewer.evaluate(() => document.fonts.ready);
+
+      const publicTabs = (await viewer.getByRole('navigation', { name: '双创公共浏览', exact: true }).boundingBox())!;
+      expect.soft((await publicDetail.getByRole('heading', { level: 1 }).boundingBox())!.y - publicTabs.y - publicTabs.height).toBeCloseTo(65, 0);
+      expect.soft(await publicDetail.locator('time').evaluateAll(nodes => nodes.every(node => /\d{4}年/.test(node.textContent ?? '')))).toBe(true);
+      const publication = publicDetail.locator('.campus-publication-dates');
+      expect.soft(await publication.count()).toBe(1);
+      if (await publication.count()) await expect.soft(publication).toHaveCSS('border-bottom-style', 'solid');
+      const award = publicDetail.getByRole("region", { name: "立项或获奖说明", exact: true });
+      expect.soft(await award.count()).toBe(1);
+      if (await award.count()) {
+        expect.soft(await award.evaluate(node => node.parentElement?.classList.contains("campus-achievement-main"))).toBe(true);
+        expect.soft(await award.getByRole("heading", { level: 2 }).evaluate(node => getComputedStyle(node).fontWeight)).toBe("600");
+      }
+      const projectSnapshot = publicDetail.getByRole("region", { name: "公开项目概况", exact: true });
+      const snapshotInk = await projectSnapshot.evaluate(node => {
+        const canvas = document.createElement("canvas").getContext("2d")!;
+        canvas.fillStyle = getComputedStyle(node).backgroundColor; canvas.fillRect(0, 0, 1, 1);
+        return [...canvas.getImageData(0, 0, 1, 1).data].slice(0, 3).join(",");
+      });
+      expect.soft(snapshotInk).toBe("253,252,248");
+      expect.soft(await projectSnapshot.locator("dl > div").evaluateAll(nodes => nodes.every(node => node.querySelector("dt")!.getBoundingClientRect().right <= node.querySelector("dd")!.getBoundingClientRect().left + 1))).toBe(true);
+      expect.soft(await publicDetail.locator("time").count()).toBeGreaterThanOrEqual(2);
+      await viewer.screenshot({ path: testInfo.outputPath(`achievement-source-${width}.png`), fullPage: true });
+    }
+    await viewer.setViewportSize(originalPublicViewport);
+
     await owner.getByRole("button", { name: "重新读取核实与材料状态", exact: true }).click();
     await expect(panel(owner)).toContainText("首次核实已通过");
     await owner.getByLabel("作品与阶段成果说明", { exact: true }).fill("第二版公开进展。");
@@ -332,4 +369,118 @@ test("achievement review: private proof and every update reviewed across three a
     // Restore the shared student grant so the existing operations suite retains its own starting contract.
     await setOperator(false);
   } finally { await ownerContext.close(); await viewerContext.close(); }
+});
+
+test("approved achievement review composition: real frozen snapshot, private panes and decision context", async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await ensureStudentLogin(page);
+  const ownerId = process.env.CQ_E2E_AUTHOR_SECRETS!.split(",").at(-1)!;
+  const operatorId = process.env.CQ_E2E_STUDENT_ID!;
+  const headers = { owner: { Authorization: `Bearer ${mintToken(ownerId)}` }, admin: { Authorization: `Bearer ${mintToken(process.env.CQ_E2E_ADMIN_ID!)}` } };
+  async function api<T>(actor: keyof typeof headers, method: string, path: string, data?: unknown, status = 200): Promise<T> {
+    const response = await page.request.fetch(`${API_URL}${path}`, { method, headers: headers[actor], ...(data === undefined ? {} : { data }) });
+    expect(response.status(), await response.text()).toBe(status); return response.json() as Promise<T>;
+  }
+  const prior = await api<{ profile: { version: number } | null }>("owner", "GET", "/ie/me/owner-profile");
+  const profile = await api<{ version: number }>("owner", "PUT", "/ie/me/owner-profile", { version: prior.profile?.version ?? 0, name: "模拟核实布局负责人", student_no: "00886655", major: "模拟信息管理", grade: "2026级" });
+  const qualification = await api<{ version: number; status: string }>("owner", "GET", "/ie/me/owner-qualification");
+  if (qualification.status !== "APPROVED") {
+    const applied = await api<{ version: number }>("owner", "POST", "/ie/me/owner-qualification", { version: qualification.version, profile_version: profile.version });
+    await api("admin", "POST", `/admin/ie/owner-qualifications/${ownerId}/approve`, { version: applied.version });
+  }
+  const grantPath = `/admin/ie/operations-grants/${operatorId}`;
+  const grant = await api<{ version: number; enabled: boolean }>("admin", "GET", grantPath);
+  if (!grant.enabled) await api("admin", "PUT", grantPath, { version: grant.version, enabled: true, reason: "四种宽度的真实核实布局验证" });
+  try {
+    const fields = { title: "模拟校园信息整理项目", summary: "提交时的项目概况，须保留在不可变核实快照。", direction: "校园服务", stage: "初步实践", team_status: "模拟两人小组" };
+    const project = await api<{ id: string; version: number }>("owner", "POST", "/ie/me/project-drafts", { ...fields, request_id: crypto.randomUUID() }, 201);
+    const achievement = await api<{ id: string; version: number }>("owner", "POST", `/ie/me/project-drafts/${project.id}/achievements`, { request_id: crypto.randomUUID(), title: "模拟核实工作样例", description: "完成第一轮访谈与资料来源核对，保留未知信息。", award_text: "模拟立项记录，待核对证明。", work_url: "https://example.invalid/practice" }, 201);
+    const base = `/ie/me/project-drafts/${project.id}/achievements/${achievement.id}`;
+    const pdf = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n");
+    const intent = await api<{ upload_url: string; client_headers: Record<string, string>; evidence: { id: string } }>("owner", "POST", `${base}/evidence`, { request_id: crypto.randomUUID(), size: pdf.length, content_type: "application/pdf" }, 201);
+    expect((await page.request.put(intent.upload_url, { headers: intent.client_headers, data: pdf })).status()).toBe(200);
+    expect((await api<{ state: string }>("owner", "POST", `${base}/evidence/${intent.evidence.id}/complete`)).state).toBe("READY");
+    const workflow = await api<{ version: number }>("owner", "GET", `${base}/workflow`);
+    await api("owner", "POST", `${base}/submit`, { request_id: crypto.randomUUID(), workflow_version: workflow.version, project_version: project.version, achievement_version: achievement.version, evidence_ids: [intent.evidence.id] });
+    await api("owner", "PATCH", `/ie/me/project-drafts/${project.id}`, { ...fields, summary: "T8_PRIVATE_NEWER_PROJECT: 提交后的较新草稿。", version: project.version });
+    const failures: string[] = [];
+    const check = (condition: boolean, message: string) => { if (!condition) failures.push(message); };
+    async function capture(name: string, width: number) {
+      await page.addStyleTag({ content: ':root{--font-sans:"Noto Sans CJK SC",sans-serif;--font-display:"Noto Serif CJK SC",serif}' });
+      await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getTiming().iterations ?? 1)).map(a => a.finished.catch(() => {}))); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); window.scrollTo(0, 0); });
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name}/${width}: overflow`);
+      await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true, animations: "disabled" });
+    }
+    const queue = page.getByRole("region", { name: "成果核实待办", exact: true });
+    const detail = page.getByRole("region", { name: "成果核实快照", exact: true });
+    for (const width of [320, 390, 800, 1440]) {
+      await page.setViewportSize({ width, height: 900 }); await page.goto(`${BASE_URL}/innovation/reviews`);
+      await expect(queue).toContainText("模拟核实工作样例");
+      await expect(queue).not.toContainText("00886655"); await expect(queue).not.toContainText("T8_PRIVATE_NEWER_PROJECT");
+      const row = queue.getByRole("listitem").filter({ hasText: "模拟核实工作样例" }); await expect(row).toHaveCount(1);
+      expect.soft(await readSourceTagPaint(row.locator('.campus-review-operation')), `operations/${width}: source review-kind tag`).toMatchObject({ ink: '95,104,85,255', ground: '232,233,223,255', border: '0px', padding: '2px 6px', font: '11px', weight: '400', radius: '3px' });
+      if (width >= 640) {
+        const axis = await row.evaluate(el => { const s = el.querySelector(".campus-review-state"); return s ? getComputedStyle(s).textAlign : null; });
+        check(axis === "center", `queue/${width}: short status axis ${axis}`);
+      }
+
+      const restriction = queue.locator('.campus-review-restriction');
+      check(await restriction.count() === 1, `queue/${width}: restricted-read context band`);
+      if (await restriction.count()) {
+        const band = (await restriction.boundingBox())!, count = (await queue.locator('.list-count').boundingBox())!;
+        check(band.y + band.height <= count.y, `queue/${width}: restriction precedes real counts`);
+      }
+      check(await page.getByRole('button', { name: '重新读取待办', exact: true }).evaluate(el => el.closest('.campus-review-page-head') !== null), `queue/${width}: reload belongs beside heading`);
+      await expect(page.getByRole('link', { name: '导师资料维护', exact: true })).toHaveAttribute('href', '/innovation/operations/mentors');
+      await capture("operations-reviews", width);
+      check(await queue.getByRole("heading", { name: "待办目录", exact: true }).count() === 0, `queue/${width}: redundant directory heading`);
+      await row.getByRole("button", { name: /领取并核实|查看核实快照/ }).click();
+      await expect(detail).toContainText("00886655"); await expect(detail).toContainText(fields.summary);
+      await expect(detail).not.toContainText("T8_PRIVATE_NEWER_PROJECT");
+      await expect(detail.locator('.campus-review-snapshot-meta')).toContainText('待核实');
+      expect.soft(await readSourceTagPaint(detail.locator('.campus-review-snapshot-meta .badge-info')), `snapshot/${width}: source blue review-kind tag`).toMatchObject({ ink: '53,94,130,255', ground: '231,237,240,255', border: '0px', padding: '2px 6px', font: '11px', weight: '400', radius: '3px' });
+      expect.soft(await detail.locator('.campus-review-snapshot-meta time').count()).toBe(0);
+      await expect(detail.locator('.campus-review-snapshot-meta')).not.toContainText(/第.*版|已由你领取/);
+
+      for (const name of ["已提交项目概况", "已提交成果内容", "核实用负责人资料", "提交证明"]) await expect(detail.getByRole("heading", { name, exact: true })).toBeVisible();
+      const panes = await detail.evaluate(el => ["campus-review-content", "campus-review-private", "campus-review-decision"].map(name => {
+        const node = el.querySelector(`.${name}`); if (!node) return null;
+        const s = getComputedStyle(node), p = getComputedStyle(node, "::before");
+        return { name, columns: s.gridTemplateColumns, gap: s.gap, dividerDisplay: p.display, dividerWidth: p.width };
+      }));
+      for (const pane of panes) {
+        check(pane !== null, `snapshot/${width}: missing independent group`);
+        if (!pane) continue;
+        check(width < 640 ? pane.dividerDisplay === "none" : pane.dividerDisplay !== "none" && pane.dividerWidth === "2px", `snapshot/${width}: ${pane.name} rule ${JSON.stringify(pane)}`);
+        if (width >= 640) check(pane.columns.split(" ").length === 2, `snapshot/${width}: ${pane.name} columns`);
+      }
+      check(await detail.getByRole("heading", { name: "核实决定", exact: true }).count() === 1, `snapshot/${width}: decision context heading`);
+      await capture("operations-review", width);
+      const header = await detail.locator(".page-head").innerText();
+      check(header.includes(fields.title), `snapshot/${width}: real project context missing`);
+      const backAxis = await detail.evaluate(el => { const back = el.querySelector("button")!, r = back.getBoundingClientRect(), owner = el.getBoundingClientRect(); return { x: r.x, expected: owner.x, width: r.width, available: owner.width }; });
+      check(Math.abs(backAxis.x - backAxis.expected) < 1 && backAxis.width < backAxis.available * 0.8, `snapshot/${width}: centered or stretched back action ${JSON.stringify(backAxis)}`);
+      check(await detail.locator(".campus-review-proof-list > li").count() === 1, `snapshot/${width}: proof row composition`);
+      if (width >= 640) {
+        const adjacency = await detail.evaluate(el => { const a = el.querySelector(".campus-review-content")!.getBoundingClientRect(), b = el.querySelector(".campus-review-private")!.getBoundingClientRect(); return b.top - a.bottom; });
+        check(Math.abs(adjacency) < 1, `snapshot/${width}: content/private divider gap ${adjacency}`);
+      }
+      const decision = detail.getByRole("button", { name: "通过首次核实", exact: true }); await decision.focus(); await expect(decision).toBeFocused();
+      const target = await decision.boundingBox(); check(Boolean(target && target.width >= 44 && target.height >= 44), `snapshot/${width}: decision target`);
+      check(await decision.evaluate(el => { const b = el.getBoundingClientRect(), top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return top === el || el.contains(top); }), `snapshot/${width}: decision covered`);
+      await page.screenshot({ path: testInfo.outputPath(`operations-decision-${width}-natural.png`), animations: "disabled" });
+      await detail.getByRole("button", { name: "返回核实待办", exact: true }).click(); await expect(queue).toContainText("模拟核实工作样例");
+    }
+    // Settle the owned case through the existing UI; no abandoned claimed row.
+    await queue.getByRole("listitem").filter({ hasText: "模拟核实工作样例" }).getByRole("button", { name: "查看核实快照", exact: true }).click();
+    await detail.getByRole("button", { name: "退回修改", exact: true }).click(); await confirm(page, "退回成果修改");
+    await expect(detail.getByRole("alert")).toContainText("退回必须填写原因");
+    await detail.getByLabel("核实备注／退回原因", { exact: true }).fill("模拟布局检查完成，请补充实践来源。");
+    await detail.getByRole("button", { name: "退回修改", exact: true }).click(); await confirm(page, "退回成果修改");
+    await expect(page.getByRole("region", { name: "核实处理结果", exact: true })).toBeFocused();
+    await expect(page.getByRole("status")).toContainText("已退回");
+    expect(failures, failures.join("\n")).toEqual([]);
+  } finally {
+    if (!grant.enabled) { const current = await api<{ version: number }>("admin", "GET", grantPath); await api("admin", "PUT", grantPath, { version: current.version, enabled: false, reason: "恢复本次布局测试前的运营权限" }); }
+  }
 });

@@ -16,9 +16,7 @@ export default function AdminRedemptionsPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">兑换审核</h1>
-        <p className="page-subtitle">
-          按时间先后处理兑换申请：通过并扣减积分、拒绝（原因必填）、标记发放
-        </p>
+        <p className="page-subtitle">按申请时间处理，批准与实际发放分开记录。</p>
       </div>
       <RedemptionsAdmin />
     </>

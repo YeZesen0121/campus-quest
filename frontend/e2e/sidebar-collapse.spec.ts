@@ -96,41 +96,41 @@ test.describe("sidebar collapse + resize (defect #3)", () => {
     // aria-valuenow tracks the settled width for assistive tech.
     await expect(resizer).toHaveAttribute("aria-valuenow", String(Math.round(widened.width)));
 
-    // Drag back below the minimum clamps at RAIL_WIDTH_MIN_PX (208).
+    // Drag back below the minimum clamps at the approved ordinary200px rail.
     const handle2 = (await resizer.boundingBox())!;
     await page.mouse.move(handle2.x + handle2.width / 2, startY);
     await page.mouse.down();
     await page.mouse.move(handle2.x + handle2.width / 2 - 400, startY, { steps: 8 });
     await page.mouse.up();
     const clamped = (await rail.boundingBox())!;
-    expect(Math.round(clamped.width)).toBe(208);
+    expect(Math.round(clamped.width)).toBe(200);
   });
 
   test("resizer keyboard stepping is the pointer drag's equal", async ({ page }) => {
     const resizer = page.locator(RESIZER);
     await resizer.focus();
     await expect(resizer).toBeFocused();
-    await expect(resizer).toHaveAttribute("aria-valuenow", "232");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "200");
 
     await page.keyboard.press("ArrowRight");
-    await expect(resizer).toHaveAttribute("aria-valuenow", "248");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "216");
     const rail = page.locator(RAIL);
-    expect(Math.round((await rail.boundingBox())!.width)).toBe(248);
+    expect(Math.round((await rail.boundingBox())!.width)).toBe(216);
 
     // The NON-clamped narrowing step (r5 backlog pin): ArrowLeft from
     // a mid-range value steps back by the same 16px — the clamped
     // Left-at-min case below can never catch a broken narrow branch.
     await page.keyboard.press("ArrowLeft");
-    await expect(resizer).toHaveAttribute("aria-valuenow", "232");
-    expect(Math.round((await rail.boundingBox())!.width)).toBe(232);
+    await expect(resizer).toHaveAttribute("aria-valuenow", "200");
+    expect(Math.round((await rail.boundingBox())!.width)).toBe(200);
 
     // Home/End jump to the range bounds; clamped keys hold the bound.
     await page.keyboard.press("End");
     await expect(resizer).toHaveAttribute("aria-valuenow", "400");
     await page.keyboard.press("Home");
-    await expect(resizer).toHaveAttribute("aria-valuenow", "208");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "200");
     await page.keyboard.press("ArrowLeft");
-    await expect(resizer).toHaveAttribute("aria-valuenow", "208");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "200");
   });
 
   test("the preference survives reload (localStorage, non-secret key)", async ({ page }) => {
@@ -145,7 +145,7 @@ test.describe("sidebar collapse + resize (defect #3)", () => {
     const stored = await page.evaluate(() =>
       window.localStorage.getItem("cq:sidebar-preference"),
     );
-    expect(JSON.parse(stored!)).toEqual({ collapsed: true, widthPx: 232 });
+    expect(JSON.parse(stored!)).toEqual({ collapsed: true, widthPx: 200 });
   });
 
   test("a DRAGGED width survives reload too (endResizeDrag's write)", async ({ page }) => {
@@ -163,37 +163,47 @@ test.describe("sidebar collapse + resize (defect #3)", () => {
     await page.mouse.up();
     await expect
       .poll(() => rail.evaluate((node) => Math.round(node.getBoundingClientRect().width)))
-      .toBe(292);
+      .toBe(260);
 
     await page.reload();
-    // The mount effect re-applies the stored 292 post-hydration.
+    // The mount effect re-applies the stored260 post-hydration.
     await expect
       .poll(() => rail.evaluate((node) => Math.round(node.getBoundingClientRect().width)), {
         timeout: 10_000,
       })
-      .toBe(292);
+      .toBe(260);
     const stored = await page.evaluate(() =>
       window.localStorage.getItem("cq:sidebar-preference"),
     );
-    expect(JSON.parse(stored!)).toEqual({ collapsed: false, widthPx: 292 });
+    expect(JSON.parse(stored!)).toEqual({ collapsed: false, widthPx: 260 });
   });
 
   test("no stored preference keeps the rem-based default (root-font scaling)", async ({ page }) => {
     // Fresh context = no cq:sidebar-preference, so the rail must ride
-    // the CSS 14.5rem fallback and scale with the root font — NOT a
-    // JS-written 232px, which would freeze the width for users whose
+    // the CSS12.5rem fallback and scale with the root font — NOT a
+    // JS-written200px, which would freeze the width for users whose
     // root font differs from 16px (reviewer finding A).
     const rail = page.locator(RAIL);
     const at16 = (await rail.boundingBox())!.width;
-    expect(Math.round(at16)).toBeGreaterThanOrEqual(230);
-    expect(Math.round(at16)).toBeLessThanOrEqual(234);
+    expect(Math.round(at16)).toBeGreaterThanOrEqual(198);
+    expect(Math.round(at16)).toBeLessThanOrEqual(202);
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "20px";
     });
-    // 14.5rem at a 20px root = 290px (rem units recompute live).
+    // 12.5rem at a20px root =250px (rem units recompute live).
     const at20 = (await rail.boundingBox())!.width;
-    expect(Math.round(at20)).toBeGreaterThanOrEqual(286);
-    expect(Math.round(at20)).toBeLessThanOrEqual(294);
+    expect(Math.round(at20)).toBeGreaterThanOrEqual(246);
+    expect(Math.round(at20)).toBeLessThanOrEqual(254);
+  });
+
+  test("a saved former-default232px survives the new200px default", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cq:sidebar-preference", JSON.stringify({ collapsed: false, widthPx: 232 })));
+    await page.reload();
+    await expect(page.locator(RESIZER)).toHaveAttribute("aria-valuenow", "232");
+    expect(Math.round((await page.locator(RAIL).boundingBox())!.width)).toBe(232);
+    await page.locator(RESIZER).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator(RESIZER)).toHaveAttribute("aria-valuenow", "248");
   });
 
   test("below the wide band the rail (and its affordances) stay hidden", async ({ page }) => {
@@ -201,7 +211,13 @@ test.describe("sidebar collapse + resize (defect #3)", () => {
     await expect(page.locator(RAIL)).toBeHidden();
     await expect(page.locator(TOGGLE)).toBeHidden();
     await expect(page.locator(RESIZER)).toBeHidden();
-    // The medium band's top nav owns navigation instead.
-    await expect(page.locator(".app-nav")).toBeVisible();
+    // The source medium menu owns all the same real destinations.
+    await expect(page.locator(".app-nav")).toBeHidden();
+    await page.getByRole("button", { name: "全部导航", exact: true }).click();
+    const menu = page.getByRole("dialog", { name: "全部导航", exact: true });
+    await expect(menu.getByRole("link", { name: "任务", exact: true })).toBeVisible();
+    await expect(menu.getByRole("link", { name: "退出登录", exact: true })).toBeVisible();
+    await menu.getByRole("button", { name: "关闭菜单", exact: true }).click();
+    await expect(menu).toBeHidden();
   });
 });

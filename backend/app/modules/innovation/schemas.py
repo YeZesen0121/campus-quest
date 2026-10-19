@@ -1,7 +1,7 @@
 """Explicit owner-management DTOs; no persistence/private identity leakage."""
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -49,6 +49,7 @@ class ProjectDraftResponse(BaseModel):
     direction: str
     stage: str
     team_status: str
+    lifecycle: Literal["ACTIVE", "COMPLETED"]
     version: int
     created_at: datetime
     updated_at: datetime
@@ -61,3 +62,11 @@ class ProjectDraftListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ProjectCreationReplayResponse(BaseModel):
+    """Former creators can reconcile a request without current project access."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    ownership: Literal["TRANSFERRED"] = "TRANSFERRED"

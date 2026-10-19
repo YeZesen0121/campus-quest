@@ -234,7 +234,10 @@ class PublicProjectSummary(BaseModel):
     summary: str
     direction: str
     stage: str
-    source_kind: Literal["ACHIEVEMENT", "RECRUITMENT"]
+    source_kind: Literal["ACHIEVEMENT", "RECRUITMENT", "INTRODUCTION"]
+    lifecycle: Literal["ACTIVE", "COMPLETED"]
+    introduction_revision: int | None
+    introduction_source: Literal["ACHIEVEMENT", "RECRUITMENT"] | None
     achievement_count: int
     recruitment_count: int
 

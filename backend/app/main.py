@@ -30,6 +30,17 @@ from app.modules.identity import (
 )
 from app.modules.identity.dependencies import get_actor
 from app.modules.innovation import achievement_router as innovation_achievement_router
+from app.modules.innovation import (
+    collaboration_achievement_router,
+    collaboration_query_router,
+    collaboration_recruitment_router,
+    collaboration_workspace_router,
+    lifecycle_router,
+    transfer_router,
+)
+from app.modules.innovation import (
+    collaboration_router as innovation_collaboration_router,
+)
 from app.modules.innovation import evidence_router as innovation_evidence_router
 from app.modules.innovation import mentor_link_router as innovation_mentor_link_router
 from app.modules.innovation import mentor_router as innovation_mentor_router
@@ -111,6 +122,13 @@ def create_app() -> FastAPI:
     app.include_router(innovation_public_achievement_router.router, prefix="/api/v1")
     app.include_router(innovation_mentor_router.router, prefix="/api/v1")
     app.include_router(innovation_mentor_link_router.router, prefix="/api/v1")
+    app.include_router(innovation_collaboration_router.router, prefix="/api/v1")
+    app.include_router(collaboration_workspace_router.router, prefix="/api/v1")
+    app.include_router(collaboration_achievement_router.router, prefix="/api/v1")
+    app.include_router(collaboration_recruitment_router.router, prefix="/api/v1")
+    app.include_router(collaboration_query_router.router, prefix="/api/v1")
+    app.include_router(transfer_router.router, prefix="/api/v1")
+    app.include_router(lifecycle_router.router, prefix="/api/v1")
 
     # Tasks/claims API: its typed exceptions subclass BusinessError
     # (rendered by the core handler), so only the endpoint-limiter mapping

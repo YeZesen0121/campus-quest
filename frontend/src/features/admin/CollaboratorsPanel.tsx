@@ -99,9 +99,9 @@ export function CollaboratorsPanel({ taskId }: { taskId: string }) {
   }
 
   return (
-    <section className="section" aria-label="协作者管理">
+    <section className="section campus-teacher-collaborators" aria-label="协作者管理" id="teacher-collaborators">
       <div className="section-head">
-        <h3 className="section-title">协作者管理</h3>
+        <h2 className="section-title">协作者管理</h2>
       </div>
       <p className="field-hint">
         为其他教师授予本任务的明确权限；协作者不能授予超出自身拥有的权限。已授权但未在本页显示的协作者，可在下方输入其
@@ -150,7 +150,7 @@ export function CollaboratorsPanel({ taskId }: { taskId: string }) {
       <div className="dialog-actions">
         <Button variant="primary" onClick={() => void onAdd()} disabled={busy} aria-busy={busy}>
           {busy ? <span className="spinner" aria-hidden="true" /> : null}
-          <span>添加 / 更新权限</span>
+          <span>添加协作授权</span>
         </Button>
         <Button
           variant="danger"

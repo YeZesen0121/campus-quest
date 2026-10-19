@@ -115,11 +115,19 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     return body.token;
   }
 
-  test("invite -> password -> TOTP confirm -> recovery codes once -> done", async ({ page }) => {
+  test("invite -> password -> TOTP confirm -> recovery codes once -> done", async ({ page }, info) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
     const token = await freshInvitationToken(`e2e-staff-${RUN}@school.edu`);
     await page.goto(`${BASE_URL}/staff/invite/${encodeURIComponent(token)}`);
+
+    // Preserve the real invitation password step as visual evidence before setup.
+    await expect(page.getByLabel("设置密码")).toBeVisible();
+    for (const width of [390,1440]) {
+      await page.setViewportSize({width,height:900});
+      await page.evaluate(()=>document.fonts.ready);
+      await page.screenshot({path:info.outputPath(`staff-invite-password-${width}.png`),fullPage:true});
+    }
 
     // Password step: band mirror + repeat field.
     await page.getByLabel("设置密码").fill("e2e-correct-horse");
@@ -129,7 +137,22 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     // Setup step: NO QR — the secret + otpauth URI render as copyable text.
     const secretLocator = page.getByTestId("totp-secret");
     await expect(secretLocator).toBeVisible();
+    await expect(page.locator('.secret-box .secret-label').first()).toHaveText('账号名称');
     await expect(page.getByTestId("totp-uri")).toContainText("otpauth://totp/");
+    // Synthetic invitation only; render the actual second step at both
+    // approved widths before proving its real confirmation/code lifecycle.
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => document.fonts.ready);
+      const copySecret = page.getByRole('button', { name: '复制密钥', exact: true });
+      const copyUri = page.getByRole('button', { name: '复制绑定链接', exact: true });
+      const secretBox = (await copySecret.boundingBox())!;
+      const uriBox = (await copyUri.boundingBox())!;
+      expect(uriBox.y, 'provisioning copy actions share the approved row').toBeCloseTo(secretBox.y, 0);
+      expect(uriBox.x).toBeGreaterThan(secretBox.x + secretBox.width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`totp-entry-${width}.png`), fullPage: true, caret: 'initial' });
+    }
     const secret = (await secretLocator.textContent())?.trim() ?? "";
 
     // Confirm with the code a real authenticator would show for `secret`.
@@ -161,9 +184,18 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
 
     // Recovery codes: shown EXACTLY ONCE with the prominent warning.
     await expect(codesList).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: '保存恢复代码', exact: true })).toBeVisible();
     await expect(page.getByText("恢复代码只显示这一次")).toBeVisible();
     const codeCount = await codesList.getByRole("listitem").count();
     expect(codeCount, "the backend issues 8 recovery codes").toBe(8);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const copy = (await page.getByRole('button', { name: '复制全部恢复代码', exact: true }).boundingBox())!;
+      const saved = (await page.getByRole('button', { name: '我已妥善保存，完成绑定', exact: true }).boundingBox())!;
+      expect(saved.y, 'recovery actions share the approved row').toBeCloseTo(copy.y, 0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`synthetic-recovery-codes-${width}.png`), fullPage: true, caret: 'initial' });
+    }
 
     // Copy-all places one code per line on the clipboard.
     await page.getByRole("button", { name: "复制全部恢复代码" }).click();
@@ -174,6 +206,13 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     await expect(page.getByText("动态口令绑定完成，员工账号已激活。")).toBeVisible();
     await expect(codesList).toHaveCount(0);
     await expect(secretLocator).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '绑定完成', exact: true })).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const completePanel = (await page.locator('.auth-security-result').boundingBox())!;
+      expect(completePanel.width, 'completion retains the approved result panel width').toBeCloseTo(width === 390 ? 354 : 560, 0);
+      await page.screenshot({ path: info.outputPath(`totp-complete-${width}.png`), fullPage: true, caret: 'initial' });
+    }
 
     // Done points at the staff login (the pending session is setup-only).
     await expect(page.getByRole("link", { name: "前往员工登录" })).toHaveAttribute(

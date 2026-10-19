@@ -33,6 +33,7 @@ import {
   getCurrentAcademicTerm,
   grantRewardReview,
   listAdminUsers,
+  listAdminRewardItems,
   listAuditLogs,
   listNotificationFailures,
   listRedemptionQueue,
@@ -62,6 +63,7 @@ type RecordedRequest = {
   headers: Headers;
   credentials: RequestCredentials | undefined;
   body: unknown;
+  signal: AbortSignal | null | undefined;
 };
 
 let recorded: RecordedRequest | undefined;
@@ -83,6 +85,7 @@ beforeEach(() => {
       headers: new Headers(init?.headers),
       credentials: init?.credentials,
       body: init?.body,
+      signal: init?.signal,
     };
     return responseFor();
   }) as typeof fetch;
@@ -95,6 +98,24 @@ afterEach(() => {
 function emptyPage(): string {
   return JSON.stringify({ items: [], total: 0, limit: 20, offset: 0 });
 }
+
+test("administrator reward listing retains offset, cancellation and the full disabled-row DTO", async () => {
+  const row = { id: "reward-disabled", name: "已下架的管理项目", enabled: false,
+    point_cost: 11, stock: null, per_user_term_limit: null, description: null,
+    available_from: null, available_until: null, requires_manual_review: true,
+    fulfillment_instructions: "仍需保留的发放说明" };
+  stubFetch(JSON.stringify({ items: [row], total: 21, limit: 20, offset: 20 }));
+  const controller = new AbortController();
+  const page = await listAdminRewardItems({ limit: 20, offset: 20, signal: controller.signal });
+  assert.equal(recorded?.url, "/api/v1/admin/rewards?limit=20&offset=20");
+  assert.equal(recorded?.method, "GET");
+  assert.equal(recorded?.credentials, "include");
+  assert.equal(recorded?.body, undefined);
+  assert.equal(recorded?.signal, controller.signal);
+  assert.deepEqual(page.items, [row]);
+  assert.equal(page.total, 21);
+  assert.equal(page.offset, 20);
+});
 
 describe("account directory (spec §5.7)", () => {
   test("list carries role/status filters on GET /admin/users", async () => {

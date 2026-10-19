@@ -102,6 +102,11 @@ owner-approved product decision — never "to fit the new DOM".
 | Locator | Surface | Notes |
 |---|---|---|
 | `.page-head` | page header anchor (specs + visual-capture) | capture spec already falls back to `main`; if renamed, update all spec uses to the equivalent header locator |
+| `.cq-divided-sections` and its `::before` | shared UI gallery; `ui-migration-layout.spec.ts` | presentation-only container; tests assert actual column positions, unequal heights, centered full-height divider and single-column absence at320/390/639/640/800/1440; any structural replacement must preserve those geometry checks |
+| `.cq-status-cell` | shared dense tables | apply explicitly to the matching status header/cell; actual computed alignment is checked via table/cell roles, other columns remain uncentered |
+| `.auth-card` | approved authentication page composition; `auth-reference-layout.spec.ts` | form card is separate from the heading and entry navigation;390/1440 geometry derives from approved auth-login.html, not a self-generated image. Replacements must retain same banner/heading/card/entry roles and reference alignment |
+| list `找回密码步骤` / `账号激活步骤`, `aria-current="step"` | authentication recovery and invitation | exactly two descriptive steps; current item follows the existing form state, not a demo transition; the pending invitation token remains absent from UI text |
+| brand link `华师令`; context `校内空间 / 个人信息` | authenticated shells | one visible brand across the three navigation bands; desktop context reads actual path/query below its own Suspense boundary; existing nav, profile and permission contracts remain |
 | `.task-card` | tasks list | review-comment seed hook; SHOTS `student-tasks` preparation waits for the first card to be visible, then awaits `finished` for finite animations before sampling |
 | `.claim-panel` · `.upload-panel` | task detail claim/upload | submission flow anchors |
 | `.deadline-line` | task/claim deadline row | SHOTS `student-claim` preparation first waits for the exact named region `分配给你的任务单元` to be visible, so capture/axe observes loaded claim content |
@@ -198,3 +203,226 @@ R4.1 卡片反馈追加：label/name `一句话介绍` / `talent-headline` 为�
 R5 的未决命令在当前用户与auth epoch内跨站内导航、同文档Back和项目列表卸载恢复；录入恢复原账号与字段，邀请恢复可读的导师对象，关系恢复offset。成功或明确拒绝清除，跨标签登出/换号同步清除。整页刷新/关闭有未决操作警告，不承诺关闭浏览器后的恢复。
 
 R5 新像素证据使用 `innovation-mentors.spec.ts` 的实际组件，专属导师身份世界 `CQ_E2E_MENTOR_WORLD=1`，开启 `CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1` 时固定 Noto Sans CJK SC，截图覆盖运营表单、本人确认与手机公开详情。原全站基线默认保持；导师登录/双创首页入口及项目导师区是已批准的功能内容变化，按 `innovation-mentor-visual-walkthrough.md` 单独核对差异及必要图片更新。
+
+## UI 还原验证中的定位与登录辅助（2026-10-16）
+
+- 角色拒绝提示限定在 `main` 内的 `alert`，继续断言实际角色文案与返回入口；Next 页面播报节点位于主内容外，不可用裸 `getByRole('alert')` 混定位。
+- 员工登录辅助按自己的 `POST /api/v1/auth/staff/login` 响应判断认证结果。200后等待真正跳转，只有明确401 `AUTHENTICATION_REQUIRED` 才重算验证码；导航慢不触发再次登录。
+- 新 `fixture-staff-navigation.spec.ts` 沿用既有邮箱/密码/动态验证码标签和审核队列h1，不添加产品test-id。CQ_E2E=1时必须实跑，缺少员工世界契约直接失败，不新增no-skip豁免。
+- 数据准备辅助先观察自身已完成的读取，再保留原UI断言：人才tags/profile初读后，只有已存在档案才等待files；成果新建后等待自身workflow/evidence；招募项目链接先完成真实URL导航与该公开项目读取，再断言article。没有全局networkidle等待，也不重试读取或放宽原断言。
+- `fixture-talent-readiness.spec.ts` 两种初始化分支在CQ_E2E=1必须实跑；只延迟真实GET响应，不伪造档案、标签、文件或身份。新故障注入文件独立120秒预算用于真实准备/延迟/清理，既有业务断言和全局超时保持。
+
+- 跨浏览器R1退出场景先等待真实region `获得的荣誉`（GrowthBody就绪时才渲染），再点击页底退出链接。此检查只避免成长区骨架变为真实内容时移动按钮；仍验证真实/logout确认、退出及浏览器返回门禁，不增加请求、等待时间或重试。
+
+- 学生 `loginThroughUi` 观察自己触发的 `POST /api/v1/auth/login`，要求200后等待真实URL离开登录页；使用既有导航及用例预算，不新增重试或全局超时。`fixture-student-navigation.spec.ts` 仅延迟真实落点请求，验证一次成功提交及真正到达主页；CQ_E2E=1必须实跑，缺少学生账号直接失败，不新增no-skip豁免。
+
+- 导师跨标签换号用例中的退出会执行完整文档替换；URL断言本身不证明新文档脚本已加载。确认退出前注册 `waitForURL(/login$/, {waitUntil:'load'})`，新文档完成后才填写登录字段。用例保留真实脚本6500ms延迟、字段值持续性、重新登录POST200与主页面document marker/私密输入清除断言；不改变产品认证、全局超时或重试。
+
+## T4 学生任务样张还原（2026-10-17）
+
+| B 定位 / 呈现 | 保留的断言 |
+| --- | --- |
+| `.student-task-page`、`.student-task-view`、`.student-claim-view` | 只限定学生页族；不改变 CampusShell 和教师既有 `.task-detail`，四断点无横向溢出 |
+| `.task-card-title` 的 discovery h2 / dashboard h3 | 页面标题层级正确；整张卡片的真实 href 可点击，主色键盘焦点和四种形状仍保留 |
+| `.task-decision .fact-row` 与领取按钮 | 实际几何验证事实先于动作，手机动作中心点不被底栏覆盖；既有隐私、201及冲突断言不变 |
+| `#submission-file` 与可见的 `label[for="submission-file"]` | 仍为原生文件输入，中文可访问标签、accept、busy禁用及所有上传回调保持；不依赖浏览器英文按钮文案 |
+| `.assignment-grid .assignment-item .assignment-value` | 含平台/关键词/领取时间的原定位保留，字段改用dl/dt/dd；像素时间遮罩仍必须实际命中 |
+| `region 奖励状态` | 组合到分配面板中；完整服务端奖励文字及状态宣布保持，不从样张复制数字 |
+
+新版已确认样张的安静卡片不要求标题常驻下划线；旧纯视觉断言改由整卡右下角真实导航覆盖，未删除链接、焦点或稀有度验证。任务列表h2消除了旧heading-order豁免，fresh axe先证明过期后仅删除该项。
+
+四断点原生文件输入获得键盘焦点后，检查关联可见label中心实际命中，防止焦点藏在手机固定底栏后。真实领取201后的平台/关键词使用同一行的标签与值，保留服务端值和继续提交地址。画廊先等待现有“确认操作”示例dialog真正出现，再Escape关闭；这只是填充态截图的就绪边界，不删除对话框或业务断言。
+
+## T5 奖励、排行、通知与成长（2026-10-17）
+
+| B 定位 / 呈现 | 保留的断言 |
+| --- | --- |
+| `.student-growth-page` | 只限定奖励/排行榜/通知/成长tab；info tab继续T3布局，四断点无溢出 |
+| `.reward-price`、`.reward-card-action` | 价格/真实兑换按钮同排，44px触区；不足提示与不可用状态保持，ul不带原生左缩进 |
+| `.board-nick-name`、`.board-honor`、`.rank-layout` | 正常只读35/36px、荣誉同行、长行增高；既有data-me/data-top3和公开字段不变；中线跟随父级高度并在中缝 |
+| `#ranking-around`、真实`/profile`链接 | 本人名次可定位到我的附近，再到成长页；周期URL与真实数据来源不变 |
+| `.inbox-toolbar`、`.notif-item[data-read]`、`.notif-body` | 筛选/计数同行、h2语义保留；未读文字与glyph、长正文全文、44px已读操作和回滚逻辑保持 |
+| `.growth-primary`、`.completion-metrics`、`.honor-copy` | 六项服务端指标、按时比例/分子分母、最佳月榜和荣誉类型/周期/日期保留；不添加无API的荣誉选择器 |
+| `GrowthGallery`开发边界 | 同一WalletSection/GrowthBody/BoardRow呈现零值、透支/冻结、大数和长昵称荣誉；固定示例不读写真实业务数据 |
+
+新增四断点用例复用真实角色世界，画廊先等现有dialog出现再关闭。实际奖励页只打开/取消确认框并检查焦点返回，不消耗共享奖励；真实兑换/钱包重取由既有rewards-ranking用例独立拥有。
+`growth-style-isolation.spec.ts` reuses actual teacher/admin shots and their `main .notif-time`: the approved teacher-review metadata is12px and administrator user dates remain13px; only timestamps inside `.notif-item` receive the11px approved inbox density. It creates no synthetic product DOM or mask.
+T5 filled gallery checks `.notif-icon svg`, the1px illustration tile, and `.growth-honor-icon svg` at320/390/800/1440; the glyphs are aria-hidden and do not replace visible event, unread, honor-name or type text.
+
+### T6a public sample restoration selectors (2026-10-17)
+
+| Surface | Stable selector or accessible contract | Purpose |
+| --- | --- | --- |
+| Public discovery | `.campus-discovery-page[data-variant]`, navigation `双创公共浏览`, region `双创三库` | Approved page-family geometry; role detail uses its direct return without this navigation |
+| Independent feeds | Regions `校内已核实成果`, `校内招募岗位`, `项目正在招募`, `项目已核实成果`, `项目已同意导师` | Equal discovery columns; project recruitment left/achievement right and mentors below |
+| Project filters | Form `校内浏览筛选`, labelled search `搜索`, button `筛选` with `aria-expanded`/`aria-controls="campus-project-filter-options"`, submit `应用筛选` | Native Enter search; expand advanced filters and retain URL context |
+| Talent filters | Form `人才筛选`, `.campus-talent-filter-tags > summary`, existing labelled state/material selects and tag checkboxes | Tab reaches summary, Enter opens, next Tab reaches first standard tag; no selector weakens value/filter assertions |
+| Role reading | `.campus-role-facts`, region `招募项目介绍`, existing region `授权联系方式` | Facts before phone reading; contact remains one explicit-action island |
+| Same-list returns | Links `返回项目库`, `返回招募列表`, `返回人才列表` | Fixed internal paths preserve whitelisted filters; no arbitrary redirect parameter |
+
+Geometry tests wait for real finite entrance animations and font readiness;
+they keep the existing coordinate precision and do not alter product motion.
+
+### T6b private maintenance restoration selectors (2026-10-17)
+
+| Surface | Stable selector or accessible contract | Purpose |
+| --- | --- | --- |
+| Private family | `.campus-management-page`, navigation `本人双创管理` | Three ACTIVE-student maintenance links only on owner/project list-editor/achievement list/talent editor; no such nav on dedicated achievement editor or recruitment list-editor |
+| Existing state owners | Regions `负责人资料编辑器`, `项目草稿编辑器`, `成果草稿编辑器`, `招募岗位编辑器`, `本人人才档案编辑器` | Keep account/record keys, controlled inputs, conflict reconciliation and request recovery; project editor remains inline |
+| Source composition | `.campus-owner-layout`, `.campus-project-fields`, `.campus-achievement-layout`, `.campus-recruitment-grid` | Approved owner1.35:1 / full project / proof-left-status-right / recruitment direction-stage pair; phone stacks in DOM order |
+| Proof and workflow | Region `成果核实与证明`, nested physical region `成果核实操作` | Stateful review panel stays once after a saved record; physical focus fallback and whole existing editor screenshot include form/proof/pending status |
+| Draft controls | Form `form.ie-draft-form`, existing labelled native fields and buttons | Distinguish own draft from the independent tag-suggestion form; single-line identity uses inputs without changing validation |
+| Error and native focus | Real unavailable-project404 plus existing return link; natural focused save/upload controls | Retain heading/return without mounting editors early; static capture resets prior focus before its top scroll, natural actions never manually scroll |
+| Recruitment summary | Region `当前招募摘要`, buttons `查看岗位摘要：<岗位名>` with `aria-pressed` | Render the real selected private DTO; shortcut opens the existing editor after a fresh read, never executes a command on mount; stale CLOSED data rejects a close confirmation |
+| Native textarea sizing | Existing labelled `textarea` controls, including `name="summary"`, `name="description"`, `name="introduction"`, `name="talent-introduction"` | Controlled native leaf expands after real edits within CSS bounds; keep original form state, validation, input value, native resize and focus identity |
+| Narrow private toolbars and choices | Existing `新建成果草稿` action, `标准技能标签` caption and `.ie-talent-choices > label` | Complete create label stays on one line while toolbar items wrap; compact13px skill labels retain44px targets and three first-row choices at320px; authorized recruitment contact input spans its form |
+
+No masks, pixel thresholds, blanket retries or permissions were relaxed. Save and
+preview remain separate commands; visibility and authorization have their own
+visible groups. Natural saves use intrinsic width except the approved full-width
+phone recruitment save/preview group. Other private phone buttons keep compact
+visible frames inside their44px targets. All inspected native controls must be44px
+and pass actual hit testing.
+
+### T7 mentor restoration selectors (2026-10-17; verification in progress)
+
+| Surface | Stable selector or accessible contract | Purpose |
+| --- | --- | --- |
+| Confirmed directory | `.campus-mentor-directory-list`, form `导师筛选` | Real totals, native filters, two columns/2px divider above768px and single-column phone |
+| Confirmed detail | `.campus-mentor-public-body`, region `导师授权联系` | Contact band before prose; explicit version-bound read; intro/direction then project-types/achievements |
+| Personal consent | Region `候选导师资料`, `.campus-mentor-candidate-grid`, form `导师本人确认` | Candidate/consent equal columns and separate old-public disclosure; original `key={record.version}` |
+| Existing authorization | Region `当前导师授权`, `.campus-mentor-current-grid`, form `修改代维护授权` | Pause/channel rows/withdraw separate from scope; all expired selections reset |
+| Operations | `.campus-mentor-maintain-grid`, region `导师当前授权与已确认版本` | Editable candidate and read-only scope/old public version; no operator confirmation |
+| Project links | `.campus-mentor-links-grid`, regions `查找并邀请导师`/`挂名关系与历史` | Independent owner search/history; existing LinksWorkspace continues owning command/offset above keyed rows |
+| Date provenance | Native `time[datetime]`, public `data-time-format="date"` | Exact timestamp is bound to the real public/private response. V checks business-zone text before masking only newly displayed volatile time text; stable fields and unmasked source/product QA remain visible |
+
+Mentor form presentation rows3/2/3/2 and90–240px bounds do not alter original
+MENTOR_FIELDS constants4/3/4/3, validation, request bodies or recovery ownership.
+Consent checkboxes and native actions keep44px targets. The existing0.01 visual
+threshold and zero visual retries remain. This adds narrow volatile-date masks;
+the historical T6b no-new-mask statement applies to that completed batch.
+
+R5 operations list uses .campus-mentor-operations-columns / .campus-mentor-operations-state for the same desktop state axis, a native named mentor link plus secondary maintenance link, and original offset20 server pagination. Phone state follows identity while maintenance spans both rows. Candidate heading stays whole while real metadata wraps; contact choices preserve44px targets with no added row gap. Geometry of paired inputs is read atomically to avoid the existing220ms page entrance transform advancing between reads; tolerance stays unchanged.
+
+R5 page2 record assertions scope heading level3 to the current named workspace listitem. Separate search/history section headings are not page records; retain exact expected row names, count, offset, same request-body retry and page-fallback assertions.
+
+### T8 teacher and achievement review selectors (2026-10-17; local engineering verified)
+
+| Surface | Accessible or structural contract | Purpose |
+| --- | --- | --- |
+| Submission review | `.campus-teacher-review`, `.review-layout`, button `返回待审核队列` | Original selectedId controls phone queue visibility; keyboard entry focuses the visible phone return button, desktop keeps its visible queue focus; returning focuses the exact original row |
+| Decision result | Region `任务审核处理结果` | A completed decision removes its opener; the original result becomes the focus destination |
+| Task list | Region `任务管理列表`, `.campus-teacher-table tbody` | Phone header is visually hidden; select actual body rows rather than assuming an accessible header count |
+| Task detail | Navigation `任务管理章节` and original section IDs | Same-page context anchors; no new detail or governance routes |
+| Native task form | `.campus-task-dialog`, `.campus-task-fields` | Existing create/edit dialog, original labels and disabled state; source form groups and deadline field order |
+| Moderation | Region `评论管理列表`, listitem `data-deleted=true`, original anonymous author and moderation key | Staff history keeps original content with `已删除`; the public tombstone uses `该评论已删除` separately |
+| Identity reveal | Dialog `揭示匿名身份`, original reason and explicit confirmation | No identity prefetch; reveal permission does not grant comment deletion permission |
+| Achievement review | `.campus-achievement-review-queue`, `.campus-achievement-review-editor` | Same-route claimed snapshot; public submitted content, restricted owner/proofs and decision sections remain distinct |
+
+Controlled staff dialogs without a Radix Trigger now capture their actual DOM opener
+and current auth epoch. Escape/cancel restores that connected opener only for the
+same actor; completed review/deletion uses its existing result/list region when the
+opener was removed. Existing request handlers and Radix focus trapping remain.
+All natural action screenshots assert44px and a visible, unobscured focused target.
+
+### T9 administrator composition selectors (2026-10-18; local engineering verified)
+
+| Surface | Accessible or structural contract | Purpose |
+| --- | --- | --- |
+| Authorized admin shell | `.campus-admin-main` | Apply approved administrative density only after original role/account gate |
+| Admin labelled records | Original table names and `td[data-label]`, `.cq-status-cell` | Source phone alternatives and desktop status/header axis; original row data and actions remain |
+| Controlled admin dialogs | `.campus-admin-dialog`, `[data-admin-return]` | Capture actual opener and auth epoch; only the same actor can regain connected opener or named local fallback |
+| System parameters | `.campus-admin-setting-editor`, native summary named `修改` plus exact parameter title | Five initially collapsed editors; native keyboard opening, original controlled drafts/version confirmation |
+| System navigation | Navigation `系统分区`, original `#admin-settings`, `#admin-templates`, `#admin-failures`, `#admin-repairs` | Same-page source section links, no new routes |
+| Audit filters | Original `audit-filter-action`, `audit-filter-actor`, `audit-filter-target` and buttons `检索` / `清空条件` | Exact equality filters and original offset pagination; snapshots are readonly native disclosures |
+| Reward catalogue | Region `奖励目录`, original name/point/reason dialog labels, `.list-footer` and `加载更多` | Existing administrative GET catalogue, including disabled rows; reread server order after mutation and discard old pagination responses |
+| Reward review authorization | Region `审阅授权管理`, native select `授权操作` (`grant` / `revoke`), original `教师用户 ID` / `操作原因`, button `确认操作` | One source form retains target/reason across modes; pending/done disables mode; original POST/DELETE command body, mandatory reason and reset remain |
+| Account filter reset | Original selects `角色筛选` / `状态筛选`, buttons `筛选` / `清空` | Clear resets both controlled selectors and reloads the original unfiltered server page at offset0; keyboard focus stays on the reset control |
+
+The original working focus handlers for operations grants and owner qualification
+remain unchanged. Selected detail screenshots follow real account selection or
+explicit audited snapshot reads; fixtures never insert private profile data into
+the queue. Full IDs remain in the protected admin DOM; visual ellipsis retains
+the real ID in its native title. No public disclosure contract is broadened.
+
+T9 selected grant details use the original controlled reason, validation and
+same-actor focus ref through a native multiline textarea. The ref's TypeScript
+element type changes, while its emitted `useRef(null)` remains identical.
+The displayed version is the existing server `record.version`. Qualification
+facts retain all four explicitly read snapshot fields; CSS pairs their labels
+and values without adding those fields to queue rows.
+
+Template maintenance exercises the existing content-version and enable/disable
+semantics; toggles preserve the content version. Repair forms keep their original
+reason-mandatory explicit confirmation buttons and typed server refusals. Test
+world cleanup recognizes a template's audited creation by a null prior snapshot;
+a later edit by this world's actor does not confer ownership of another template.
+
+T9 phone readability regression measures `.campus-admin-setting-row` title,
+current-value facts and `.campus-admin-setting-hint`: at320/390 the title spans
+the row and both fact/description columns remain at least40% of its width.
+This catches intrinsic grid tracks collapsing even when document overflow is0.
+The selected real redemption retains the original actions and adds their
+truthful consequence in `.campus-admin-redemption-policy[role="note"]` below
+that detail's action row. Assertions compare actual element geometry and text;
+no fixture values or backend transition rules are substituted.
+
+
+Task12 teacher reminder form: the existing 新建任务 / 编辑任务 dialogs expose native checkbox labels 截止前 24 小时 / 截止前 4 小时 under 提醒时间, and 站内 / 短信 / 已验证邮箱 under 通知渠道. These are presentation bindings to the existing notify_24h, notify_4h and notification_channels fields. The existing 任务配置 region retains read-only 截止提醒 / 通知渠道 facts from the actual DTO. Business success is verified through real request/response and reread, not through checkbox paint alone.
+
+Task12 private source context uses `.campus-private-context` before the editor h1 and the existing loaded private parent DTO, never public recruitment fields. 成果流程指引 is a navigation landmark with existing 我的项目 / 负责人资料与资格 links. The existing inline-editor case checks both new and fresh loaded recruitment editors and preserves the independently saved project-name field. Long-title recruitment summaries keep `.campus-private-state` intrinsic and on one line. Login readiness tests hold actual client-script routes 6500ms, inspect server-rendered native disabled controls, then release scripts and verify controlled values remain. No timeout, retry, endpoint or identity fixture is weakened.
+
+Task12 staff closure: `details.campus-task-schema` retains the actual saved version and complete parseable JSON in a native keyboard disclosure. Teacher natural actions use a real Shift+Tab / Tab round trip and check all four edge midpoints and four curvature-aware corner points plus the full44px bounding box and focus-ring bounds against visible fixed bars; screenshots keep those bars. `campus-review-restriction` precedes actual queue counts, while the existing 重新读取待办 action stays owned by the queue and appears beside its heading. Review details use actual case.status; their DTO provides no timestamp, claim ownership or revision ordinal to invent. Reward edit uses existing 描述（选填） / 发放说明（选填，学生兑换后可见） labels, existing reason and PATCH, with real reread and explicit-null verification.
+
+Task12 final closure: staff h1 on `/teacher/reviews` is the approved `提交审核` (sidebar destination remains `审核队列`); fixture login checks keep real POST counts and6500ms navigation stimulus. Personal navigation uses bottom nav at<=640px, complete `全部导航` dialog nav at641–1023px, and rail `个人` nav at>=1024px; each actual destination surface contains exactly one current `我的` item. All existing destinations, five bottom slots, Escape return and overflow checks remain. Staff SSR login now shares the student/mentor readiness contract: email/password/second-factor/submit are disabled until handlers exist; current backend parser, login body, 2FA, session and redirect are unchanged. Talent management remains the same ACTIVE-STUDENT-only link, aligned to its own header top0 with44px target.
+
+Task12 source paint: `.ie-talent-state[data-cooperation-state]`, `.campus-private-state[data-visible]`, `.campus-mentor-state[data-link-status]` and `.campus-review-operation[data-operation]` project existing DTO state for presentation only. The blue variant is context-specific; generic `.badge-info` remains neutral except the actual frozen-review kind inside `.campus-review-snapshot-meta`. `.campus-source-note` is the original qualification consequence paragraph or the permanent whitelist consequence `[role="note"][aria-label="白名单停用影响"]`; it does not change confirmation or mutation ownership. `.app-sidebar-workspace` is a role-shell caption, and `.app-user-name` is the only ellipsized identity part. Paint assertions read RGBA, padding, border and typography; section-heading frame assertions require an opaque actual border, not just `border-style:solid`. Mentor source focus checks retain the full native ring/44px hit contract; root scroll-padding reserves existing fixed bars without manual focus scrolling.
+
+Task12 reward heading: the server page passes its unchanged `.page-head` title/description as a ReactNode slot to the existing catalogue island. `.campus-admin-rewards-heading` owns native wrapping and the existing `.row-actions` callbacks; no second command or loading owner is introduced. The source-bound admin case checks27px/left alignment below the description at320/390, and header/action center agreement within1px at800/1440 (actual source delta0.5px). The earlier absolute cross-sibling placement and hidden duplicate h2 are removed. State labels within `.campus-mentor-person-head` explicitly keep the11px source recipe despite the surrounding12px metadata; plain directory accepting-contact copy remains12px.
+
+
+Task12 capture ownership: `captureOwnedVisual(page, owned, name, masks)` is limited to existing recruitment, talent and review content captures. Whole-content owners use the real main landmark; nested editor/dialog/contact owners retain their original landmark. The captured owner must contain no `.app-topbar,.app-bottomnav`; only these external shell bars are hidden temporarily and their prior visibility must be restored. No stable business field is newly masked. Existing reviewed time masks and screenshot names/tolerances remain. Natural viewport and full shell capture obligations remain independent.
+
+The authenticated mentor destination assertion uses visible nav 导师工作区 → 本人档案与授权, href `/innovation/mentors/me`, and current-page state. A transient header 返回工作台 link before authentication resolves is not the authenticated desktop navigation owner.
+
+
+Capture-only development tooling: the installed Next development UI mounts outside product owners in `nextjs-portal`. Visual captures exclude this external portal. The official `[data-nextjs-dialog-overlay]` error surface must have zero matches before exclusion, including hidden matches; capture cleanup cannot conceal a runtime error. Full-shell captures retain all actual product navigation. Owned captures additionally assert external decoration is hidden during capture and restore its prior visibility. One forced refresh of all50 active PNGs removes stale artifact remnants under the unchanged1% comparison tolerance;11 historical PNGs remain immutable and every changed pair requires actual inspection before fresh no-update comparison.
+
+
+Task12 selected grant uses the existing `#operations-reason` textarea and its existing `.field`/form ancestors for approved-width geometry: min(700px,available form width) at>=640px, full available width on phone. No new selector/state/API is introduced. Cross-browser keyboard login must wait for enabled native controls and assert complete values; typing alone does not perform an enabled actionability check. Staff OTP attempts replace the prior value and only an actual uniform authentication rejection may recompute a code; successful/transport/navigation responses cannot trigger another login.
+
+UI13 final comparison keeps existing accessible audit/account filter names while visible labels match the approved samples; exact-match hints use aria-describedby. Existing .review-item-title/.review-tier geometry, title-cell .rarity-badge, .secret-box .secret-label order and 成果流程指引 remain presentation contracts. The guide displays 校对项目概况 with accessible name 校对项目概况（我的项目） so the visible label is included for voice control; its original href and unsaved guard remain. Native #submission-file remains; 开始上传 is present and disabled before selection and uses the original handler afterward. No new API, sensitive selector, mask, tolerance, retry or skip condition is introduced.
+Teacher review keeps the 校验报告 region while naming its visible heading 机器校验报告. Staff queue metadata timestamps remain inline, and notification-only phone wrapping stays scoped to .notif-item.
+
+### UI14 已批准首页标题与认证就绪契约
+
+- 首页以 `getByRole("heading", { name: "首页", level: 1, exact: true })` 确认；元数据标题“我的主页”不作为正文定位。冷启动任务页同样使用精确一级标题“任务广场”，不匹配上下文栏副本。
+- 跨标签页与冷启动继续走真实表单、200登录响应和实际导航，复用已有 `loginThroughUi`。保留旧身份清除、迟响应围栏和单刷新不变量，不增加重试或调整全局超时。
+- UI14 独立诊断联跑8项通过；运行环境和未覆盖范围见交付评审，不据此声称当前全量电池通过。
+
+### R6 协作、交接及生命周期（行为与结构契约）
+
+以下只约束 R6 新增/衔接入口，不把 opaque 引用当可见身份文本。API setup 中的编号不进入公开文案；受控下载不暴露存储地址。
+
+| 分类 | 真实可访问定位 | 行为/等强度要求 |
+| --- | --- | --- |
+| A | `我的项目分类` 导航及 `我负责的 / 我共管的 / 我参与的` region | URL role 与分类一致；本人分类20项分页，新页就绪后给键盘明确位置 |
+| A | `正在读取协作资料` status | 有读屏提示；视觉骨架本身仍隐藏于可访问树 |
+| A | `本人的协作邀请与同意`、`项目协作记录` region | 管理和挂名分别确认、拒绝、退出；姓名/分工为不可变候选 |
+| A | `同意共同管理 / 同意公开挂名 / 拒绝公开挂名 / 撤下公开挂名 / 退出共同管理` button | 每次对具体用途明确确认，成功后对应权限或公开展示即时失效 |
+| A | `邀请协作`、`发起负责人交接` region内的 `对方账号`、`核对对象` | 核对后只显示昵称，账号输入清空；两个表单不能混淆对象 |
+| A | `协作项目文字`、`成果文字编辑器` region | 无证明/提审隐式授权；保存冲突及重放保留原输入，载入服务器文字须明确选择 |
+| A | `协作招募岗位`、`招募岗位编辑器` region | 共管走专用transport；资格不足仍可存稿，发布动作明确说明条件 |
+| A | `交接摘要与结果` region；`读取最新交接摘要` | 页面和真实 GET就绪后再确认；项目文字、关系、岗位、材料或公开状态变化要求重新核对 |
+| A | `当前关系与将关闭岗位清单`、`发起时已记录的清单` region | 显示安全关系与范围、具体岗位；旧快照未记录不能伪作空名单 |
+| A | `本次逐份交接的证明`；`主动查阅证明 N` | 仅指定目标且明确提前授权出现按钮；主动读取先确认持久审计与回避后果 |
+| A | `确认接任项目` dialog与`确认接任并关闭现有岗位` | 发送当前冻结摘要/版本。未知结果退出modal，提供原结果核对入口；终态不再返回私稿清单 |
+| A | `逐岗核对招募与新联系授权` link | 进入当前新负责人的真实岗位管理；旧联系不默认继承，须逐岗明确开放 |
+| A | `项目状态与公开介绍`；`待发布介绍预览` region | 结项前列后果与具体岗位；四字段介绍先预览再明确发布；恢复不自动开放岗位 |
+| A | `核对原操作结果` button及错误alert | 使用原request_id/body/版本；先查结果；换号清除并隔离迟响应，不另发一份新命令 |
+| A | `本人同意公开的项目成员` region | 只显示当前接受的姓名和分工；不展示候选、账号、私稿或完整身份验证暗示 |
+| A | 运营详情错误后的“其他无冲突运营处理 / 联系管理员安排” | 新参与释放原领取，材料与决定同时拒权；提供后续协调路径 |
+| B | `ie-draft-list / ie-draft-row / r6-summary / r6-workflow-group` | 延用项目token、列表与表单层级；替换DOM时须保留以上region/标签/焦点/业务断言 |
+| B | 本人分类中 `a[href="/profile/collaboration/projects/<opaque reference>"]` | 只用于精确找回测试所建项目的SPA入口；仍检查可访问名称与实际目标路由，不读取旧页面地址代替导航完成 |
+
+功能旅程：`innovation-collaboration.spec.ts`、`innovation-collaboration-transfer.spec.ts`、`innovation-collaboration-states.spec.ts`、`innovation-collaboration-review.spec.ts`、`innovation-collaboration-recovery.spec.ts`。独立像素：`innovation-collaboration-visual.spec.ts`，Linux固定字体，390/1440，无新增mask或容差/重试放宽；四个新基线须逐张走查后另行无更新重跑。

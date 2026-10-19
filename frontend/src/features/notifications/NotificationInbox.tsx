@@ -60,6 +60,7 @@ import {
   type InboxFilterKey,
 } from "./inboxView";
 import { Button } from "@/components/ui/button";
+import { NotificationEventIcon } from "./NotificationEventIcon";
 
 export interface NotificationInboxProps {
   /** The URL filter the page parsed (remounts per tab; patterns §4). */
@@ -219,27 +220,26 @@ export function NotificationInbox({ filter }: NotificationInboxProps) {
 
   return (
     <section className="section notifications-view" aria-label="通知收件箱">
-      <div className="section-head">
-        <h2 className="section-title">消息</h2>
+      <div className="inbox-toolbar">
+        <h2 className="sr-only">消息</h2>
+        <nav className="tab-bar segmented-tabs" aria-label="通知筛选">
+          {INBOX_FILTERS.map((tab) => (
+            <Link
+              key={tab.key}
+              className="tab-link"
+              href={tab.key === "all" ? "/notifications" : "/notifications?filter=unread"}
+              aria-current={tab.key === filter ? "page" : undefined}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
         {unreadTotal !== null && unreadTotal > 0 ? (
-          <span className="badge badge-info">
+          <span className="inbox-total">
             未读 <span className="meta-num">{unreadTotal}</span> 条
           </span>
         ) : null}
       </div>
-
-      <nav className="tab-bar segmented-tabs" aria-label="通知筛选">
-        {INBOX_FILTERS.map((tab) => (
-          <Link
-            key={tab.key}
-            className="tab-link"
-            href={tab.key === "all" ? "/notifications" : "/notifications?filter=unread"}
-            aria-current={tab.key === filter ? "page" : undefined}
-          >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
 
       {phase === "loading" ? (
         <SectionSkeleton lines={4} />
@@ -333,7 +333,7 @@ export function NotificationRow({ view, item, markError, onMarkRead }: Notificat
       data-category={view.category}
     >
       <span className="notif-icon" data-tone={view.tone} aria-hidden="true">
-        {view.glyph}
+        <NotificationEventIcon eventType={view.eventType} />
       </span>
       <div className="notif-main">
         <div className="notif-item-head">

@@ -10,7 +10,7 @@
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { MenuIcon } from "./navIcons";
 import { navItemActive, type SideNavItem } from "./WorkspaceSidebar";
@@ -18,9 +18,11 @@ import { navItemActive, type SideNavItem } from "./WorkspaceSidebar";
 export function StaffMenuSheet({
   label,
   items,
+  footer,
 }: {
   label: string;
   items: readonly SideNavItem[];
+  footer?: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const pathname = usePathname();
@@ -66,6 +68,8 @@ export function StaffMenuSheet({
               </Link>
             ))}
           </nav>
+          {footer !== undefined ? <div className="app-menusheet-account">{footer}</div> : null}
+          <button type="button" className="btn btn-secondary app-menusheet-close" onClick={() => dialogRef.current?.close()}>关闭菜单</button>
         </div>
       </dialog>
     </>

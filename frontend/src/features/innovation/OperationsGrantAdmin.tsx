@@ -7,7 +7,6 @@ import { SectionError, SectionSkeleton } from "@/components/ui/sectionStates";
 import { useSection } from "@/components/ui/useSection";
 import { listAdminUsers, type AdminUserDto } from "@/features/admin/adminApi";
 import { roleLabel, userStatusView } from "@/features/admin/adminView";
-import { AuthField } from "@/features/auth/AuthField";
 import { useSession } from "@/features/auth/session";
 import { getAuthEpoch } from "@/lib/accessToken";
 import { getOperationsGrant, saveOperationsGrant, type OperationsGrantDto } from "./operationsApi";
@@ -65,7 +64,7 @@ function GrantEditor({ user, initial }: { user: AdminUserDto; initial: Operation
   const [message, setMessage] = useState("");
   const active = useRef(false);
   const epoch = useRef(getAuthEpoch());
-  const reasonInput = useRef<HTMLInputElement>(null);
+  const reasonInput = useRef<HTMLTextAreaElement>(null);
   const mutationButton = useRef<HTMLButtonElement>(null);
   const reloadButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -98,12 +97,20 @@ function GrantEditor({ user, initial }: { user: AdminUserDto; initial: Operation
   }
 
   const eligible = user.role === "STUDENT" && user.status === "ACTIVE";
-  return <section className="panel form ie-draft-form" aria-label="当前账号运营授权">
-    <h2 className="section-title">{user.nickname}的双创运营身份</h2>
-    <p role="status">{record.enabled ? "当前已授权" : "当前未授权"}</p>
+  return <section className="panel form ie-draft-form campus-admin-selected-detail" aria-label="当前账号运营授权">
+    <div className="campus-admin-detail-heading">
+      <h2 className="section-title">{user.nickname}的双创运营身份</h2>
+      <p role="status" className="badge">{record.enabled ? "当前已授权" : "当前未授权"}</p>
+      <span className="field-hint">版本 {record.version}</span>
+    </div>
     <p className="field-hint">此授权不改变学生身份，不授予教师、管理员或积分调整权限。审核时仍须检查项目授权并回避本人参与项目。</p>
     <form method="post" onSubmit={submit} noValidate>
-      <AuthField name="operations-reason" label="操作原因" error={fieldError} hint="必填，最多 500 个字符；会记入审计日志。" inputProps={{ ref: reasonInput, type: "text", value: reason, required: true, disabled: busy, onChange: (event) => { setReason(event.target.value); setFieldError(undefined); } }} />
+      <div className="field">
+        <label className="field-label" htmlFor="operations-reason">操作原因</label>
+        <textarea id="operations-reason" name="operations-reason" className="input campus-admin-reason" ref={reasonInput} rows={3} value={reason} required disabled={busy} aria-invalid={fieldError ? true : undefined} aria-describedby={fieldError ? "operations-reason-error operations-reason-hint" : "operations-reason-hint"} onChange={(event) => { setReason(event.target.value); setFieldError(undefined); }} />
+        <p className="field-hint" id="operations-reason-hint">必填，最多 500 个字符；会记入审计日志。</p>
+        {fieldError ? <p className="field-error" id="operations-reason-error">{fieldError}</p> : null}
+      </div>
       {error ? <div className="alert alert-error" role="alert"><p>{error.message}</p>{error.requestId ? <p className="req-id">请求 ID：{error.requestId}</p> : null}</div> : null}
       {!eligible && !record.enabled ? <p className="field-hint">该账号当前不符合授予条件。</p> : null}
       {message ? <p role="status" className="alert alert-success">{message}</p> : null}
@@ -123,8 +130,8 @@ function GrantEditor({ user, initial }: { user: AdminUserDto; initial: Operation
         <DialogTitle>撤回双创运营身份</DialogTitle>
         <DialogDescription>确认撤回{user.nickname}的双创运营身份？此操作会记录原因。</DialogDescription>
         <DialogFooter>
-          <Button variant="danger" disabled={busy} onClick={() => void mutate()}>确认撤回</Button>
           <Button variant="secondary" disabled={busy} onClick={() => setConfirm(false)}>取消</Button>
+          <Button variant="danger" disabled={busy} onClick={() => void mutate()}>确认撤回</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

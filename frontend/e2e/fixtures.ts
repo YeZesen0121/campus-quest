@@ -108,8 +108,14 @@ export async function loginThroughUi(
   await openLoginForm(page, `${BASE_URL}/login`);
   await page.getByLabel("学号").fill(account.username);
   await page.getByLabel("密码").fill(account.password);
+  const loginResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/login" &&
+      response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).not.toHaveURL(/\/login/);
+  expect((await loginResponse).status()).toBe(200);
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
 /**
@@ -302,17 +308,27 @@ export async function staffLogin(
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const submitted = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/v1/auth/staff/login' &&
+      response.request().method() === 'POST');
     await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
     await page.getByRole("button", { name: "登录", exact: true }).click();
-    try {
-      await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: 5_000 });
+    const response = await submitted;
+    if (response.ok()) {
+      // Accepted credentials must never be submitted again merely because
+      // a cold route is still loading. Use the existing navigation budget.
+      await page.waitForURL(url => url.pathname !== '/staff/login');
       return;
-    } catch {
-      // A slow hop can carry the submit across the step boundary —
-      // recompute the code exactly like a real user would.
+    }
+    const body = await response.json().catch(() => null) as { error?: { code?: string } } | null;
+    // The seeded password is known. Only the server's uniform auth rejection
+    // can justify recomputing the rolling TOTP; transport/navigation failures
+    // and other business errors must surface instead of triggering a login.
+    if (response.status() !== 401 || body?.error?.code !== 'AUTHENTICATION_REQUIRED') {
+      throw new Error(`Seeded staff login rejected: HTTP${response.status()} (${body?.error?.code ?? 'unknown'})`);
     }
   }
-  await expect(page).not.toHaveURL(/\/staff\/login/);
+  throw new Error('Seeded staff login rejected all three current TOTP attempts');
 }
 
 /** Mentor login uses its dedicated form and clears any student resume state. */
@@ -423,4 +439,59 @@ export function mintToken(userId: string): string {
 /** Recover the current SMS OTP code for a phone (the real Redis hash). */
 export function recoverOtpCode(phoneE164: string): string {
   return runWorldAction<{ code: string }>("otp-code", phoneE164).code;
+}
+
+/** Read the complete target/ring bounds and the actual approved rounded hit shape. */
+export async function readControlClearance(control: import("@playwright/test").Locator) {
+  return await control.evaluate(el => {
+        const b = el.getBoundingClientRect(), style = getComputedStyle(el);
+        const ring = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        let top = 0, bottom = innerHeight;
+        for (const bar of document.querySelectorAll('.app-topbar,.app-bottomnav')) {
+          const r = bar.getBoundingClientRect(), position = getComputedStyle(bar).position;
+          if (!r.width || !r.height || !['fixed', 'sticky'].includes(position)) continue;
+          if (r.top <= 0) top = Math.max(top, r.bottom);
+          if (r.bottom >= innerHeight) bottom = Math.min(bottom, r.top);
+        }
+        // Approved controls have a4px rounded hit shape. Sampling1px
+        // outside that curve falsely rejects the approved source itself.
+        // Keep the full bounding-box/ring test and check four edges plus
+        // four points inside the actual rounded corners.
+        const corner = Math.max(1, Math.min(parseFloat(style.borderTopLeftRadius) || 0, b.width / 2 - 1, b.height / 2 - 1));
+        const points = [[b.left + corner, b.top + corner], [b.right - corner, b.top + corner], [b.left + corner, b.bottom - corner], [b.right - corner, b.bottom - corner], [b.left + b.width / 2, b.top + 1], [b.left + b.width / 2, b.bottom - 1], [b.left + 1, b.top + b.height / 2], [b.right - 1, b.top + b.height / 2]];
+        return { ring, full: b.left - ring >= 0 && b.right + ring <= innerWidth && b.top - ring >= top && b.bottom + ring <= bottom,
+          hit: points.every(([x, y]) => { const hit = document.elementFromPoint(x, y); return hit === el || (hit !== null && el.contains(hit)); }),
+          top: b.top, bottom: b.bottom, viewportTop: top, viewportBottom: bottom };
+      });
+}
+
+/** Read the rendered source-paint contract, including resolved modern CSS colors. */
+export async function readSourceTagPaint(control: import("@playwright/test").Locator) {
+  return control.evaluate(element => {
+    const style = getComputedStyle(element), canvas = document.createElement('canvas').getContext('2d')!;
+    const rgb = (color: string) => { canvas.clearRect(0, 0, 1, 1); canvas.fillStyle = color; canvas.fillRect(0, 0, 1, 1); return Array.from(canvas.getImageData(0, 0, 1, 1).data).join(','); };
+    return { ink: rgb(style.color), ground: rgb(style.backgroundColor), borderInk: rgb(style.borderTopColor), border: style.borderTopWidth, padding: style.padding, font: style.fontSize, weight: style.fontWeight, radius: style.borderRadius };
+  });
+}
+
+/** Capture stable owned content without external fixed navigation covering it. */
+export async function captureOwnedVisual(
+  page: import("@playwright/test").Page,
+  owned: import("@playwright/test").Locator,
+  name: string,
+  masks: import("@playwright/test").Locator[] = [],
+) {
+  const bars = '.app-topbar,.app-bottomnav,nextjs-portal';
+  await expect(owned.locator(bars), 'shell navigation and development tooling must be outside the captured owner').toHaveCount(0);
+  const visibility = () => page.locator(bars).evaluateAll(elements => elements.map(element => getComputedStyle(element).visibility));
+  await expect(page.locator('nextjs-portal [data-nextjs-dialog-overlay]'), 'development errors must not be hidden by capture cleanup').toHaveCount(0);
+  const before = await visibility();
+  const style = await page.addStyleTag({ content: `${bars} { visibility: hidden !important; } nextjs-portal { display: none !important; }` });
+  try {
+    expect((await visibility()).every(value => value === 'hidden'), 'external capture decoration must be hidden').toBe(true);
+    await expect(owned).toHaveScreenshot(name, { maxDiffPixelRatio: 0.01, mask: masks });
+  } finally {
+    await style.evaluate(element => { element.parentNode?.removeChild(element); });
+  }
+  expect(await visibility(), 'capture must restore external navigation visibility').toEqual(before);
 }

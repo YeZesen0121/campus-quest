@@ -40,6 +40,7 @@ from app.modules.innovation.evidence_schemas import (
     EvidenceListResponse,
     EvidenceResponse,
 )
+from app.modules.innovation.evidence_scope import evidence_scope
 from app.modules.innovation.models import (
     AchievementDraft,
     OwnerQualification,
@@ -53,7 +54,7 @@ def _conflict(message: str) -> BusinessError:
     return BusinessError(ErrorCode.CONFLICT, message, status_code=409)
 
 
-def _response(row: AchievementEvidence) -> EvidenceResponse:
+def _response(row: AchievementEvidence, *, read_only: bool = False) -> EvidenceResponse:
     return EvidenceResponse(
         id=row.id,
         content_type=row.content_type,
@@ -63,6 +64,7 @@ def _response(row: AchievementEvidence) -> EvidenceResponse:
         failure_code=row.failure_code,
         version=row.version,
         created_at=row.created_at,
+        read_only=read_only,
     )
 
 
@@ -82,7 +84,7 @@ class EvidenceService:
 
     async def _owned(
         self, db: AsyncSession, *, actor: Actor, project_id: UUID, achievement_id: UUID
-    ) -> None:
+    ) -> ProjectDraft:
         await _require_student(db, actor)
         qualification = await db.scalar(
             select(OwnerQualification.status)
@@ -90,12 +92,13 @@ class EvidenceService:
             .with_for_update()
         )
         parent = await db.scalar(
-            select(ProjectDraft.id)
+            select(ProjectDraft)
             .where(
                 ProjectDraft.id == project_id,
                 ProjectDraft.owner_user_id == actor.user_id,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         child = (
             await db.scalar(
@@ -117,9 +120,17 @@ class EvidenceService:
             raise BusinessError(
                 ErrorCode.PERMISSION_DENIED, "请先开通项目负责人资格", status_code=403
             )
+        assert parent is not None
+        return parent
 
     async def _row(
-        self, db: AsyncSession, achievement_id: UUID, evidence_id: UUID
+        self,
+        db: AsyncSession,
+        achievement_id: UUID,
+        evidence_id: UUID,
+        *,
+        actor: Actor,
+        upload_only: bool = False,
     ) -> AchievementEvidence:
         row = await db.scalar(
             select(AchievementEvidence)
@@ -127,6 +138,7 @@ class EvidenceService:
                 AchievementEvidence.id == evidence_id,
                 AchievementEvidence.achievement_id == achievement_id,
                 AchievementEvidence.removed_at.is_(None),
+                evidence_scope(actor.user_id, upload_only=upload_only),
             )
             .with_for_update()
             .execution_options(populate_existing=True)
@@ -167,7 +179,7 @@ class EvidenceService:
         payload: EvidenceIntentCreate,
         context: AuditContext | None = None,
     ) -> tuple[EvidenceIntentResponse, bool]:
-        await self._owned(
+        project = await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
         await require_editable(db, achievement_id)
@@ -185,6 +197,11 @@ class EvidenceService:
         created = row is None
         now = self._clock.now()
         if row is not None:
+            if (
+                row.uploaded_by_user_id != actor.user_id
+                or row.uploaded_owner_generation != project.ownership_generation
+            ):
+                raise _conflict("这次上传属于其他交接批次，请新建上传请求")
             if row.creation_payload_fingerprint != fingerprint:
                 raise _conflict("这次上传请求已用于其他文件信息")
             if row.removed_at is not None:
@@ -197,6 +214,7 @@ class EvidenceService:
                     AchievementEvidence.achievement_id == achievement_id,
                     AchievementEvidence.removed_at.is_(None),
                     AchievementEvidence.referenced.is_(False),
+                    evidence_scope(actor.user_id, upload_only=True),
                     or_(
                         AchievementEvidence.state != "PENDING",
                         AchievementEvidence.expires_at > now,
@@ -219,6 +237,8 @@ class EvidenceService:
                 )
             row = AchievementEvidence(
                 achievement_id=achievement_id,
+                uploaded_by_user_id=actor.user_id,
+                uploaded_owner_generation=project.ownership_generation,
                 creation_request_id=payload.request_id,
                 creation_payload_fingerprint=fingerprint,
                 object_key=signed.object_key,
@@ -255,7 +275,7 @@ class EvidenceService:
         achievement_id: UUID,
         context: AuditContext | None = None,
     ) -> EvidenceListResponse:
-        await self._owned(
+        project = await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
         rows = await db.scalars(
@@ -263,11 +283,21 @@ class EvidenceService:
             .where(
                 AchievementEvidence.achievement_id == achievement_id,
                 AchievementEvidence.removed_at.is_(None),
+                evidence_scope(actor.user_id),
             )
             .order_by(AchievementEvidence.created_at, AchievementEvidence.id)
             .execution_options(populate_existing=True)
         )
-        result = EvidenceListResponse(items=[_response(row) for row in rows])
+        result = EvidenceListResponse(
+            items=[
+                _response(
+                    row,
+                    read_only=row.uploaded_by_user_id != actor.user_id
+                    or row.uploaded_owner_generation != project.ownership_generation,
+                )
+                for row in rows
+            ]
+        )
         await self._record(db, actor, achievement_id, "IE_EVIDENCE_LIST", context)
         await db.commit()
         return result
@@ -300,7 +330,9 @@ class EvidenceService:
         await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
-        row = await self._row(db, achievement_id, evidence_id)
+        row = await self._row(
+            db, achievement_id, evidence_id, actor=actor, upload_only=True
+        )
         now = self._clock.now()
         if row.state in ("READY", "REJECTED"):
             result = _response(row)
@@ -348,7 +380,9 @@ class EvidenceService:
         await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
-        row = await self._row(db, achievement_id, evidence_id)
+        row = await self._row(
+            db, achievement_id, evidence_id, actor=actor, upload_only=True
+        )
         if row.state != "CHECKING" or row.check_token != token:
             raise _conflict("检查请求已被更新，请刷新材料状态")
         await require_editable(db, achievement_id)
@@ -377,7 +411,9 @@ class EvidenceService:
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
         await require_editable(db, achievement_id)
-        row = await self._row(db, achievement_id, evidence_id)
+        row = await self._row(
+            db, achievement_id, evidence_id, actor=actor, upload_only=True
+        )
         if row.referenced:
             raise _conflict("材料已用于审核记录，不能移除")
         row.removed_at = self._clock.now()
@@ -399,7 +435,7 @@ class EvidenceService:
         await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
-        row = await self._row(db, achievement_id, evidence_id)
+        row = await self._row(db, achievement_id, evidence_id, actor=actor)
         if row.state != "READY":
             raise _conflict("材料尚未通过检查")
         key, digest, size, content_type = (
@@ -427,7 +463,7 @@ class EvidenceService:
         await self._owned(
             db, actor=actor, project_id=project_id, achievement_id=achievement_id
         )
-        row = await self._row(db, achievement_id, evidence_id)
+        row = await self._row(db, achievement_id, evidence_id, actor=actor)
         if row.state != "READY" or row.sha256 != digest:
             raise _conflict("材料状态已变更，请刷新")
         await db.commit()

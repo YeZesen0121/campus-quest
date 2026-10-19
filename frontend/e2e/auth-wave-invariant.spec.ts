@@ -5,6 +5,7 @@
  * CQ_E2E_PROBE=1 (never part of the release gate).
  */
 import { expect, test } from "@playwright/test";
+import { loginThroughUi } from "./fixtures";
 
 const PROBE = process.env.CQ_E2E_PROBE === "1";
 
@@ -26,11 +27,7 @@ test("one rotation per cold-start wave; both tabs authed", async ({ browser }) =
   const boot = await ctx.newPage();
   const student = process.env.CQ_E2E_STUDENT ?? "";
   const [username, password] = student.split(":");
-  await boot.goto("/login");
-  await boot.getByLabel("学号").fill(username);
-  await boot.getByLabel("密码").fill(password);
-  await boot.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(boot).not.toHaveURL(/\/login/);
+  await loginThroughUi(boot, { username, password });
   await boot.close();
 
   // THE WAVE: two fresh pages (token-less memory each), same jar, same tick.
@@ -53,7 +50,7 @@ test("one rotation per cold-start wave; both tabs authed", async ({ browser }) =
   console.log("WAVE_REFRESHES:", JSON.stringify(refreshes), "COUNT:", refreshes.length);
   // The invariant: exactly one rotation serves the whole wave.
   expect(refreshes, "one POST /auth/refresh per cold-start wave").toHaveLength(1);
-  await expect(p1.getByText("我的主页")).toBeVisible();
-  await expect(p2.getByText("任务广场").or(p2.getByText("最新任务"))).toBeVisible({ timeout: 10_000 });
+  await expect(p1.getByRole("heading", { name: "首页", level: 1, exact: true })).toBeVisible();
+  await expect(p2.getByRole("heading", { name: "任务广场", level: 1, exact: true })).toBeVisible({ timeout: 10_000 });
   console.log("INVARIANT PASS: one rotation per wave, both tabs authed");
 });

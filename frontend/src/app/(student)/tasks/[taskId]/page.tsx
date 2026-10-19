@@ -6,7 +6,7 @@ import { TaskRating } from "@/features/community/TaskRating";
 import { TaskDetailView } from "@/features/tasks/TaskDetailView";
 
 export const metadata: Metadata = {
-  title: "任务详情 · CampusQuest",
+  title: "任务详情 · 华师令",
   description: "任务说明、奖励与截止信息，以及领取入口",
 };
 
@@ -34,12 +34,12 @@ export default async function TaskDetailPage({
   );
 
   return (
-    <>
+    <div className="student-task-page">
       <TaskDetailView taskId={taskId} />
       {/* Keyed by task + sort: a navigation or tab switch REMOUNTS the
           islands so every fetch keys off the URL, never stale state. */}
       <CommentThread key={`${taskId}:${sort}`} taskId={taskId} sort={sort} />
       <TaskRating key={taskId} taskId={taskId} />
-    </>
+    </div>
   );
 }

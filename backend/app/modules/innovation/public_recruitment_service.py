@@ -65,6 +65,7 @@ class PublicRecruitmentService:
             .join(OwnerQualification, OwnerQualification.user_id == _USERS.c.id)
             .where(
                 RecruitmentDraft.status == "OPEN",
+                ProjectDraft.lifecycle == "ACTIVE",
                 RecruitmentDraft.moderation_state == "NORMAL",
                 or_(
                     RecruitmentDraft.deadline_at.is_(None),

@@ -17,9 +17,7 @@ export default function AdminAuditPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">审计日志</h1>
-        <p className="page-subtitle">
-          全平台审计记录的只读检索，按操作名 / 操作者 / 目标类型精确过滤
-        </p>
+        <p className="page-subtitle">只读检索关键操作与变更快照。</p>
       </div>
       <AuditLogSearch />
     </>

@@ -66,6 +66,7 @@ _ALIYUN_SMS_CREDENTIAL_FIELDS: tuple[tuple[str, str], ...] = (
 
 
 class Settings(BaseSettings):
+    ie_invitation_days: int = Field(default=7, ge=1, le=30)
     database_url: str
     redis_url: str
     s3_endpoint_url: str

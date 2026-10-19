@@ -1,0 +1,186 @@
+{
+  "mock_data": true,
+  "capture": "Owned content; outside fixed shell hidden; no business field or error masking",
+  "items": [
+    {
+      "file": "r1-admin-operations.png",
+      "width": 1232,
+      "height": 831,
+      "sha256": "bbfbc0e8e54e6e07f5a4f17b785b66ce0ec58780dd3f0c5bb3262d054dc1dfa6",
+      "source_log": "20261019T161628-visual-164137.log",
+      "evidence_scope": "Complete core visual run passed: 16 tests, no baseline regeneration",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r1-admin-qualification.png",
+      "width": 1232,
+      "height": 831,
+      "sha256": "7b4577f106b6b29a413eaf126f51049ddbcecf661d66bc5f7d10d6ad2aed7665",
+      "source_log": "20261019T161628-visual-164137.log",
+      "evidence_scope": "Complete core visual run passed: 16 tests, no baseline regeneration",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r1-owner-profile.png",
+      "width": 1130,
+      "height": 831,
+      "sha256": "4edb3d435640fbdc1ef3ce70918aea4f3795c0768a19bdee533ca311bcfd9b50",
+      "source_log": "20261019T161628-visual-164137.log",
+      "evidence_scope": "Complete core visual run passed: 16 tests, no baseline regeneration",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r1-project-draft.png",
+      "width": 1240,
+      "height": 977,
+      "sha256": "fb1b27458a2e2b78e269a36b41262edc83ef8ecd3673889221f5cf3fbefc386d",
+      "source_log": "20261019T161628-visual-164137.log",
+      "evidence_scope": "Complete core visual run passed: 16 tests, no baseline regeneration",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r2-achievement-proof-workspace.png",
+      "width": 1130,
+      "height": 1197,
+      "sha256": "53585b1cfa096a472070c28d8bfb177bd0b7a1172a99209b3cfc0d456d43bd23",
+      "source_log": "20261019T175901-visual-242864.log",
+      "evidence_scope": "Complete owned visual run passed without baseline updates; simulated identities and materials",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r3-recruitment-owner-form.png",
+      "width": 966,
+      "height": 2244,
+      "sha256": "0584fa8d38795999ef2c3db89c6dd041622644d3226927fa376dafd2c2c7b515",
+      "source_log": "20261019T191721-visual-280138.log",
+      "evidence_scope": "Complete owned visual run passed without baseline updates; simulated identities and materials",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r4-talent-public-mobile.png",
+      "width": 390,
+      "height": 1091,
+      "sha256": "d96bfee491b62fce487d02bb718e88c642c9d39c715b4b14989751bbd35158f1",
+      "source_log": "20261019T191934-visual-281116.log",
+      "evidence_scope": "Complete owned visual run passed without baseline updates; simulated identities and materials",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r5-mentor-confirmation.png",
+      "width": 1008,
+      "height": 1120,
+      "sha256": "2a9324edac4fc1214e7b7c9f4761fd0d50b34deaa429f64ecd42f23ea9e96d12",
+      "source_log": "20261019T194132-visual-285935.log",
+      "evidence_scope": "Complete owned visual run passed without baseline updates; simulated identities and materials",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-archive-1440.png",
+      "width": 1240,
+      "height": 835,
+      "sha256": "a04ad61634d15da2342a5084d4e61d3f522e039d19c1fb1036fb79bf76d54e87",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-archive-390.png",
+      "width": 390,
+      "height": 1027,
+      "sha256": "bbd7e420850b7e3db4f4e8e09b91e9e12d138fc0f6165c9c7c8c81322542e001",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-list-error-simulated-390.png",
+      "width": 356,
+      "height": 160,
+      "sha256": "8b04c02abfbf8bc27cb8c1302d96ba15d2ea01aea5391391ba436a01cce9ad1a",
+      "source_log": "20261019T140749-playwright-99326.log",
+      "evidence_scope": "scenario passed; global run has known failures",
+      "simulated_network_or_rows": true
+    },
+    {
+      "file": "r6-list-loading-simulated-390.png",
+      "width": 356,
+      "height": 107,
+      "sha256": "2821f8017d2d064c2d388be802869baed6c698d2ca7d0b8ca99ea50dcf537a69",
+      "source_log": "20261019T140749-playwright-99326.log",
+      "evidence_scope": "scenario passed; global run has known failures",
+      "simulated_network_or_rows": true
+    },
+    {
+      "file": "r6-manager-unqualified-recruitment-390.png",
+      "width": 356,
+      "height": 2251,
+      "sha256": "fe7894696a3ee8d35c9d178d95b57fca546e3aab1526324ab8474b7e975a507b",
+      "source_log": "20261019T161911-node-165404.log",
+      "evidence_scope": "Management/consent/independent-exit scenario passed; full run has an R4 detail-loading failure",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-member-consent-public.png",
+      "width": 1008,
+      "height": 131,
+      "sha256": "90132bbcfdde5483ab4cd00286dba7e69859933e961da0b366ba629528805167",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-member-list-long-1440.png",
+      "width": 1130,
+      "height": 1162,
+      "sha256": "d7565827bd6485e9d7552072cd4687ee405938760859fa0245df18de38d9c01d",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": true
+    },
+    {
+      "file": "r6-member-list-long-390.png",
+      "width": 390,
+      "height": 1305,
+      "sha256": "e4c1cd687220da3e3f2a256b0a4835002e1e2bcff08caeff284da7aab006da13",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": true
+    },
+    {
+      "file": "r6-private-completed.png",
+      "width": 356,
+      "height": 1029,
+      "sha256": "a4242a6ea5d1efc2c272f83aaed0782b688fa38905eb6a2c9380df1c86ff7f41",
+      "source_log": "20261019T140749-playwright-99326.log",
+      "evidence_scope": "scenario passed; global run has known failures",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-review-conflict-coordination.png",
+      "width": 390,
+      "height": 787,
+      "sha256": "6c1aaae29adc92d95a54555886385a0df6e649212819ec23396374cdf2fb67ce",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-transfer-current-mobile.png",
+      "width": 390,
+      "height": 2168,
+      "sha256": "b05b5fe6b71ca13388ac36a1693dc413d54ff68f4df4346935d658120dee529d",
+      "source_log": "20261019T135535-playwright-95369.log",
+      "evidence_scope": "13 R6 scenarios passed; before F5 discovery",
+      "simulated_network_or_rows": false
+    },
+    {
+      "file": "r6-unqualified-owner-transfer-390.png",
+      "width": 356,
+      "height": 494,
+      "sha256": "8bd6f8e058c4fab07e4b4648668ccc5d964f4a5763d5b55fb3802c8e98170a32",
+      "source_log": "20261019T152004-playwright-119356.log",
+      "evidence_scope": "F5 phone journey passed; complete 27-scenario mixed run passed with no skips",
+      "simulated_network_or_rows": false
+    }
+  ]
+}

@@ -11,13 +11,13 @@
  * matter what the server decided internally, and no state ever reveals
  * whether the username exists.
  */
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { isApiError } from "@/lib/errors";
 
 import { AuthField } from "./AuthField";
+import { AuthSteps } from "./AuthSteps";
 import { FormErrorSummary } from "./FormErrorSummary";
 import { SubmitButton } from "./SubmitButton";
 import {
@@ -170,6 +170,8 @@ export function PasswordResetForm() {
 
   if (step === "identify") {
     return (
+      <>
+      <AuthSteps label="找回密码步骤" steps={['确认学号', '设置新密码']} current={0} />
       <form className="form" onSubmit={onRequestCode} noValidate>
         <FormErrorSummary view={summary} />
         <AuthField
@@ -193,18 +195,15 @@ export function PasswordResetForm() {
             disabled: requesting,
           }}
         />
-        <SubmitButton loading={requesting}>获取验证码</SubmitButton>
-        <p className="auth-alt-action">
-          想起密码了？
-          <Link className="link" href="/login">
-            返回登录
-          </Link>
-        </p>
+        <SubmitButton loading={requesting} block={false}>获取验证码</SubmitButton>
       </form>
+      </>
     );
   }
 
   return (
+    <>
+    <AuthSteps label="找回密码步骤" steps={['确认学号', '设置新密码']} current={1} />
     <form className="form" onSubmit={onConfirm} noValidate>
       <FormErrorSummary view={summary} />
       <p className="field-hint" role="status">
@@ -245,21 +244,17 @@ export function PasswordResetForm() {
           disabled: submitting,
         }}
       />
-      <SubmitButton loading={submitting}>重置密码</SubmitButton>
+      <div className="auth-actions">
+      <SubmitButton loading={submitting} block={false}>重置密码</SubmitButton>
       <Button
-        block
         variant="secondary"
         onClick={() => void requestCode(username.trim())}
         disabled={requesting || remaining > 0 || submitting}
       >
         {resendButtonLabel(remaining, "重新发送验证码", requesting)}
       </Button>
-      <p className="auth-alt-action">
-        想起密码了？
-        <Link className="link" href="/login">
-          返回登录
-        </Link>
-      </p>
+      </div>
     </form>
+    </>
   );
 }

@@ -7,7 +7,7 @@ import {
 } from "@/features/rankings/leaderboardView";
 
 export const metadata: Metadata = {
-  title: "排行榜 · CampusQuest",
+  title: "排行榜 · 华师令",
   description: "今日榜、本月榜、总榜与我的附近",
 };
 
@@ -30,12 +30,12 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
   );
 
   return (
-    <>
+    <div className="student-growth-page">
       <div className="page-head">
         <h1 className="page-title">排行榜</h1>
-        <p className="page-subtitle">今日榜、本月榜、总榜与我的附近</p>
+        <p className="page-subtitle">每一次认真完成，都在积累。</p>
       </div>
       <Leaderboard key={period} period={period} />
-    </>
+    </div>
   );
 }

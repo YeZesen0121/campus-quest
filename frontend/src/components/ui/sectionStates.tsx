@@ -44,7 +44,7 @@ export function SectionCardsSkeleton({ cards = 6 }: { cards?: number }) {
   );
 }
 
-/** Empty state (design §10): what/why/action, centered and quiet. */
+/** Empty state (design §10): what/why/action, left aligned and quiet. */
 export function EmptyState({
   title,
   hint,

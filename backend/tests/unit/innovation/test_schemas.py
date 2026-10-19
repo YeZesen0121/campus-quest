@@ -67,6 +67,7 @@ def test_private_response_field_whitelist() -> None:
         "direction",
         "stage",
         "team_status",
+        "lifecycle",
         "version",
         "created_at",
         "updated_at",

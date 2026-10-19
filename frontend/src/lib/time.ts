@@ -139,7 +139,7 @@ export function formatCountdownText(
 
 /**
  * Absolute deadline text in the business timezone, e.g. "9月19日 18:00"
- * (spec §14 example). Year is omitted; add a variant when a view needs it.
+ * (spec §14 example). Year is omitted; publication metadata uses its own variant.
  */
 export function formatDeadlineDateTime(
   instantMs: number,
@@ -147,6 +147,22 @@ export function formatDeadlineDateTime(
 ): string {
   return new Intl.DateTimeFormat(config.locale, {
     timeZone: config.timeZone,
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(instantMs));
+}
+
+/** Publication metadata keeps its year; deadline labels retain their short form. */
+export function formatPublicationDateTime(
+  instantMs: number,
+  config: BusinessTimeConfig = BUSINESS_TIME_CONFIG,
+): string {
+  return new Intl.DateTimeFormat(config.locale, {
+    timeZone: config.timeZone,
+    year: "numeric",
     month: "long",
     day: "numeric",
     hour: "2-digit",

@@ -330,6 +330,9 @@ describe("lifecycleActions (spec §6.2 table, mirrored for affordances)", () => 
     assert.equal(close.confirmRequired, true);
     assert.equal(close.buttonClass, "btn-danger");
     assert.match(close.confirmBody, /不可撤销/);
+    assert.match(close.confirmBody, /不能再领取/);
+    assert.match(close.confirmBody, /已有领取.*继续/);
+    assert.doesNotMatch(close.confirmBody, /不能再领取或提交/);
   });
 
   test("PAUSED offers resume + close; CLOSED offers archive only", () => {
@@ -622,4 +625,40 @@ describe("collaborator permission labels (spec §4.2)", () => {
     ]);
     assert.deepEqual(permissionLabels(["FUTURE_CODE"]), ["FUTURE_CODE"]);
   });
+});
+
+
+describe("task reminder form preserves supported notification policy", () => {
+  test("create retains existing defaults and carries explicit false and empty channels", () => {
+    const defaults = taskFormToBody(readyForm(), NOW).body!;
+    assert.equal(defaults.notify_24h, true);
+    assert.equal(defaults.notify_4h, true);
+    assert.deepEqual(defaults.notification_channels, ["SMS", "EMAIL", "IN_APP"]);
+    const selected = { ...readyForm(), notify24h: false, notify4h: false, notificationChannels: [] };
+    const body = taskFormToBody(selected, NOW).body!;
+    assert.equal(body.notify_24h, false);
+    assert.equal(body.notify_4h, false);
+    assert.deepEqual(body.notification_channels, []);
+  });
+  test("editing reads the server policy and never shares its channel array", () => {
+    const task = draftTask({ notify_24h: false, notify_4h: true, notification_channels: ["EMAIL"] });
+    const values = taskFormFromTask(task);
+    assert.equal(values.notify24h, false);
+    assert.equal(values.notify4h, true);
+    assert.deepEqual(values.notificationChannels, ["EMAIL"]);
+    values.notificationChannels.push("IN_APP");
+    assert.deepEqual(task.notification_channels, ["EMAIL"]);
+  });
+  for (const status of ["DRAFT", "PUBLISHED", "PAUSED"]) {
+    test(`${status}: notification changes are diff-only and remain mutable after publish`, () => {
+      const task = draftTask({ status });
+      const values = { ...taskFormFromTask(task), notify24h: false, notify4h: false, notificationChannels: [] };
+      const result = taskFormToUpdateBody(values, task, NOW);
+      assert.equal(result.ok, true);
+      assert.deepEqual(result.body, { notify_24h: false, notify_4h: false, notification_channels: [] });
+      assert.deepEqual(taskFormToUpdateBody(taskFormFromTask(task), task, NOW).body, {});
+      const reordered = { ...taskFormFromTask(task), notificationChannels: ["IN_APP", "EMAIL", "SMS"] };
+      assert.deepEqual(taskFormToUpdateBody(reordered, task, NOW).body, {});
+    });
+  }
 });

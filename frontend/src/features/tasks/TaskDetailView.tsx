@@ -20,6 +20,7 @@ import { formatDeadlineDateTime, parseServerInstant } from "@/lib/time";
 
 import { getTask, type TaskDetailDto } from "./api";
 import { ClaimButton } from "./ClaimButton";
+import { TaskRarity } from "./TaskCard";
 import { availabilityText, deadlineView, ratingText, rarityView } from "./display";
 import { useNow } from "./useNow";
 
@@ -74,7 +75,7 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
 
   if (phase === "loading") {
     return (
-      <div className="task-detail">
+      <div className="task-detail student-task-view">
         <span className="skeleton skeleton-line" style={{ width: "60%" }} />
         <span className="skeleton skeleton-line" data-width="narrow" />
         <span className="skeleton skeleton-block" />
@@ -85,22 +86,22 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
   if (phase === "error" || detail === null) {
     if (isApiError(error) && error.code === "NOT_FOUND") {
       return (
-        <div className="task-detail">
+        <div className="task-detail student-task-view">
           <div className="empty-state">
             <p className="empty-title">任务不存在或已下架</p>
             <p className="empty-hint">它可能已被老师关闭或归档</p>
             <Link className="link" href="/tasks">
-              返回任务列表
+              <span aria-hidden="true">← </span>返回任务列表
             </Link>
           </div>
         </div>
       );
     }
     return (
-      <div className="task-detail">
+      <div className="task-detail student-task-view">
         <SectionError error={error} onRetry={retry} retryLabel="重新加载" />
         <Link className="link back-link" href="/tasks">
-          返回任务列表
+          <span aria-hidden="true">← </span>返回任务列表
         </Link>
       </div>
     );
@@ -114,17 +115,14 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
       : formatDeadlineDateTime(parseServerInstant(detail.fixed_deadline_at));
 
   return (
-    <div className="task-detail">
+    <div className="task-detail student-task-view">
       <Link className="link back-link" href="/tasks">
-        返回任务列表
+        <span aria-hidden="true">← </span>返回任务列表
       </Link>
-      <div>
-        <h1 className="task-detail-title">{detail.title}</h1>
+      <header className="student-work-heading">
         <div className="task-detail-badges">
-          <span className="rarity-badge" data-rarity={rarity.rarity}>
-            {rarity.label}
-          </span>
-          <span className="badge" suppressHydrationWarning>
+          <TaskRarity rarity={rarity} />
+          <span suppressHydrationWarning>
             {ratingText(detail.rating)}
           </span>
           {deadline.urgency === "near" ? (
@@ -134,7 +132,8 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
             <span className="badge badge-danger">已截止</span>
           ) : null}
         </div>
-      </div>
+        <h1 className="task-detail-title">{detail.title}</h1>
+      </header>
       {/* Plan 11 mid-pass review P1: the decision information comes
           BEFORE the claim action (patterns §8 archetype). Source order
           is the narrow reading order — 说明 → 事实 → CTA; the wide grid
@@ -148,7 +147,7 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
           <dl className="task-facts">
             <div className="fact-row">
               <dt className="fact-label">基础奖励</dt>
-              <dd className="fact-value">{detail.base_reward_points} 积分</dd>
+              <dd className="fact-value"><strong>{detail.base_reward_points}</strong> 积分</dd>
             </div>
             <div className="fact-row">
               <dt className="fact-label">截止方式</dt>

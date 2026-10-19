@@ -54,9 +54,9 @@ export function TaskStatisticsPanel({ taskId, reloadSeed }: TaskStatisticsPanelP
   }, [taskId, reloadSeed, refetchSeed]);
 
   return (
-    <section className="section" aria-label="任务统计">
+    <section className="section campus-teacher-statistics" aria-label="任务统计" id="teacher-statistics">
       <div className="section-head">
-        <h3 className="section-title">任务统计</h3>
+        <h2 className="section-title">任务统计</h2>
       </div>
       {state.kind === "loading" ? (
         <SectionSkeleton lines={3} />

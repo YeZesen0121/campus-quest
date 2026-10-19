@@ -296,19 +296,21 @@ export function UploadPanel({
         （任务如有更严格的限制，以上传时的校验结果为准）。
       </p>
 
-      <div className="field">
-        <label className="field-label" htmlFor="submission-file">
-          选择文件
-        </label>
-        <input
-          id="submission-file"
-          className="input"
-          type="file"
-          accept={FILE_PICKER_ACCEPT}
-          value={inputValue}
-          onChange={onFileChange}
-          disabled={busy}
-        />
+      <div className="field upload-area">
+        <span className="field-label">选择要提交的数据文件</span>
+        <div className="submission-file-picker">
+          <input
+            id="submission-file"
+            className="sr-only"
+            type="file"
+            accept={FILE_PICKER_ACCEPT}
+            value={inputValue}
+            onChange={onFileChange}
+            disabled={busy}
+          />
+          <label className="btn btn-secondary" htmlFor="submission-file">选择文件</label>
+          <span>{state.filename ?? "尚未选择文件"}</span>
+        </div>
         {preCheckMessage !== null ? (
           <p className="field-error" role="alert">
             {preCheckMessage}
@@ -321,6 +323,12 @@ export function UploadPanel({
           当前文件：<span className="mono">{state.filename}</span>
           {state.fileSize !== null ? `（${formatFileSize(state.fileSize)}）` : null}
         </p>
+      ) : null}
+
+      {state.phase === "idle" ? (
+        <Button variant="primary" disabled={state.filename === null} onClick={onStartUpload}>
+          开始上传
+        </Button>
       ) : null}
 
       <p className="upload-phase-line" role="status" aria-live="polite">
@@ -347,12 +355,6 @@ export function UploadPanel({
       ) : null}
       {state.phase === "uploading" && state.progress === null ? (
         <p className="field-hint">正在建立上传连接…</p>
-      ) : null}
-
-      {state.phase === "idle" && state.filename !== null ? (
-        <Button variant="primary" onClick={onStartUpload}>
-          开始上传
-        </Button>
       ) : null}
 
       {state.phase === "prepare-failed" ||

@@ -58,7 +58,7 @@ test.describe("anonymous visitor (the guard's 401 path)", () => {
     page,
   }) => {
     await page.goto(`${BASE_URL}/notifications`);
-    await expect(page.getByRole("heading", { name: "登录 CampusQuest" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "登录华师令" })).toBeVisible();
     await expect(page.getByRole("link", { name: "去登录" })).toBeVisible();
     // No inbox affordances leak to the anonymous shell.
     await expect(page.getByLabel("通知收件箱")).toHaveCount(0);

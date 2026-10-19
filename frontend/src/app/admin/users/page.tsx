@@ -16,9 +16,7 @@ export default function AdminUsersPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">用户与账户</h1>
-        <p className="page-subtitle">
-          账号目录与状态管理；停用 / 封禁 / 恢复均需填写原因并记入审计日志
-        </p>
+        <p className="page-subtitle">按角色与账号状态查找，单独处理账号使用权限。</p>
       </div>
       <AdminUserAccounts />
     </>

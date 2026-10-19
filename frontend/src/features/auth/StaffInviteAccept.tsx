@@ -26,6 +26,8 @@ import { useState, type FormEvent } from "react";
 import { isApiError } from "@/lib/errors";
 
 import { AuthField } from "./AuthField";
+import { AuthPage } from "./AuthPage";
+import { AuthSteps } from "./AuthSteps";
 import { FormErrorSummary } from "./FormErrorSummary";
 import { SubmitButton } from "./SubmitButton";
 import { TotpSetup } from "./TotpSetup";
@@ -90,16 +92,20 @@ export function StaffInviteAccept({ token }: StaffInviteAcceptProps) {
 
   if (step.kind === "totp") {
     return (
-      <div className="invite-flow">
-        <p className="field-hint" role="status">
+      <AuthPage title="绑定动态口令" kicker="员工账号激活" description="密码已设置，完成绑定后即可激活员工账号。" layout="wide">
+        <AuthSteps label="账号激活步骤" steps={['设置密码', '绑定动态口令']} current={1} />
+        <p className="sr-only" role="status">
           密码已设置。请完成动态口令（TOTP）绑定，激活员工账号。
         </p>
         <TotpSetup accessToken={step.accessToken} />
-      </div>
+      </AuthPage>
     );
   }
 
   return (
+    <AuthPage title="接受员工邀请" kicker="员工账号激活" description="设置密码后，继续完成动态口令绑定。">
+    <AuthSteps label="账号激活步骤" steps={['设置密码', '绑定动态口令']} current={0} />
+    <p className="auth-brief">邀请链接仅可使用一次，请一次性完成绑定。</p>
     <form className="form" onSubmit={onSubmit} noValidate>
       <FormErrorSummary view={summary} />
       <AuthField
@@ -129,7 +135,8 @@ export function StaffInviteAccept({ token }: StaffInviteAcceptProps) {
           disabled: submitting,
         }}
       />
-      <SubmitButton loading={submitting}>设置密码并继续</SubmitButton>
+      <SubmitButton loading={submitting} block={false}>设置密码并继续</SubmitButton>
     </form>
+    </AuthPage>
   );
 }

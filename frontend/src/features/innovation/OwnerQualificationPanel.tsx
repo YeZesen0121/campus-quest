@@ -67,12 +67,13 @@ function QualificationEditor({ initial, profile, dirty, onLatestProfile }: Owner
   }
 
   return <div className="panel form ie-draft-form">
-    <p role="status" aria-label="负责人资格状态">{view.label}</p>
+    <span className="campus-private-state">{record.status === "APPROVED" ? "已开通" : record.status === "PENDING" ? "待开通" : "未申请"}</span>
+    <p className="campus-qualification-title" role="status" aria-label="负责人资格状态">{view.label}</p>
     <p className="field-hint">{view.hint}</p>
     {record.profile_version !== null ? <p className="field-hint">本次申请使用第 {record.profile_version} 版已保存资料。</p> : null}
     {record.requested_at ? <p className="field-hint">申请时间：<time dateTime={record.requested_at}>{formatDeadlineDateTime(parseServerInstant(record.requested_at))}</time></p> : null}
     {record.approved_at ? <p className="field-hint">开通时间：<time dateTime={record.approved_at}>{formatDeadlineDateTime(parseServerInstant(record.approved_at))}</time></p> : null}
-    <p className="field-hint">私有项目和成果草稿仍可保存；负责人资格与成果核实是不同流程。</p>
+    <p className="campus-private-note">资格由管理员人工开通。私有项目和成果草稿仍可保存；负责人资格与成果核实是不同流程。</p>
     {error ? <div className="alert alert-error" role="alert"><p>{error.message}</p>{error.requestId ? <p className="req-id">请求 ID：{error.requestId}</p> : null}</div> : null}
     {profileMismatch ? <p className="alert alert-warning" role="alert">本人资料已在其他页面更新。当前输入已保留，请在最新负责人资料区核对并明确载入后再申请。</p> : null}
     {message ? <p role="status" aria-label="资格操作结果" className="alert alert-success">{message}</p> : null}

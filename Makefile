@@ -174,4 +174,5 @@ visual-regression:
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-navigation-visual.spec.ts --project=chromium
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-recruitment-visual.spec.ts --project=chromium
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-talents-visual.spec.ts --project=chromium
+	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 npx playwright test innovation-collaboration-visual.spec.ts --project=chromium
 	cd frontend && CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 CQ_E2E_MENTOR_WORLD=1 npx playwright test innovation-mentors.spec.ts --project=chromium

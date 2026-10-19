@@ -299,10 +299,11 @@ describe("settings stored-form parsers (backend system/service.py canonical form
 });
 
 describe("reward catalogue form bodies (presence-based edit contract)", () => {
-  const row: RewardCatalogueDto = {
+  const row: RewardCatalogueDto & { fulfillment_instructions: string | null } = {
     id: "r1",
     name: "文创礼包",
     description: "含贴纸",
+    fulfillment_instructions: null,
     point_cost: 100,
     stock: 10,
     per_user_term_limit: 1,
@@ -352,6 +353,25 @@ describe("reward catalogue form bodies (presence-based edit contract)", () => {
     const result = rewardFormToUpdateBody({ ...base, reason: "  " }, row);
     assert.equal(result.ok, false);
     assert.equal(result.body, undefined);
+  });
+
+  test("reward source edit: authorized instructions prefill without guessing hidden fields", () => {
+    const known = { ...row, fulfillment_instructions: "原发放说明" };
+    assert.equal(rewardFormFromCatalogue(known, toLocal).fulfillmentInstructions, "原发放说明");
+  });
+  test("reward source edit: changed authorized instructions use the existing diff-only PATCH", () => {
+    const known = { ...row, fulfillment_instructions: "原发放说明" };
+    const values = { ...rewardFormFromCatalogue(known, toLocal), fulfillmentInstructions: "  新发放说明  ", reason: "修改说明" };
+    assert.deepEqual(rewardFormToUpdateBody(values, known).body, { fulfillment_instructions: "新发放说明", reason: "修改说明" });
+  });
+  test("reward source edit: clear a held instruction with explicit null", () => {
+    const known = { ...row, fulfillment_instructions: "原发放说明" };
+    const values = { ...rewardFormFromCatalogue(known, toLocal), fulfillmentInstructions: "", reason: "清除说明" };
+    assert.deepEqual(rewardFormToUpdateBody(values, known).body, { fulfillment_instructions: null, reason: "清除说明" });
+  });
+  test("reward source edit: untouched null remains absent and review policy remains unmanaged", () => {
+    const values = { ...rewardFormFromCatalogue(row, toLocal), requiresManualReview: true, reason: "核对" };
+    assert.deepEqual(rewardFormToUpdateBody(values, row).body, { reason: "核对" });
   });
 
   test("create sends every managed field with tz-aware datetimes", () => {

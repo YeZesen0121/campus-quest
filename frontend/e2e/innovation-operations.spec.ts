@@ -46,7 +46,35 @@ test("operations identity: genuine admin grant, student visibility and confirmed
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true });
   try {
     const admin = await context.newPage();
-    await openAdmin(admin);
+    const [grantRead] = await Promise.all([
+      admin.waitForResponse((response) => response.request().method() === "GET" && new URL(response.url()).pathname.startsWith("/api/v1/admin/ie/operations-grants/") && response.status() === 200),
+      openAdmin(admin),
+    ]);
+    const currentVersion = (await grantRead.json()).version as number;
+    const authorization = admin.getByRole("region", { name: "当前账号运营授权", exact: true });
+    const compositionDifferences: string[] = [];
+    for (const width of [320, 390, 800, 1440]) {
+      await admin.setViewportSize({ width, height: 900 });
+      await admin.evaluate(async () => { await document.fonts.ready; });
+      const metrics = await authorization.evaluate((section) => {
+        const reason = section.querySelector("#operations-reason")!;
+        const field = reason.closest(".field")!, form = reason.closest("form")!;
+        const heading = section.querySelector("h2")!, status = section.querySelector('[role="status"]')!;
+        return { reasonTag: reason.tagName, reasonWidth: reason.getBoundingClientRect().width, fieldWidth: field.getBoundingClientRect().width, availableWidth: form.getBoundingClientRect().width, text: section.textContent, headingStateOffset: Math.abs(heading.getBoundingClientRect().top - status.getBoundingClientRect().top) };
+      });
+      if (metrics.reasonTag !== "TEXTAREA") compositionDifferences.push(`${width}: multiline reason field`);
+      // Approved admin.css caps this field at700px, except below640px.
+      const expectedReasonWidth = width >= 640 ? Math.min(700, metrics.availableWidth) : metrics.availableWidth;
+      if (Math.abs(metrics.reasonWidth - expectedReasonWidth) > 1 || Math.abs(metrics.fieldWidth - expectedReasonWidth) > 1) {
+        compositionDifferences.push(`${width}: approved reason width ${metrics.reasonWidth}/${metrics.fieldWidth}, expected ${expectedReasonWidth}`);
+      }
+      if (!metrics.text?.includes(`版本 ${currentVersion}`)) compositionDifferences.push(`${width}: actual grant version`);
+      if (width >= 640 && metrics.headingStateOffset > 12) compositionDifferences.push(`${width}: state beside heading`);
+      expect(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await admin.screenshot({ path: testInfo.outputPath("admin-grant-selected-" + width + ".png"), fullPage: true });
+    }
+    await admin.setViewportSize({ width: 390, height: 844 });
+    expect(compositionDifferences, "approved selected grant composition").toEqual([]);
     await admin.getByRole("button", { name: "授予运营身份", exact: true }).click();
     await expect(admin.getByLabel("操作原因", { exact: true })).toBeFocused();
     await grant(admin);

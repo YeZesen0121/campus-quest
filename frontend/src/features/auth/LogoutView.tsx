@@ -37,9 +37,11 @@ export function LogoutView() {
     }
   }
   return <>
-    <div className="auth-head"><h1 className="auth-title">退出当前账号</h1><p className="auth-subtitle">退出当前浏览器的登录会话，然后可换用另一个演示账号。</p></div>
+    <p className="auth-brief">退出当前浏览器的登录会话，然后可换用另一个账号。</p>
     {failed ? <p className="alert alert-error" role="alert" aria-label="退出结果">退出尚未确认，可能是网络或服务暂时不可用。请重试；确认完成前不要将此浏览器交给他人。</p> : null}
-    <Button block disabled={busy} onClick={() => void confirm()}>{busy ? "正在退出…" : failed ? "重试退出登录" : "确认退出登录"}</Button>
-    {!busy && !failed ? <p className="auth-alt-action"><Link className="link" href="/innovation">取消，返回创新创业</Link></p> : null}
+    <div className="auth-actions">
+      <Button disabled={busy} onClick={() => void confirm()}>{busy ? "正在退出…" : failed ? "重试退出登录" : "确认退出登录"}</Button>
+      {!busy && !failed ? <Link className="btn btn-secondary" href="/innovation">取消，返回创新创业</Link> : null}
+    </div>
   </>;
 }

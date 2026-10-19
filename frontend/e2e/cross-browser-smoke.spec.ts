@@ -11,12 +11,11 @@
  * Chromium run collects nothing from this file, so the main suite and
  * its baselines are untouched.
  *
- * WEBKIT NOTE: Playwright's webkit fill() sets the DOM value without
- * the input event React's controlled components listen for — the
- * first post-hydration render rolls the field back to empty (probed:
- * fill reads 18 immediately, 0 within ~200ms; typing holds). The
- * keyboard path (pressSequentially) is the faithful user interaction
- * anyway, so every text entry in THIS spec types.
+ * Native keyboard entry starts only after the form enables its inputs.
+ * pressSequentially does not wait for enabled state: typing into the
+ * server-rendered disabled field loses keystrokes before hydration.
+ * Assert the complete entered value before submitting. Each TOTP attempt
+ * replaces the previous value and only a real auth rejection can retry.
  */
 import { createHmac } from "node:crypto";
 
@@ -75,8 +74,11 @@ async function studentLoginTyped(
 ): Promise<void> {
   const [username, password] = credentials.split(":");
   await page.goto(`${BASE}/login`);
+  await expect(page.getByLabel("学号")).toBeEnabled();
   await page.getByLabel("学号").pressSequentially(username, { delay: 2 });
   await page.getByLabel("密码").pressSequentially(password, { delay: 2 });
+  await expect(page.getByLabel("学号")).toHaveValue(username);
+  await expect(page.getByLabel("密码")).toHaveValue(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);
   // Session anchor: the app shell must render the AUTHED layout (the
@@ -97,6 +99,10 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
     await page.goto(`${BASE}/profile/project-drafts`);
     await expect(page.getByRole("button", { name: "新建项目草稿", exact: true })).toBeVisible();
     await page.getByRole("link", { name: "我的账户", exact: true }).click();
+    // Growth's ready-only honors region settles the page above the footer.
+    // Otherwise its skeleton can expand between mouse-down and mouse-up,
+    // moving the logout link away from the pointer without activating it.
+    await expect(page.getByRole("region", { name: "获得的荣誉", exact: true })).toBeVisible();
     await page.getByRole("region", { name: "退出当前账号", exact: true }).getByRole("link", { name: "退出登录", exact: true }).click();
     await page.getByRole("button", { name: "确认退出登录", exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
@@ -137,17 +143,27 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
     );
     const page = await browser.newPage();
     await page.goto(`${BASE}/staff/login`);
+    await expect(page.getByLabel("邮箱")).toBeEnabled();
     await page.getByLabel("邮箱").pressSequentially(staff[0], { delay: 2 });
     await page.getByLabel("密码").pressSequentially(staff[1] ?? "", { delay: 2 });
+    await expect(page.getByLabel("邮箱")).toHaveValue(staff[0]);
+    await expect(page.getByLabel("密码")).toHaveValue(staff[1] ?? "");
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      await page.getByLabel("动态验证码").pressSequentially(totpCode(totpSecret), { delay: 2 });
+      const code = totpCode(totpSecret);
+      await page.getByLabel("动态验证码").fill("");
+      await page.getByLabel("动态验证码").pressSequentially(code, { delay: 2 });
+      await expect(page.getByLabel("动态验证码")).toHaveValue(code);
+      const submitted = page.waitForResponse(response =>
+        new URL(response.url()).pathname === "/api/v1/auth/staff/login" && response.request().method() === "POST");
       await page.getByRole("button", { name: "登录", exact: true }).click();
-      try {
-        await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: 5_000 });
+      const response = await submitted;
+      if (response.ok()) {
+        await expect(page).not.toHaveURL(/\/staff\/login/);
         break;
-      } catch {
-        /* TOTP step rollover — recompute like a user would */
       }
+      const body = await response.json() as { error?: { code?: string } };
+      expect(response.status(), "only a genuine auth rejection can recompute TOTP").toBe(401);
+      expect(body.error?.code).toBe("AUTHENTICATION_REQUIRED");
     }
     await expect(page).not.toHaveURL(/\/staff\/login/);
     await page.goto(`${BASE}/teacher/reviews`);

@@ -11,20 +11,25 @@ import { getAuthEpoch } from "@/lib/accessToken";
 
 import { getOwnerProfile, saveOwnerProfile, type OwnerFields, type OwnerProfileDto } from "./ownerApi";
 import { describeOwnerSaveError, EMPTY_OWNER_FIELDS, normalizeOwnerFields, ownerFields, OWNER_FIELDS, validateOwnerFields, type OwnerFieldErrors, type OwnerSaveError } from "./ownerForm";
+import { PrivateHeader } from "./PrivateWorkspace";
 import { OwnerQualificationPanel } from "./OwnerQualificationPanel";
 
 export function OwnerProfileView() {
   const { state } = useSession();
   if (state.status !== "authenticated") return null;
-  if (state.me.role !== "STUDENT" || state.me.status !== "ACTIVE") return <p className="alert alert-warning" role="alert">仅正常状态的学生账号可以管理自己的负责人资料。</p>;
+  if (state.me.role !== "STUDENT" || state.me.status !== "ACTIVE") return <><OwnerHeader /><p className="alert alert-warning" role="alert">仅正常状态的学生账号可以管理自己的负责人资料。</p></>;
   return <ProfileLoader key={`${state.me.id}:${getAuthEpoch()}`} />;
 }
 
 function ProfileLoader() {
   const { state, retry } = useSection(getOwnerProfile);
-  if (state.status === "loading") return <div role="status" aria-label="正在读取负责人资料"><SectionSkeleton /></div>;
-  if (state.status === "error") return <SectionError error={state.error} onRetry={retry} />;
+  if (state.status === "loading") return <><OwnerHeader /><div role="status" aria-label="正在读取负责人资料"><SectionSkeleton /></div></>;
+  if (state.status === "error") return <><OwnerHeader /><SectionError error={state.error} onRetry={retry} /></>;
   return <ProfileEditor initial={state.data.profile} />;
+}
+
+function OwnerHeader({ onLeave }: { onLeave?: () => boolean }) {
+  return <PrivateHeader title="负责人资料与资格" subtitle="先保存本人资料，再申请负责人资格；管理员查看本次申请的资料快照。" current="owner" onLeave={onLeave} />;
 }
 
 function ProfileEditor({ initial }: { initial: OwnerProfileDto | null }) {
@@ -86,21 +91,24 @@ function ProfileEditor({ initial }: { initial: OwnerProfileDto | null }) {
   }
 
   return (
+    <>
+    <OwnerHeader onLeave={() => !busy && (!dirty || window.confirm("当前资料尚未保存，确定离开吗？"))} />
     <section className="section" aria-label="负责人资料编辑器">
+      <div className="campus-owner-layout"><div className="section">
       <h2 className="section-title" ref={heading} tabIndex={-1}>本人负责人资料</h2>
       <form className="panel form ie-draft-form" method="post" onSubmit={submit} noValidate ref={form}>
-        <p className="field-hint">四项均为必填。保存不会自动开通负责人资格；保存后请在负责人资格区申请，由管理员人工开通。申请时会提交四项资料快照供管理员确认。</p>
-        {OWNER_FIELDS.map(({ key, label, limit }) => (
+        <p className="field-hint">四项均为必填；申请仅提交已保存的资料快照。保存不会自动开通负责人资格。</p>
+        <div className="campus-private-fields">{OWNER_FIELDS.map(({ key, label, limit }) => (
           <AuthField key={key} name={`owner-${key}`} label={label} error={errors[key]} hint={`必填，最多 ${limit} 个字符。`}
             inputProps={{ type: "text", required: true, autoComplete: "off", value: fields[key], disabled: busy, onChange: (event) => { setFields({ ...fields, [key]: event.target.value }); setSaved(false); } }} />
-        ))}
+        ))}</div>
         {error ? <div className="alert alert-error" role="alert">
           <p>{error.message}</p>
           {error.requestId ? <p className="req-id">请求 ID：{error.requestId}</p> : null}
           {error.reload ? <Button variant="secondary" disabled={busy} onClick={() => void readLatest()}>读取最新资料（保留当前输入）</Button> : null}
         </div> : null}
-        <p className={saved ? "alert alert-success" : "field-hint"} role="status" aria-label="负责人资料保存状态">{busy ? "正在保存或读取，请稍候…" : saved ? "资料已保存；保存资料不会自动开通负责人资格。" : dirty ? "有未保存的修改。" : record ? "当前资料已保存。" : "尚未填写负责人资料。"}</p>
-        <SubmitButton loading={busy} disabled={error?.reload === true}>保存负责人资料</SubmitButton>
+        <p className="field-hint" role="status" aria-label="负责人资料保存状态">{busy ? "正在保存或读取，请稍候…" : saved ? "资料已保存；保存资料不会自动开通负责人资格。" : dirty ? "有未保存的修改。" : record ? "当前资料已保存。" : "尚未填写负责人资料。"}</p>
+        <SubmitButton block={false} loading={busy} disabled={error?.reload === true}>保存负责人资料</SubmitButton>
       </form>
       {remote ? <section className="panel ie-draft-remote" aria-label="最新负责人资料">
         <h3 className="section-title">最新负责人资料</h3>
@@ -110,7 +118,8 @@ function ProfileEditor({ initial }: { initial: OwnerProfileDto | null }) {
           setRecord(remote.profile); setFields(remote.profile ? ownerFields(remote.profile) : EMPTY_OWNER_FIELDS); setRemote(null); setError(null); setErrors({}); setSaved(false); heading.current?.focus();
         }}>载入此资料（替换当前输入）</Button>
       </section> : null}
-      <OwnerQualificationPanel profile={record} dirty={dirty || busy || error?.reload === true} onLatestProfile={setRemote} />
+      </div><OwnerQualificationPanel profile={record} dirty={dirty || busy || error?.reload === true} onLatestProfile={setRemote} /></div>
     </section>
+    </>
   );
 }

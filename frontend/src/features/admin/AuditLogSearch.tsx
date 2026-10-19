@@ -95,20 +95,16 @@ export function AuditLogSearch() {
 
   return (
     <section className="section" aria-label="审计日志检索">
-      <div className="section-head">
-        <h2 className="section-title">审计日志</h2>
-      </div>
-      <p className="field-hint">
-        只读检索，按操作名 / 操作者 / 目标类型精确过滤（均需完整匹配）。
-      </p>
-      <form className="panel" onSubmit={onSearch}>
+      <form className="panel campus-admin-filter campus-admin-audit-filter" onSubmit={onSearch}>
         <div className="form-grid">
           <div className="field">
             <label className="field-label" htmlFor="audit-filter-action">
-              操作名（如 USER_SUSPENDED）
+              操作名
             </label>
             <input
               id="audit-filter-action"
+              aria-label="操作名（如 USER_SUSPENDED）"
+              aria-describedby="audit-action-hint"
               className="input mono"
               value={filters.action}
               onChange={(event) =>
@@ -116,6 +112,7 @@ export function AuditLogSearch() {
               }
               placeholder="USER_SUSPENDED"
             />
+            <p className="field-hint" id="audit-action-hint">精确匹配，例如 USER_SUSPENDED</p>
           </div>
           <div className="field">
             <label className="field-label" htmlFor="audit-filter-actor">
@@ -123,6 +120,8 @@ export function AuditLogSearch() {
             </label>
             <input
               id="audit-filter-actor"
+              aria-label="操作者用户 ID"
+              aria-describedby="audit-actor-hint"
               className="input mono"
               value={filters.actor}
               onChange={(event) =>
@@ -130,13 +129,16 @@ export function AuditLogSearch() {
               }
               placeholder="00000000-0000-0000-0000-000000000000"
             />
+            <p className="field-hint" id="audit-actor-hint">精确匹配，填写完整用户 ID</p>
           </div>
           <div className="field">
             <label className="field-label" htmlFor="audit-filter-target">
-              目标类型（如 system_setting）
+              目标类型
             </label>
             <input
               id="audit-filter-target"
+              aria-label="目标类型（如 system_setting）"
+              aria-describedby="audit-target-hint"
               className="input mono"
               value={filters.targetType}
               onChange={(event) =>
@@ -144,6 +146,7 @@ export function AuditLogSearch() {
               }
               placeholder="system_setting"
             />
+            <p className="field-hint" id="audit-target-hint">精确匹配，例如 system_setting</p>
           </div>
         </div>
         <div className="dialog-actions">
@@ -232,25 +235,25 @@ function AuditRow({ row }: { row: AuditLogDto }) {
     row.after_snapshot !== null;
   return (
     <tr>
-      <td>
+      <td data-label="时间">
         <time className="notif-time" dateTime={row.created_at}>
           {formatDeadlineDateTime(parseServerInstant(row.created_at))}
         </time>
       </td>
-      <td className="mono">{row.action}</td>
-      <td>
+      <td className="mono" data-label="操作">{row.action}</td>
+      <td data-label="操作者">
         <span className="mono" title={row.actor_user_id}>
           {roleLabel(row.actor_role)} {row.actor_user_id.slice(0, 8)}…
         </span>
       </td>
-      <td>
+      <td data-label="目标">
         <span className="mono">
           {row.target_type} {row.target_id.slice(0, 8)}
           {row.target_id.length > 8 ? "…" : ""}
         </span>
       </td>
-      <td>{row.reason ?? "—"}</td>
-      <td>
+      <td data-label="原因">{row.reason ?? "—"}</td>
+      <td data-label="快照">
         {hasSnapshot ? (
           <details>
             <summary>查看</summary>

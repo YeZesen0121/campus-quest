@@ -37,6 +37,9 @@ export interface RedeemDialogProps {
   spendablePoints: number | null;
   open: boolean;
   onClose: () => void;
+  /** The actual opener and stable shelf if refetch removes/disables it. */
+  returnFocusTo?: HTMLElement | null;
+  returnFocusFallback?: HTMLElement | null;
   /**
    * Boundary hook: fires with the server's redemption on success so the
    * page refetches wallet + shelf (patterns §3: refetch at boundaries).
@@ -50,6 +53,8 @@ export function RedeemDialog({
   open,
   onClose,
   onRedeemed,
+  returnFocusTo,
+  returnFocusFallback,
 }: RedeemDialogProps) {
   return (
     <Dialog
@@ -60,7 +65,19 @@ export function RedeemDialog({
         }
       }}
     >
-      <DialogContent aria-labelledby="redeem-dialog-title">
+      <DialogContent
+        className="reward-confirmation"
+        aria-labelledby="redeem-dialog-title"
+        onCloseAutoFocus={(event) => {
+          const target = returnFocusTo?.isConnected && !returnFocusTo.matches(':disabled')
+            ? returnFocusTo
+            : returnFocusFallback?.isConnected ? returnFocusFallback : null;
+          if (target !== null) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         {/* The primitive unmounts the content on close, so the body's
             attempt state starts fresh on every open — the legacy reset-
             on-open effect's job, without an effect. */}
@@ -146,6 +163,14 @@ function RedeemDialogBody({
             <DialogFooter>
               <button
                 type="button"
+                className="btn btn-secondary"
+                onClick={onClose}
+                disabled={submitting}
+              >
+                取消
+              </button>
+              <button
+                type="button"
                 className="btn btn-primary"
                 onClick={() => void submit()}
                 disabled={submitting}
@@ -154,14 +179,6 @@ function RedeemDialogBody({
               >
                 {submitting ? <span className="spinner" aria-hidden="true" /> : null}
                 <span>确认兑换</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={onClose}
-                disabled={submitting}
-              >
-                取消
               </button>
             </DialogFooter>
           </>

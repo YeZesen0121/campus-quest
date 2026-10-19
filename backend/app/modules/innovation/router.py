@@ -18,6 +18,7 @@ from app.modules.identity.dependencies import (
 )
 from app.modules.identity.events import Actor
 from app.modules.innovation.schemas import (
+    ProjectCreationReplayResponse,
     ProjectDraftCreate,
     ProjectDraftListResponse,
     ProjectDraftResponse,
@@ -48,14 +49,18 @@ def get_project_draft_service(
 Service = Annotated[ProjectDraftService, Depends(get_project_draft_service)]
 
 
-@router.post("", response_model=ProjectDraftResponse, status_code=201)
+@router.post(
+    "",
+    response_model=ProjectDraftResponse | ProjectCreationReplayResponse,
+    status_code=201,
+)
 async def create_draft(
     payload: ProjectDraftCreate,
     response: Response,
     db: Database,
     actor: Student,
     service: Service,
-) -> ProjectDraftResponse:
+) -> ProjectDraftResponse | ProjectCreationReplayResponse:
     draft, created = await service.create(db, actor=actor, payload=payload)
     response.status_code = 201 if created else 200
     return draft

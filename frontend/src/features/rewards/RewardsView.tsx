@@ -51,12 +51,17 @@ interface LatestRedemption {
   redemption: RedemptionDto;
   itemName: string;
 }
+interface RewardDialogSelection {
+  reward: RewardItemDto;
+  trigger: HTMLButtonElement;
+  fallback: HTMLElement | null;
+}
 import { Button } from "@/components/ui/button";
 
 export function RewardsView() {
   const wallet = useSection(() => myWallet(), "GET /api/v1/points/me");
   const shelf = useSection(() => listRewards(), "GET /api/v1/rewards");
-  const [dialogReward, setDialogReward] = useState<RewardItemDto | null>(null);
+  const [dialogReward, setDialogReward] = useState<RewardDialogSelection | null>(null);
   const [latest, setLatest] = useState<LatestRedemption | null>(null);
 
   const spendablePoints =
@@ -78,12 +83,18 @@ export function RewardsView() {
         items={shelf.state.status === "ready" ? shelf.state.data.items : null}
         retry={shelf.retry}
         spendablePoints={spendablePoints}
-        onRedeem={setDialogReward}
+        onRedeem={(reward, trigger) => setDialogReward({
+          reward,
+          trigger,
+          fallback: trigger.closest<HTMLElement>('.reward-shelf-section'),
+        })}
       />
       {dialogReward !== null ? (
         <RedeemDialog
-          key={dialogReward.id}
-          reward={dialogReward}
+          key={dialogReward.reward.id}
+          reward={dialogReward.reward}
+          returnFocusTo={dialogReward.trigger}
+          returnFocusFallback={dialogReward.fallback}
           spendablePoints={spendablePoints}
           open
           onClose={() => setDialogReward(null)}
@@ -102,7 +113,7 @@ export function RewardsView() {
 
 // --- wallet hero ------------------------------------------------------------------
 
-function WalletSection({
+export function WalletSection({
   status,
   error,
   data,
@@ -127,8 +138,8 @@ function WalletSection({
       ? nextRewardView(data.spendable_points, shelfItems)
       : null;
   return (
-    <section className="section" aria-label="积分余额">
-      <SectionHeading title="积分余额" />
+    <section className="section wallet-section" aria-label="积分余额">
+      <div className="sr-only"><SectionHeading title="积分余额" /></div>
       {status === "loading" ? <SectionSkeleton lines={2} /> : null}
       {status === "error" ? <SectionError error={error} onRetry={retry} /> : null}
       {status === "ready" && data !== null ? (
@@ -142,8 +153,8 @@ function WalletSection({
             }
           >
             <div className="balance-hero-main">
+              <p className="balance-label">可花费</p>
               <p className="balance-hero-stat">
-                <span className="metric-label">可花费</span>
                 <span className="stat-focus">{data.spendable_points}</span>
                 <span className="balance-hero-unit">积分</span>
               </p>
@@ -153,6 +164,8 @@ function WalletSection({
             </div>
             {goal !== null ? (
               <div className="goal-rail-block balance-hero-goal">
+                <p className="balance-goal-label">下一份奖励</p>
+                <p className="balance-goal-name">{goal.rewardName}<span>{goal.rewardCost} 积分</span></p>
                 <div
                   className="goal-rail"
                   role="progressbar"
@@ -165,16 +178,11 @@ function WalletSection({
                     className="goal-rail-fill"
                     style={{ width: `${Math.round(goal.ratio * 100)}%` }}
                   />
-                  <span
-                    className="goal-rail-node"
-                    data-reached={goal.remainingPoints === null}
-                    aria-hidden="true"
-                  />
                 </div>
                 <p className="progress-note">
                   {goal.remainingPoints === null
-                    ? `「${goal.rewardName}」（${goal.rewardCost} 积分）现在就可以兑换`
-                    : `距兑换「${goal.rewardName}」还差 ${goal.remainingPoints} 积分`}
+                    ? "现在可以兑换"
+                    : `还差 ${goal.remainingPoints} 积分`}
                 </p>
               </div>
             ) : null}
@@ -200,7 +208,7 @@ function WalletSection({
 function LatestRedemptionPanel({ latest }: { latest: LatestRedemption }) {
   const status = redemptionStatusView(latest.redemption.status);
   return (
-    <section className="section" aria-label="最近兑换">
+    <section className="section latest-redemption" aria-label="最近兑换">
       <SectionHeading title="最近兑换" />
       <div className="panel">
         <div className="claim-row-top">
@@ -239,11 +247,11 @@ function ShelfSection({
    * wallet loads (tiles then keep the pre-plan-13 enabled behavior —
    * the server's typed conflict teaches). */
   spendablePoints: number | null;
-  onRedeem: (item: RewardItemDto) => void;
+  onRedeem: (item: RewardItemDto, trigger: HTMLButtonElement) => void;
 }) {
   return (
-    <section className="section" aria-label="奖励货架">
-      <SectionHeading title="奖励货架" />
+    <section className="section reward-shelf-section" aria-label="奖励货架" tabIndex={-1}>
+      <SectionHeading title="奖励货架" action={<span className="field-hint">兑换申请需经老师审核</span>} />
       {status === "loading" ? <SectionCardsSkeleton cards={3} /> : null}
       {status === "error" ? <SectionError error={error} onRetry={retry} /> : null}
       {status === "ready" && items !== null ? (
@@ -282,7 +290,7 @@ export function RewardCard({
 }: {
   item: RewardItemDto;
   spendablePoints: number | null;
-  onRedeem: (item: RewardItemDto) => void;
+  onRedeem: (item: RewardItemDto, trigger: HTMLButtonElement) => void;
 }) {
   const view = rewardShelfView(item);
   const cta = rewardCtaView(item, spendablePoints);
@@ -299,36 +307,33 @@ export function RewardCard({
       ) : null}
       {/* Cost is the tile's primary signal; stock/window stay quiet
           metadata (both are the server's own verdicts verbatim). */}
-      <p className="reward-price">
-        <span className="reward-cost meta-num">{item.point_cost} 积分</span>
-      </p>
       {view.stockLabel !== null || view.windowLabel !== null ? (
         <div className="reward-card-meta">
           {view.stockLabel !== null ? <span>{view.stockLabel}</span> : null}
           {view.windowLabel !== null ? <span>{view.windowLabel}</span> : null}
         </div>
       ) : null}
-      {cta.kind === "unavailable" ? (
-        // 缺货 / 窗口关闭: quiet unavailable treatment — no button to
-        // knock on; the state text + the quiet metadata carry it.
-        <p className="reward-unavailable">{view.stateLabel}</p>
-      ) : (
-        <>
-          {/* Spendability is the server's call (patterns §3): only the
-              wallet's OWN spendable figure disables the button, and any
-              stale-wallet attempt still meets the typed conflict. */}
-          <Button
-            variant="primary"
-            onClick={() => onRedeem(item)}
-            disabled={cta.kind === "insufficient"}
-          >
-            兑换
-          </Button>
-          {cta.kind === "insufficient" ? (
-            <p className="reward-cta-note">还差 {cta.missingPoints} 积分</p>
-          ) : null}
-        </>
-      )}
+      <p className="reward-price"><strong className="reward-cost meta-num">{item.point_cost}</strong> 积分</p>
+      <div className="reward-card-action">
+        {cta.kind === "unavailable" ? (
+          <p className="reward-unavailable">{view.stateLabel}</p>
+        ) : (
+          <>
+            {/* Only the wallet's own spendable figure disables the action;
+                stale attempts still meet the server's typed conflict. */}
+            <Button
+              variant="primary"
+              onClick={(event) => onRedeem(item, event.currentTarget)}
+              disabled={cta.kind === "insufficient"}
+            >
+              兑换
+            </Button>
+            {cta.kind === "insufficient" ? (
+              <p className="reward-cta-note">还差 {cta.missingPoints} 积分</p>
+            ) : null}
+          </>
+        )}
+      </div>
     </li>
   );
 }

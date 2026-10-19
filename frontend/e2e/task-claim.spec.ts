@@ -102,11 +102,22 @@ test.describe("student task claim", () => {
   test("claim allocates server-side and reveals only the user's assignment", async ({ page }) => {
     await page.goto(TASK_URL!);
 
+    const claimed = page.waitForResponse(response =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === `/api/v1${new URL(TASK_URL!, BASE_URL).pathname}/claim`);
     await page.getByRole("button", { name: "领取任务" }).click();
+    const allocationResponse = await claimed;
+    expect(allocationResponse.status()).toBe(201);
+    const allocation = await allocationResponse.json() as { claim_id: string; platform: string; keyword: string };
 
     // The after-allocation panel appears (role=status announces success).
     const panel = page.locator(".claim-panel");
     await expect(panel).toBeVisible();
+    const allocatedFact = panel.locator('.assignment-item').first();
+    await expect(allocatedFact).toHaveCSS('border-top-width', '0px');
+    const labelBounds = (await allocatedFact.locator('.assignment-label').boundingBox())!;
+    const valueBounds = (await allocatedFact.locator('.assignment-value').boundingBox())!;
+    expect(valueBounds.x).toBeGreaterThan(labelBounds.x + labelBounds.width);
     // Exactly ONE platform + ONE keyword — the allocated pair, never a list.
     await expect(panel.getByText("平台", { exact: true })).toHaveCount(1);
     await expect(panel.getByText("关键词", { exact: true })).toHaveCount(1);
@@ -117,6 +128,15 @@ test.describe("student task claim", () => {
     // display). The panel carries TWO 截止 texts (deadline line + the
     // grace note), so the pin targets the deadline line itself.
     await expect(panel.locator(".deadline-line")).toBeVisible();
+    const continuation = panel.getByRole('link', { name: '继续提交', exact: true });
+    await expect(continuation).toHaveAttribute('href', `/claims/${allocation.claim_id}`);
+    await Promise.all([
+      page.waitForURL(new URL(`/claims/${allocation.claim_id}`, BASE_URL).toString()),
+      continuation.click(),
+    ]);
+    const ownAssignment = page.getByRole('region', { name: '分配给你的任务单元', exact: true });
+    await expect(ownAssignment).toContainText(allocation.platform);
+    await expect(ownAssignment).toContainText(allocation.keyword);
   });
 
   test("conflict shows typed copy and stays retry-friendly", async ({ page }) => {
@@ -162,13 +182,20 @@ test.describe("task card affordances (defect #5)", () => {
     }
   });
 
-  test("the title reads as a link at rest (quiet underline, defect #5.3)", async ({ page }) => {
+  test("the task link keeps its real destination across the whole card", async ({ page }) => {
+    const card = page.locator('.task-card').first();
     const title = page.locator(".task-card .task-card-title a").first();
     await expect(title).toBeVisible();
-    await expect(title).toHaveCSS("text-decoration-line", "underline");
-    // And it still points at the task's own detail route.
+    // The approved visual sample removes the old rest underline. Keep the
+    // real affordance: the quiet card itself remains the link's hit area.
     const href = await title.getAttribute("href");
     expect(href).toMatch(/^\/tasks\/[0-9a-f-]{36}$/);
+    await card.scrollIntoViewIfNeeded();
+    const box = (await card.boundingBox())!;
+    await Promise.all([
+      page.waitForURL(new URL(href!, BASE_URL).toString()),
+      page.mouse.click(box.x + box.width - 8, box.y + box.height - 8),
+    ]);
   });
 
   test("focusing the title outlines the whole card in primary (keyboard selection)", async ({ page }) => {

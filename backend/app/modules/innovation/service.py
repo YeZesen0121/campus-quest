@@ -8,6 +8,7 @@ Nothing here grants project-owner qualification or publishes any content.
 
 import hashlib
 import json
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -22,6 +23,7 @@ from app.modules.identity.events import Actor
 from app.modules.identity.models import User
 from app.modules.innovation.models import ProjectDraft
 from app.modules.innovation.schemas import (
+    ProjectCreationReplayResponse,
     ProjectDraftCreate,
     ProjectDraftListResponse,
     ProjectDraftResponse,
@@ -39,6 +41,7 @@ def _response(row: ProjectDraft) -> ProjectDraftResponse:
         direction=row.direction,
         stage=row.stage,
         team_status=row.team_status,
+        lifecycle=cast(Literal["ACTIVE", "COMPLETED"], row.lifecycle),
         version=row.version,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -84,7 +87,7 @@ class ProjectDraftService:
         *,
         actor: Actor,
         payload: ProjectDraftCreate,
-    ) -> tuple[ProjectDraftResponse, bool]:
+    ) -> tuple[ProjectDraftResponse | ProjectCreationReplayResponse, bool]:
         await _require_student(db, actor, lock=True)
         content = payload.model_dump(include=set(_CONTENT_FIELDS))
         fingerprint = hashlib.sha256(
@@ -100,6 +103,7 @@ class ProjectDraftService:
             pg_insert(ProjectDraft)
             .values(
                 owner_user_id=actor.user_id,
+                creator_user_id=actor.user_id,
                 creation_request_id=payload.request_id,
                 creation_payload_fingerprint=fingerprint,
                 **content,
@@ -107,7 +111,7 @@ class ProjectDraftService:
                 created_at=now,
                 updated_at=now,
             )
-            .on_conflict_do_nothing(constraint="uq_ie_project_drafts_owner_request")
+            .on_conflict_do_nothing(constraint="uq_ie_project_drafts_creator_request")
             .returning(ProjectDraft)
         )
         created = row is not None
@@ -115,7 +119,7 @@ class ProjectDraftService:
             row = await db.scalar(
                 select(ProjectDraft)
                 .where(
-                    ProjectDraft.owner_user_id == actor.user_id,
+                    ProjectDraft.creator_user_id == actor.user_id,
                     ProjectDraft.creation_request_id == payload.request_id,
                 )
                 .execution_options(populate_existing=True)
@@ -128,7 +132,11 @@ class ProjectDraftService:
                     "此创建请求已用于不同内容，请重新新建草稿",
                     status_code=409,
                 )
-        result = _response(row)
+        result: ProjectDraftResponse | ProjectCreationReplayResponse = (
+            _response(row)
+            if row.owner_user_id == actor.user_id
+            else ProjectCreationReplayResponse(id=row.id)
+        )
         await db.commit()
         return result, created
 

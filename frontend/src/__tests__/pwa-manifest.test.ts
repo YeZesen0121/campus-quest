@@ -39,10 +39,9 @@ describe("oklchToHex (reference OKLab -> sRGB pipeline)", () => {
   });
 
   test("the design tokens convert to their pinned sRGB values", () => {
-    // Ink direction: primary deepened/saturated (V1 blue #2a67bd ->
-    // ink #2b59c8); the page ground warmed earlier (see background pin).
-    assert.equal(oklchToHex(DESIGN_TOKENS.primary), "#2b59c8");
-    assert.equal(oklchToHex(DESIGN_TOKENS.background), "#f8f6f3");
+    // Approved 2026-10-16 blue and warm paper, including PWA chrome.
+    assert.equal(oklchToHex(DESIGN_TOKENS.primary), "#335d99");
+    assert.equal(oklchToHex(DESIGN_TOKENS.background), "#f5f3ec");
   });
 
   test("anything outside the token grammar is a RangeError, not a guess", () => {

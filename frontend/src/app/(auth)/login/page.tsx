@@ -2,10 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { LoginForm } from "@/features/auth/LoginForm";
+import { AuthPage } from "@/features/auth/AuthPage";
 
 export const metadata: Metadata = {
-  title: "登录 · CampusQuest",
-  description: "使用学号和密码登录 CampusQuest",
+  title: "登录 · 华师令",
+  description: "使用学号和密码登录华师令",
 };
 
 interface LoginPageProps {
@@ -18,11 +19,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const reset = params.reset === "1";
 
   return (
-    <>
-      <div className="auth-head">
-        <h1 className="auth-title">登录 CampusQuest</h1>
-        <p className="auth-subtitle">使用学号和密码登录</p>
-      </div>
+    <AuthPage title="登录华师令" kicker="校内空间"
+      description="使用学号和密码，继续你的校园实践。"
+      links={<>
+        <Link href="/register">首次使用，注册账号</Link>
+        <Link href="/staff/login">教师 / 管理员入口</Link>
+        <Link href="/mentor/login">导师入口</Link>
+      </>}>
       {registered ? (
         <div className="alert alert-success" role="status">
           <p>注册成功，请使用学号登录。</p>
@@ -33,21 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p>密码已重置，请使用新密码登录。</p>
         </div>
       ) : null}
-      <LoginForm />
-      <p className="auth-alt-action">
-        <Link className="link" href="/mentor/login">导师登录：确认与维护导师档案</Link>
-      </p>
-      <p className="auth-alt-action">
-        还没有账号？
-        <Link className="link" href="/register">
-          注册学生账号
-        </Link>
-      </p>
-      <p className="auth-alt-action">
-        <Link className="link" href="/forgot-password">
-          忘记密码？
-        </Link>
-      </p>
-    </>
+      <LoginForm secondaryAction={<Link href="/forgot-password">忘记密码</Link>} />
+    </AuthPage>
   );
 }

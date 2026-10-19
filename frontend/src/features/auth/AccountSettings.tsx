@@ -59,6 +59,7 @@ import {
   validatePasswordConfirmation,
 } from "@/features/auth/accountView";
 import { Button } from "@/components/ui/button";
+import { DividedSections } from "@/components/ui/dividedSections";
 
 /** Re-auth failure copy for the settings forms (login copy doesn't fit). */
 const REAUTH_ERROR_TEXT = "当前密码不正确，请重新输入";
@@ -125,7 +126,7 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="section" aria-label={title}>
+    <section className="section account-section" aria-label={title}>
       <div className="section-head">
         <h2 className="section-title">{title}</h2>
       </div>
@@ -135,7 +136,7 @@ export function SettingsSection({
   );
 }
 
-export function AccountSettings() {
+export function AccountSettings({ avatar }: { avatar?: ReactNode }) {
   const { state, refresh } = useSession();
   if (state.status !== "authenticated") {
     return null; // The shell gates the whole group on the session.
@@ -143,12 +144,18 @@ export function AccountSettings() {
   const me = state.me;
 
   return (
-    <>
+    <div className="account-settings">
+      <p className="field-hint account-notice">仅本人可见</p>
+      <DividedSections>
+      {avatar}
       <NicknameForm me={me} onUpdated={refresh} />
+      </DividedSections>
+      <DividedSections className="account-contact-sections">
       <PhoneChangeForm me={me} onUpdated={refresh} />
       <EmailPanel me={me} onUpdated={refresh} />
+      </DividedSections>
       <PasswordForm onUpdated={refresh} />
-    </>
+    </div>
   );
 }
 
@@ -200,7 +207,7 @@ function NicknameForm({
           label="昵称"
           counter={`${count}/${NICKNAME_MAX_GRAPHEME_CLUSTERS}`}
           counterOver={count > NICKNAME_MAX_GRAPHEME_CLUSTERS}
-          hint="展示给其他同学的名称；按显示字符计数，emoji 算 1 个。"
+          hint="展示给其他同学的名称，最多 16 个显示字符。"
           error={fieldErrors.nickname}
           inputProps={{
             value,
@@ -215,7 +222,7 @@ function NicknameForm({
             {savedNote}
           </p>
         ) : null}
-        <SubmitButton loading={submitting}>保存昵称</SubmitButton>
+        <SubmitButton loading={submitting} block={false}>保存昵称</SubmitButton>
       </form>
     </SettingsSection>
   );
@@ -326,7 +333,7 @@ function PhoneChangeForm({
   }
 
   return (
-    <SettingsSection title="手机号" hint={CURRENT_PASSWORD_HINT}>
+    <SettingsSection title="手机号">
       <div className="panel form">
         <p className="field-hint">当前手机号：{me.phone_e164 ?? "未绑定"}</p>
         {step === "request" ? (
@@ -342,6 +349,7 @@ function PhoneChangeForm({
             <AuthField
               name="phone-password"
               label="当前密码"
+              hint={CURRENT_PASSWORD_HINT}
               error={fieldErrors.password}
               inputProps={{
                 value: password,
@@ -365,7 +373,7 @@ function PhoneChangeForm({
                 disabled: requesting,
               }}
             />
-            <SubmitButton loading={requesting}>发送验证码</SubmitButton>
+            <SubmitButton loading={requesting} block={false}>发送验证码</SubmitButton>
           </form>
         ) : (
           <form className="form" onSubmit={onConfirm} noValidate>
@@ -385,9 +393,8 @@ function PhoneChangeForm({
                 disabled: submitting,
               }}
             />
-            <SubmitButton loading={submitting}>确认更换手机号</SubmitButton>
+            <SubmitButton loading={submitting} block={false}>确认更换手机号</SubmitButton>
             <Button
-              block
               variant="secondary"
               onClick={() => void sendChallenge(true)}
               disabled={remaining > 0 || requesting}
@@ -395,7 +402,6 @@ function PhoneChangeForm({
               {remaining > 0 ? `重新发送（${remaining} 秒）` : "重新发送验证码"}
             </Button>
             <Button
-              block
               variant="secondary"
               onClick={() => backToRequest("已取消，可重新填写。")}
               disabled={submitting}
@@ -523,7 +529,7 @@ function EmailPanel({
   }
 
   return (
-    <SettingsSection title="邮箱" hint={view.hint}>
+    <SettingsSection title="邮箱">
       <div className="panel form">
         <p className="field-hint">
           当前邮箱：{view.email ?? "未绑定"}{" "}
@@ -539,6 +545,7 @@ function EmailPanel({
             {view.statusLabel}
           </span>
         </p>
+        <p className="field-hint">{view.hint}</p>
 
         {view.state !== "verified" ? (
           <>
@@ -557,7 +564,7 @@ function EmailPanel({
                   disabled: sending,
                 }}
               />
-              <SubmitButton loading={sending} variant="secondary">
+              <SubmitButton loading={sending} variant="secondary" block={false}>
                 发送验证邮件
               </SubmitButton>
             </form>
@@ -576,7 +583,7 @@ function EmailPanel({
                   disabled: verifying,
                 }}
               />
-              <SubmitButton loading={verifying}>验证并绑定</SubmitButton>
+              <SubmitButton loading={verifying} block={false}>验证并绑定</SubmitButton>
             </form>
           </>
         ) : unbindOpen ? (
@@ -594,9 +601,8 @@ function EmailPanel({
                 disabled: unbinding,
               }}
             />
-            <SubmitButton loading={unbinding}>确认解绑邮箱</SubmitButton>
+            <SubmitButton loading={unbinding} block={false}>确认解绑邮箱</SubmitButton>
             <Button
-              block
               variant="secondary"
               onClick={() => setUnbindOpen(false)}
               disabled={unbinding}
@@ -667,9 +673,10 @@ function PasswordForm({ onUpdated }: { onUpdated: () => void }) {
   }
 
   return (
-    <SettingsSection title="密码" hint="修改密码需要验证当前密码。">
+    <SettingsSection title="密码" hint="修改后，其他设备上的登录会全部退出，当前登录保留。">
       <form className="panel form" onSubmit={onSubmit} noValidate>
         <FormErrorSummary view={summary} />
+        <div className="account-password-fields">
         <AuthField
           name="current_password"
           label="当前密码"
@@ -707,12 +714,13 @@ function PasswordForm({ onUpdated }: { onUpdated: () => void }) {
             disabled: submitting,
           }}
         />
+        </div>
         {note !== null ? (
           <p className="alert alert-success" role="status">
             {note}
           </p>
         ) : null}
-        <SubmitButton loading={submitting}>更新密码</SubmitButton>
+        <SubmitButton loading={submitting} block={false}>更新密码</SubmitButton>
       </form>
     </SettingsSection>
   );

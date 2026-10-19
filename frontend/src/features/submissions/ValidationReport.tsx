@@ -17,12 +17,12 @@ import {
   type FindingItemView,
 } from "./validationView";
 
-export function ValidationReport({ report }: { report: ValidationReportDto }) {
+export function ValidationReport({ report, heading = "校验报告" }: { report: ValidationReportDto; heading?: string }) {
   const view = validationReportView(report);
   return (
     <section className="validation-report" aria-label="校验报告">
       <div className="report-head">
-        <h3 className="report-title">校验报告</h3>
+        <h3 className="report-title">{heading}</h3>
         <span className={`badge badge-${view.passed ? "success" : "danger"}`}>
           {view.passed ? "校验通过" : "校验未通过"}
         </span>

@@ -5,3 +5,9 @@ export function recruitmentQuery(values: Record<string, string | string[] | unde
   for (const key of keys) { const value = values[key]; if (typeof value === "string" && value !== "") params.set(key, value); }
   return params.toString();
 }
+
+/** Only same-list public filters travel with a detail link; never an arbitrary URL. */
+export function campusDiscoveryHref(kind: 'projects' | 'recruitments', query: string, id?: string): string {
+  const context = recruitmentQuery(Object.fromEntries(new URLSearchParams(query)));
+  return `/innovation/${kind}${id ? `/${encodeURIComponent(id)}` : ''}${context ? `?${context}` : ''}`;
+}

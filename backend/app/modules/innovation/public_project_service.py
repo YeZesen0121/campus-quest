@@ -3,11 +3,23 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, case, func, literal, or_, select, union_all
+from sqlalchemy import (
+    Integer,
+    Select,
+    String,
+    case,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock
 from app.modules.identity.events import Actor
+from app.modules.innovation.lifecycle_models import ProjectIntroduction
+from app.modules.innovation.lifecycle_visibility import visible_introductions
 from app.modules.innovation.models import AchievementDraft, ProjectDraft
 from app.modules.innovation.public_achievement_service import PublicAchievementService
 from app.modules.innovation.public_recruitment_service import (
@@ -53,6 +65,8 @@ class PublicProjectService:
                 literal("ACHIEVEMENT").label("source_kind"),
                 AchievementWorkflow.latest_update_at.label("stamp"),
                 AchievementWorkflow.achievement_id.label("source_id"),
+                literal(None, Integer).label("introduction_revision"),
+                literal(None, String).label("introduction_source"),
             )
             .select_from(AchievementWorkflow)
             .join(
@@ -80,8 +94,30 @@ class PublicProjectService:
             literal("RECRUITMENT").label("source_kind"),
             RecruitmentRevision.created_at.label("stamp"),
             RecruitmentDraft.id.label("source_id"),
+            literal(None, Integer).label("introduction_revision"),
+            literal(None, String).label("introduction_source"),
         )
-        sources = union_all(achievements, recruitments).cte("public_project_sources")
+        intro = ProjectIntroduction.fields
+        introductions = visible_introductions().with_only_columns(
+            ProjectIntroduction.project_id.label("project_id"),
+            intro["title"].astext.label("title"),
+            intro["summary"].astext.label("summary"),
+            intro["direction"].astext.label("direction"),
+            intro["stage"].astext.label("stage"),
+            literal("").label("role_name"),
+            literal(-1).label("priority"),
+            literal("INTRODUCTION").label("source_kind"),
+            ProjectIntroduction.created_at.label("stamp"),
+            ProjectIntroduction.id.label("source_id"),
+            ProjectIntroduction.number.label("introduction_revision"),
+            case(
+                (ProjectIntroduction.achievement_id.is_not(None), "ACHIEVEMENT"),
+                else_="RECRUITMENT",
+            ).label("introduction_source"),
+        )
+        sources = union_all(achievements, recruitments, introductions).cte(
+            "public_project_sources"
+        )
         ranked = select(
             sources,
             func.row_number()
@@ -116,11 +152,15 @@ class PublicProjectService:
                 ranked.c.direction,
                 ranked.c.stage,
                 ranked.c.source_kind,
+                ranked.c.introduction_revision,
+                ranked.c.introduction_source,
+                ProjectDraft.lifecycle,
                 counts.c.achievement_count,
                 counts.c.recruitment_count,
                 ranked.c.stamp,
             )
             .join(counts, counts.c.project_id == ranked.c.project_id)
+            .join(ProjectDraft, ProjectDraft.id == ranked.c.project_id)
             .where(ranked.c.rank == 1)
         )
         if filters.q or filters.direction or filters.stage:
@@ -161,6 +201,9 @@ class PublicProjectService:
             direction=row.direction,
             stage=row.stage,
             source_kind=row.source_kind,
+            lifecycle=row.lifecycle,
+            introduction_revision=row.introduction_revision,
+            introduction_source=row.introduction_source,
             achievement_count=row.achievement_count,
             recruitment_count=row.recruitment_count,
         )

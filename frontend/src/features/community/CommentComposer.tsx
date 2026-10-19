@@ -202,7 +202,7 @@ export function CommentComposer({
       <div className="composer-actions">
         <Button
           type="submit"
-          variant="primary"
+          variant="secondary"
           disabled={busy}
           aria-busy={busy}
         >

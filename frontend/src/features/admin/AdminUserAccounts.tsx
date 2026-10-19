@@ -13,6 +13,8 @@
  * `describeAdminMutationError` and suggests a refresh.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -147,22 +149,9 @@ export function AdminUserAccounts() {
   }, []);
 
   return (
-    <section className="section" aria-label="账号目录">
-      <div className="section-head">
-        <h2 className="section-title">账号目录</h2>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setPhase("loading");
-            setReloadSeed((seed) => seed + 1);
-          }}
-        >
-          刷新
-        </Button>
-      </div>
-
+    <section className="section" aria-label="账号目录" data-admin-return="users" tabIndex={-1}>
       <form
-        className="panel"
+        className="panel campus-admin-filter"
         onSubmit={(event) => {
           event.preventDefault();
         }}
@@ -170,10 +159,11 @@ export function AdminUserAccounts() {
         <div className="form-grid">
           <div className="field">
             <label className="field-label" htmlFor="user-filter-role">
-              角色筛选
+              角色
             </label>
             <select
               id="user-filter-role"
+              aria-label="角色筛选"
               className="input"
               value={filters.role}
               onChange={(event) => {
@@ -191,10 +181,11 @@ export function AdminUserAccounts() {
           </div>
           <div className="field">
             <label className="field-label" htmlFor="user-filter-status">
-              状态筛选
+              账号状态
             </label>
             <select
               id="user-filter-status"
+              aria-label="状态筛选"
               className="input"
               value={filters.status}
               onChange={(event) => {
@@ -209,6 +200,21 @@ export function AdminUserAccounts() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="row-actions">
+          <Button
+            variant="primary"
+            onClick={() => {
+              setPhase("loading");
+              setReloadSeed((seed) => seed + 1);
+            }}
+          >
+            筛选
+          </Button>
+          <Button variant="secondary" onClick={() => {
+            setFilters({ role: "", status: "" });
+            setPhase("loading");
+          }}>清空</Button>
           </div>
         </div>
       </form>
@@ -235,7 +241,7 @@ export function AdminUserAccounts() {
                   <th scope="col">学号 / 用户名</th>
                   <th scope="col">昵称</th>
                   <th scope="col">角色</th>
-                  <th scope="col">状态</th>
+                  <th scope="col" className="cq-status-cell">状态</th>
                   <th scope="col">注册时间</th>
                   <th scope="col">用户 ID</th>
                   <th scope="col">操作</th>
@@ -270,6 +276,8 @@ export function AdminUserAccounts() {
         </>
       )}
 
+      <p className="field-hint">停用、封禁和恢复均需填写原因，并记入审计日志；账号处理与注册白名单分别管理。</p>
+
       {acting !== null ? (
         <AccountStatusDialog
           kind={acting.kind}
@@ -292,23 +300,23 @@ function UserRow({
   const status = userStatusView(user.status);
   return (
     <tr>
-      <td className="staff-cell-title mono">{user.username}</td>
-      <td>{user.nickname}</td>
-      <td>{roleLabel(user.role)}</td>
-      <td>
+      <td className="staff-cell-title mono" data-label="学号 / 用户名">{user.username}</td>
+      <td data-label="昵称">{user.nickname}</td>
+      <td data-label="角色">{user.role === "MENTOR" ? "导师" : roleLabel(user.role)}</td>
+      <td className="cq-status-cell" data-label="状态">
         <span className={`badge badge-${status.tone}`}>{status.label}</span>
       </td>
-      <td>
+      <td data-label="注册时间">
         <time className="notif-time" dateTime={user.created_at}>
           {formatDeadlineDateTime(parseServerInstant(user.created_at))}
         </time>
       </td>
-      <td>
-        <span className="mono" title="用户 ID（可用于授权与审计检索）">
+      <td data-label="用户 ID">
+        <span className="mono" title={`${user.id}（可用于授权与审计检索）`}>
           {user.id}
         </span>
       </td>
-      <td>
+      <td data-label="操作">
         <div className="row-actions">
           {accountActions(user.status).map((action) => (
             <Button
@@ -337,6 +345,7 @@ function AccountStatusDialog({
   onDone: (verdict: AccountStatusDto) => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="users"]'));
   const action = accountActionView(kind);
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -390,7 +399,7 @@ function AccountStatusDialog({
         onPointerDownOutside={(event) => {
           // The legacy dialog had no backdrop-click close.
           event.preventDefault();
-        }}
+        }} className="campus-admin-dialog" {...dialogFocus}
       >
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="account-status-title">{action.title}</DialogTitle>
@@ -428,6 +437,9 @@ function AccountStatusDialog({
             </div>
           ) : null}
           <DialogFooter>
+            <Button variant="secondary" onClick={onCancel} disabled={busy}>
+              取消
+            </Button>
             <Button
               type="submit"
               variant={action.buttonClass === "btn-danger" ? "danger" : "primary"}
@@ -436,9 +448,6 @@ function AccountStatusDialog({
             >
               {busy ? <span className="spinner" aria-hidden="true" /> : null}
               <span>{action.confirmLabel}</span>
-            </Button>
-            <Button variant="secondary" onClick={onCancel} disabled={busy}>
-              取消
             </Button>
           </DialogFooter>
         </form>

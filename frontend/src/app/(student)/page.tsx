@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { DashboardView } from "@/features/dashboard/DashboardView";
 
 export const metadata: Metadata = {
-  title: "我的主页 · CampusQuest",
+  title: "我的主页 · 华师令",
   description: "需要处理的任务、积分与奖励进度、月度排名",
 };
 
@@ -14,12 +14,12 @@ export const metadata: Metadata = {
  */
 export default function StudentHomePage() {
   return (
-    <>
-      <div className="page-head">
-        <h1 className="page-title">我的主页</h1>
+    <div className="student-task-page student-home-page">
+      <div className="page-head student-page-heading">
+        <h1 className="page-title">首页</h1>
         <p className="page-subtitle">需要处理的任务、积分进度与排名</p>
       </div>
       <DashboardView />
-    </>
+    </div>
   );
 }

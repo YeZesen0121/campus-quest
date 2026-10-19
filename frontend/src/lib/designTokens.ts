@@ -22,11 +22,11 @@
  * Keep the strings byte-identical to the CSS (the test enforces this).
  */
 export const DESIGN_TOKENS = {
-  /** `--primary` — the one clear accent; PWA theme_color. Ink direction:
-   * one notch more saturation so it carries the dark rail's identity. */
-  primary: "oklch(50% 0.18 264)",
+  /** `--primary` — the one clear accent; PWA theme_color. Approved 2026-10-16
+   * restrained blue, mirrored from the CSS source of truth. */
+  primary: "oklch(47.811487% 0.108178 257.500024)",
   /** `--background` — large page background; PWA background_color. */
-  background: "oklch(97.4% 0.005 90)",
+  background: "oklch(96.376251% 0.009524 93.568995)",
 } as const;
 
 /** Matches `oklch(<L>% <C> <H>)` with one optional leading `+`/`-` on H. */

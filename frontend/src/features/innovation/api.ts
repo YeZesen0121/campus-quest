@@ -4,6 +4,7 @@ import type { components } from "@/lib/api/schema";
 
 type Schemas = components["schemas"];
 export type ProjectDraftDto = Schemas["ProjectDraftResponse"];
+export type ProjectDraftCreationResult = ProjectDraftDto | Schemas["ProjectCreationReplayResponse"];
 export type ProjectDraftPageDto = Schemas["ProjectDraftListResponse"];
 export type DraftFields = Pick<ProjectDraftDto, "title" | "summary" | "direction" | "stage" | "team_status">;
 
@@ -29,8 +30,8 @@ export function getProjectDraft(id: string): Promise<ProjectDraftDto> {
   return inDraftSession(() => apiRequest<ProjectDraftDto>(`${PATH}/${encodeURIComponent(id)}`));
 }
 
-export function createProjectDraft(fields: DraftFields, requestId: string): Promise<ProjectDraftDto> {
-  return inDraftSession(() => apiRequest<ProjectDraftDto>(PATH, { method: "POST", body: { ...fields, request_id: requestId } }));
+export function createProjectDraft(fields: DraftFields, requestId: string): Promise<ProjectDraftCreationResult> {
+  return inDraftSession(() => apiRequest<ProjectDraftCreationResult>(PATH, { method: "POST", body: { ...fields, request_id: requestId } }));
 }
 
 export function updateProjectDraft(id: string, fields: DraftFields, version: number): Promise<ProjectDraftDto> {

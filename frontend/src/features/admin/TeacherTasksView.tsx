@@ -112,10 +112,10 @@ export function TeacherTasksView() {
   }, []);
 
   return (
-    <>
+    <section className="campus-teacher-tasks" aria-label="任务管理列表">
       <div className="section-head">
         <p className="list-count">
-          {total !== null ? `共 ${total} 个任务（含协作）` : null}
+          所有状态按创建时间排列。任务的统计、任务单元与协作者在详情中管理。
         </p>
         <Button
           variant="primary"
@@ -144,13 +144,12 @@ export function TeacherTasksView() {
       ) : (
         <>
           <div className="table-scroll">
-            <table className="staff-table" aria-label="我的任务（含协作）">
+            <table className="staff-table campus-teacher-table" aria-label="我的任务（含协作）">
               <thead>
                 <tr>
                   <th scope="col">标题</th>
-                  <th scope="col">状态</th>
-                  <th scope="col">稀有度</th>
-                  <th scope="col">基础积分</th>
+                  <th scope="col" className="cq-status-cell">状态</th>
+                  <th scope="col">奖励</th>
                   <th scope="col">截止</th>
                   <th scope="col">创建时间</th>
                   <th scope="col">操作</th>
@@ -197,7 +196,7 @@ export function TeacherTasksView() {
         onClose={() => setCreateOpen(false)}
         onCreated={onCreated}
       />
-    </>
+    </section>
   );
 }
 
@@ -227,16 +226,16 @@ function TaskRow({
         <Link className="link" href={`/teacher/tasks/${encodeURIComponent(item.id)}`}>
           {item.title}
         </Link>
-      </td>
-      <td>
-        <span className={`badge badge-${status.tone}`}>{status.label}</span>
-      </td>
-      <td>
         <span className="rarity-badge" data-rarity={rarity.rarity}>
           {rarity.label}
         </span>
       </td>
-      <td className="meta-num">{item.base_reward_points}</td>
+      <td className="cq-status-cell">
+        <span className={`badge badge-${status.tone}`}>{status.label}</span>
+      </td>
+      <td className="campus-teacher-reward">
+        <span className="meta-num">{item.base_reward_points} 积分</span>
+      </td>
       <td>{deadlineText}</td>
       <td>{formatDeadlineDateTime(createdMs)}</td>
       <td>

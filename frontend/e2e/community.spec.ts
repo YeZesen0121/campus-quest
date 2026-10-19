@@ -494,7 +494,7 @@ test.describe("admin identity reveal on the moderation surface (spec §21.4; pla
 
   test("the listing stays anonymous; the dialog demands a reason, then reveals and records the audit", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await loginAsStaff(page, REVEAL_ADMIN!, REVEAL_ADMIN_TOTP_SECRET!);
     await page.goto(MODERATION_TASK_PATH!);
 
@@ -507,6 +507,30 @@ test.describe("admin identity reveal on the moderation surface (spec §21.4; pla
     await expect(anonymousRow.locator(".comment-author")).toHaveText("匿名用户");
     await expect(anonymousRow.locator(".moderation-key")).toBeVisible();
     await expect(anonymousRow.getByText("学号")).toHaveCount(0);
+
+    const focusFailures: string[] = [];
+    const identityReads: string[] = [];
+    page.on("request", request => { if (/\/api\/v1\/admin\/comments\/[^/]+\/reveal-identity$/.test(new URL(request.url()).pathname)) identityReads.push(request.method()); });
+    for (const width of [320, 390, 800, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(section.locator(".skeleton")).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      for (const [label, title] of [["删除评论", "删除评论"], ["揭示身份", "揭示匿名评论身份"]]) {
+        const action = anonymousRow.getByRole("button", { name: label, exact: true }); await action.focus(); await expect(action).toBeFocused();
+        const target = await action.boundingBox();
+        if (!target || target.width < 44 || target.height < 44) focusFailures.push(`${label}/${width}: target ${JSON.stringify(target)} smaller than44`);
+        if (!await action.evaluate(el => { const b = el.getBoundingClientRect(), n = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return n === el || el.contains(n); })) focusFailures.push(`${label}/${width}: target covered`);
+        await page.screenshot({ path: testInfo.outputPath(`moderation-${label}-${width}-natural.png`), animations: "disabled" });
+        await action.click(); const opened = page.getByRole("dialog", { name: title, exact: true }); await expect(opened).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`moderation-${label}-${width}-dialog.png`), animations: "disabled" });
+        await page.keyboard.press("Escape"); await expect(opened).toHaveCount(0);
+        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        if (!await action.evaluate(el => document.activeElement === el)) focusFailures.push(`${label}/${width}: Escape focus lost`);
+      }
+      await expect(anonymousRow.getByText("学号", { exact: true })).toHaveCount(0);
+    }
+    expect(identityReads).toEqual([]);
+    await page.setViewportSize({ width: 390, height: 900 });
 
     // Open the reveal dialog on that row.
     await anonymousRow.getByRole("button", { name: "揭示身份" }).click();
@@ -532,5 +556,21 @@ test.describe("admin identity reveal on the moderation surface (spec §21.4; pla
     await dialog.getByRole("button", { name: "关闭" }).click();
     await expect(dialog).not.toBeVisible();
     await expect(anonymousRow.locator(".comment-author")).toHaveText("匿名用户");
+    expect(identityReads).toEqual(["POST"]);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    if (!await anonymousRow.getByRole("button", { name: "揭示身份", exact: true }).evaluate(el => document.activeElement === el)) focusFailures.push("reveal: explicit close focus lost");
+    await anonymousRow.getByRole("button", { name: "删除评论", exact: true }).click();
+    const deletion = page.getByRole("dialog", { name: "删除评论", exact: true });
+    await deletion.getByRole("button", { name: "确认删除", exact: true }).click();
+    await expect(deletion).toContainText("删除原因必填（将记入审计日志）");
+    await deletion.getByLabel("删除原因", { exact: true }).fill("模拟治理检查：删除这条独立测试评论，保留历史与原因。");
+    const denied = page.waitForResponse(response => response.request().method() === "DELETE" && /\/api\/v1\/teacher\/comments\//.test(new URL(response.url()).pathname));
+    await deletion.getByRole("button", { name: "确认删除", exact: true }).click();
+    expect((await denied).status()).toBe(403);
+    await expect(deletion.getByRole("alert")).toContainText("只有任务所有者或拥有社区治理权限的协作者可以删除该评论");
+    await deletion.getByRole("button", { name: "取消", exact: true }).click();
+    await expect(anonymousRow.getByRole("button", { name: "删除评论", exact: true })).toBeFocused();
+    await expect(anonymousRow.locator(".comment-author")).toHaveText("匿名用户");
+    expect(focusFailures, focusFailures.join("\n")).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { NotificationInbox } from "@/features/notifications/NotificationInbox";
 import { parseInboxFilter } from "@/features/notifications/inboxView";
 
 export const metadata: Metadata = {
-  title: "通知 · CampusQuest",
+  title: "通知 · 华师令",
   description: "任务审核结果、截止提醒与兑换动态",
 };
 
@@ -30,12 +30,12 @@ export default async function NotificationsPage({
   const filter = parseInboxFilter(Array.isArray(raw) ? raw[0] : raw);
 
   return (
-    <>
+    <div className="student-growth-page">
       <div className="page-head">
         <h1 className="page-title">通知</h1>
         <p className="page-subtitle">任务审核结果、截止提醒与兑换动态</p>
       </div>
       <NotificationInbox key={filter} filter={filter} />
-    </>
+    </div>
   );
 }

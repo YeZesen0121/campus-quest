@@ -481,6 +481,63 @@ async def snapshot_honor_ids(
         return set((await db.execute(select(Honor.id))).scalars().all())
 
 
+async def guard_reward_cleanup(
+    db: AsyncSession, *, user_ids: Sequence[UUID], reward_item_ids: Sequence[UUID]
+) -> None:
+    """Keep other worlds' redemptions intact; hold locks until cleanup commits."""
+    users, items = list(user_ids), list(reward_item_ids)
+    # Match the request path's wallet -> item order. Lock users first, as
+    # actor-guarded requests do, and use UUID ordering within each family.
+    await db.execute(
+        select(User.id).where(User.id.in_(users)).order_by(User.id).with_for_update()
+    )
+    await db.execute(
+        select(PointWallet.user_id)
+        .where(PointWallet.user_id.in_(users))
+        .order_by(PointWallet.user_id)
+        .with_for_update()
+    )
+    await db.execute(
+        select(RewardItem.id)
+        .where(RewardItem.id.in_(items))
+        .order_by(RewardItem.id)
+        .with_for_update()
+    )
+    external_redemption = await db.scalar(
+        select(RewardRedemption.id)
+        .where(
+            RewardRedemption.user_id.not_in(users),
+            RewardRedemption.reward_item_id.in_(items)
+            | RewardRedemption.decided_by.in_(users),
+        )
+        .limit(1)
+    )
+    if external_redemption is not None:
+        raise RuntimeError(
+            "Reward redemption belongs outside this world; "
+            "include both worlds explicitly before cleanup"
+        )
+    external_reservation = await db.scalar(
+        select(PointReservation.id)
+        .where(
+            PointReservation.user_id.not_in(users),
+            PointReservation.redemption_id.in_(
+                select(RewardRedemption.id).where(
+                    RewardRedemption.user_id.in_(users)
+                    | RewardRedemption.reward_item_id.in_(items)
+                    | RewardRedemption.decided_by.in_(users)
+                )
+            ),
+        )
+        .limit(1)
+    )
+    if external_reservation is not None:
+        raise RuntimeError(
+            "Point reservation belongs outside this world; "
+            "include both worlds explicitly before cleanup"
+        )
+
+
 async def clean_world(
     factory: async_sessionmaker[AsyncSession],
     *,
@@ -508,6 +565,7 @@ async def clean_world(
     if not users and not tasks and not items and not whitelist_numbers:
         return
     async with factory() as db:
+        await guard_reward_cleanup(db, user_ids=users, reward_item_ids=items)
         # Refuse cross-world approval references before any mutation.
         external_approval = await db.scalar(
             select(OwnerQualification.user_id)
@@ -552,6 +610,9 @@ async def clean_world(
                 "Review belongs outside this world; "
                 "include both worlds explicitly before cleanup"
             )
+        from tests.e2e.collaboration_cleanup import clean_collaboration_world
+
+        await clean_collaboration_world(db, users)
         if whitelist_numbers:
             await db.execute(
                 delete(StudentWhitelist).where(

@@ -9,7 +9,7 @@
  * cookie and `apiRequest` sends credentials on the follow-up /me fetch.
  */
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 
 import { useSession } from "@/features/auth/session";
 import { MENTOR_LANDING_PATH, STUDENT_LANDING_PATH } from "@/features/auth/workspace";
@@ -30,7 +30,14 @@ import { validatePassword, validateUsername } from "./validation";
 
 type LoginFields = Extract<AuthFieldName, "username" | "password">;
 
-export function LoginForm({ account = "student" }: { account?: "student" | "mentor" }) {
+const subscribeToReadiness = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
+export function LoginForm({ account = "student", secondaryAction }: { account?: "student" | "mentor"; secondaryAction?: ReactNode }) {
+  // The SSR form remains visible while scripts load, but controlled fields
+  // cannot accept input until hydration has installed their handlers.
+  const ready = useSyncExternalStore(subscribeToReadiness, clientReady, serverReady);
   const router = useRouter();
   const { refresh: refreshSession } = useSession();
   const [username, setUsername] = useState("");
@@ -41,6 +48,7 @@ export function LoginForm({ account = "student" }: { account?: "student" | "ment
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!ready || loading) return;
     const trimmed = username.trim(); // backend strips outer whitespace at login (§5.2)
     const errors: Partial<Record<LoginFields, string>> = {
       username: validateUsername(trimmed, account) ?? undefined,
@@ -74,7 +82,7 @@ export function LoginForm({ account = "student" }: { account?: "student" | "ment
   }
 
   return (
-    <form className="form" onSubmit={onSubmit} noValidate>
+    <form className="form" onSubmit={onSubmit} noValidate aria-busy={!ready || loading}>
       <FormErrorSummary view={summary} />
       <AuthField
         name="username"
@@ -90,7 +98,7 @@ export function LoginForm({ account = "student" }: { account?: "student" | "ment
           autoCorrect: "off",
           placeholder: account === "mentor" ? "请输入导师账号" : "请输入学号",
           maxLength: account === "mentor" ? 64 : 20,
-          disabled: loading,
+          disabled: !ready || loading,
         }}
       />
       <AuthField
@@ -103,10 +111,13 @@ export function LoginForm({ account = "student" }: { account?: "student" | "ment
           type: "password",
           autoComplete: "current-password",
           placeholder: "请输入密码",
-          disabled: loading,
+          disabled: !ready || loading,
         }}
       />
-      <SubmitButton loading={loading}>登录</SubmitButton>
+      <div className="auth-inline-actions">
+        <SubmitButton loading={loading} disabled={!ready} block={false}>登录</SubmitButton>
+        {secondaryAction}
+      </div>
     </form>
   );
 }

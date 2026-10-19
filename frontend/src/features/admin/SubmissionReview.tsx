@@ -18,7 +18,10 @@
  * revision-required blocks on a mandatory note; invalidate-reward-lock
  * blocks on a mandatory reason and leads with the prominent warning.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DividedSections } from "@/components/ui/dividedSections";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 
 import {
   Dialog,
@@ -75,6 +78,14 @@ export function SubmissionReview() {
   const [reloadSeed, setReloadSeed] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const queueRef = useRef<HTMLDivElement>(null);
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  const mobileBackRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const back = mobileBackRef.current;
+    if (selectedId !== null && back?.getClientRects().length) back.focus();
+  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,8 +162,8 @@ export function SubmissionReview() {
   );
 
   return (
-    <>
-      {outcome !== null ? <OutcomeAlert outcome={outcome} onDismiss={() => setOutcome(null)} /> : null}
+    <section className="campus-teacher-review" aria-label="任务审核工作区">
+      {outcome !== null ? <div role="region" aria-label="任务审核处理结果" ref={outcomeRef} tabIndex={-1}><OutcomeAlert outcome={outcome} onDismiss={() => setOutcome(null)} /></div> : null}
       {phase === "loading" ? (
         <SectionSkeleton lines={6} />
       ) : phase === "error" ? (
@@ -170,8 +181,11 @@ export function SubmissionReview() {
           hint="学生提交通过机器校验后会进入这里等待人工审核"
         />
       ) : (
-        <div className="review-layout">
-          <div className="review-queue" aria-label="待审核提交">
+        <>
+        <div className="campus-review-summary"><p className="list-count"><strong>{total}</strong> 条待审核</p><p className="field-hint">按提交时间从早到晚排列</p><p className="field-hint">仅显示有权审核的任务</p></div>
+        <DividedSections className={selected ? "review-layout campus-review-selected" : "review-layout"}>
+          <div className="review-queue" aria-label="待审核提交" role="region" ref={queueRef}>
+            <h2>待审核提交</h2>
             {items.map((item) => (
               <QueueRow
                 key={item.submission_id}
@@ -199,21 +213,30 @@ export function SubmissionReview() {
               </div>
             ) : null}
           </div>
+          <div className="review-detail-pane">
+          {selected !== null ? <Button ref={mobileBackRef} variant="ghost" className="campus-review-mobile-back" onClick={() => {
+            const opener = queueRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]');
+            setSelectedId(null);
+            requestAnimationFrame(() => { if (opener?.isConnected) opener.focus(); });
+          }}><span aria-hidden="true">← </span>返回待审核队列</Button> : null}
           {selected !== null ? (
             <ReviewDetail
               key={selected.submission_id}
               item={selected}
               versions={versions}
               onDecided={onDecided}
+              fallbackFocus={() => outcomeRef.current}
             />
           ) : (
             <div className="review-detail review-detail-empty">
               <p className="empty-hint">从左侧选择一条提交开始审核。</p>
             </div>
           )}
-        </div>
+          </div>
+        </DividedSections>
+        </>
       )}
-    </>
+    </section>
   );
 }
 
@@ -249,13 +272,13 @@ function QueueRow({
         <span className={`badge badge-${claim.tone === "muted" ? "info" : claim.tone}`}>
           {claim.label}
         </span>
-        <span className={`badge badge-${review.tone}`}>{review.label}</span>
-        <span className="badge badge-info">{versionText(item.version)}</span>
-        <span className={`badge badge-${validation.tone}`}>{validation.label}</span>
-        <span className="meta-num review-tier">{lockedTierText(item)}</span>
+        {review.label !== claim.label ? <span className={`badge badge-${review.tone}`}>{review.label}</span> : null}
+        <span>{versionText(item.version)}</span>
+        <span className="campus-review-validation" data-tone={validation.tone}>{validation.label}</span>
         <time className="notif-time" dateTime={item.submitted_at}>
           {formatDeadlineDateTime(parseServerInstant(item.submitted_at))}
         </time>
+        <span className="meta-num review-tier">{lockedTierText(item)}</span>
       </span>
     </button>
   );
@@ -285,10 +308,12 @@ function ReviewDetail({
   item,
   versions,
   onDecided,
+  fallbackFocus,
 }: {
   item: ReviewQueueItemDto;
   versions: ReviewQueueItemDto[];
   onDecided: (decision: Outcome) => void;
+  fallbackFocus: () => HTMLElement | null;
 }) {
   const [dialog, setDialog] = useState<"approve" | "revision" | "invalidate" | null>(
     null,
@@ -362,7 +387,7 @@ function ReviewDetail({
       </dl>
 
       {item.validation !== null ? (
-        <ValidationReport report={item.validation} />
+        <ValidationReport report={item.validation} heading="机器校验报告" />
       ) : (
         <p className="field-hint">校验报告尚未生成。</p>
       )}
@@ -412,10 +437,12 @@ function ReviewDetail({
           判无效
         </Button>
       </div>
+      <p className="field-hint">机器校验仅检查文件与数据格式；内容质量由人工核对。</p>
 
       {dialog === "approve" ? (
         <ApproveDialog
           item={item}
+          fallbackFocus={fallbackFocus}
           onClose={() => setDialog(null)}
           onDone={(result) => {
             setDialog(null);
@@ -427,6 +454,7 @@ function ReviewDetail({
         <RevisionDialog
           mode="revision"
           item={item}
+          fallbackFocus={fallbackFocus}
           onClose={() => setDialog(null)}
           onDone={(result) => {
             setDialog(null);
@@ -438,6 +466,7 @@ function ReviewDetail({
         <RevisionDialog
           mode="invalidate"
           item={item}
+          fallbackFocus={fallbackFocus}
           onClose={() => setDialog(null)}
           onDone={(result) => {
             setDialog(null);
@@ -454,13 +483,16 @@ function ApproveDialog({
   item,
   onClose,
   onDone,
+  fallbackFocus,
 }: {
   item: ReviewQueueItemDto;
   onClose: () => void;
   onDone: (result: ApproveResultDto) => void;
+  fallbackFocus: () => HTMLElement | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, fallbackFocus);
 
   async function onConfirm() {
     if (busy) {
@@ -487,7 +519,7 @@ function ApproveDialog({
         }
       }}
     >
-      <DialogContent aria-labelledby="approve-title">
+      <DialogContent {...dialogFocus} aria-labelledby="approve-title">
         <DialogTitle id="approve-title">通过该提交</DialogTitle>
         <p className="field-hint">
           确认后该领取将标记为已完成
@@ -498,12 +530,12 @@ function ApproveDialog({
         </p>
         {error !== null ? <SectionError error={error} /> : null}
         <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
           <Button variant="primary" onClick={() => void onConfirm()} disabled={busy} aria-busy={busy}>
             {busy ? <span className="spinner" aria-hidden="true" /> : null}
             <span>确认通过</span>
-          </Button>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>
-            取消
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -521,11 +553,13 @@ function RevisionDialog({
   item,
   onClose,
   onDone,
+  fallbackFocus,
 }: {
   mode: "revision" | "invalidate";
   item: ReviewQueueItemDto;
   onClose: () => void;
   onDone: (result: RevisionResultDto) => void;
+  fallbackFocus: () => HTMLElement | null;
 }) {
   const [text, setText] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -538,6 +572,7 @@ function RevisionDialog({
   const placeholder = invalidate
     ? "例如：提交内容与分配的平台/关键词不符…"
     : "例如：缺少 keyword 列，请补充后重新提交…";
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, fallbackFocus);
 
   async function onSubmit() {
     if (busy) {
@@ -572,6 +607,7 @@ function RevisionDialog({
       }}
     >
       <DialogContent
+        {...dialogFocus}
         aria-labelledby={invalidate ? "invalidate-title" : "revision-title"}
         onPointerDownOutside={(event) => {
           // The legacy dialog had NO backdrop-click close (a half-typed
@@ -624,6 +660,9 @@ function RevisionDialog({
         </div>
         {error !== null ? <SectionError error={error} /> : null}
         <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
           <Button
             variant={invalidate ? "danger" : "primary"}
             onClick={() => void onSubmit()}
@@ -632,9 +671,6 @@ function RevisionDialog({
           >
             {busy ? <span className="spinner" aria-hidden="true" /> : null}
             <span>{invalidate ? "确认判无效" : "确认退回"}</span>
-          </Button>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>
-            取消
           </Button>
         </DialogFooter>
       </DialogContent>

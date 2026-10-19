@@ -17,10 +17,12 @@ export interface SidebarPreference {
   widthPx: number;
 }
 
-/** 14.5rem — mirrors the `--rail-width` token default (16px root). */
-export const RAIL_WIDTH_DEFAULT_PX = 232;
-/** 13rem — narrowest expanded rail that still reads 4-char zh labels. */
-export const RAIL_WIDTH_MIN_PX = 208;
+/** Approved ordinary 12.5rem rail (16px root), mirrored in globals.css. */
+export const RAIL_WIDTH_DEFAULT_PX = 200;
+/** Approved administrator 13rem default; saved user widths still win. */
+export const RAIL_WIDTH_ADMIN_DEFAULT_PX = 208;
+/** The approved ordinary rail is also the minimum expanded width. */
+export const RAIL_WIDTH_MIN_PX = 200;
 /** 25rem — widest drag target before the content column suffers. */
 export const RAIL_WIDTH_MAX_PX = 400;
 /** 4.5rem — mirrors `--rail-width-collapsed` (icon rail). */

@@ -12,6 +12,7 @@
  * All figures are server state; nothing here recomputes a business rule.
  */
 import Link from "next/link";
+import { DiscoveryArrow } from "@/features/innovation/PublicDiscoveryFrame";
 
 import {
   EmptyState,
@@ -61,9 +62,7 @@ export function DashboardView() {
   return (
     <>
       <HeroSection state={claims.state} retry={claims.retry} now={now} />
-      {/* Signature motif 3 (achievement): ONE asymmetric story on the
-          page ground — the points/next-reward rail dominates (2fr),
-          the rank snapshot rides compact (1fr). No equal card duel. */}
+      {/* Independent wallet and ranking sections share the approved summary band. */}
       <div className="dash-band">
         <PointsProgressSection />
         <RankSection />
@@ -112,9 +111,9 @@ function HeroSection({
         <p className="hero-eyebrow">开始今天的学习</p>
         <h2 className="hero-title">领取第一个任务，开始攒积分</h2>
         <p className="hero-line">完成任务获得积分，兑换你想要的奖励</p>
-        <Link className="btn btn-primary hero-cta" href="/tasks">
-          浏览任务
-        </Link>
+        <div className="hero-bottom">
+          <Link className="btn btn-primary hero-cta" href="/tasks">浏览任务</Link>
+        </div>
       </section>
     );
   }
@@ -131,15 +130,16 @@ function HeroAction({ next, now }: { next: NextActionView; now: number }) {
   return (
     <section className="hero" aria-label="当前最重要">
       <p className="hero-eyebrow">
+        <span>当前最重要</span>
         {next.kind === "revision" ? "老师退回修改，奖励档位已保留" : "进行中 · 最早截止"}
       </p>
       <h2 className="hero-title">{next.taskTitle}</h2>
-      <div className="hero-row">
-        {next.kind === "active" && next.deadlineAt !== null ? (
-          <p className="hero-line" suppressHydrationWarning>
-            截止 {formatDeadlineSummary(parseServerInstant(next.deadlineAt), now)}
-          </p>
-        ) : null}
+      {next.kind === "active" && next.deadlineAt !== null ? (
+        <p className="hero-line" suppressHydrationWarning>
+          截止 {formatDeadlineSummary(parseServerInstant(next.deadlineAt), now)}
+        </p>
+      ) : null}
+      <div className="hero-bottom">
         {steps.linear ? (
           <p className="hero-line">
             <span className="mini-rail" aria-hidden="true">
@@ -150,13 +150,10 @@ function HeroAction({ next, now }: { next: NextActionView; now: number }) {
             {currentStepLabel(steps)}
           </p>
         ) : null}
+        <Link className="btn btn-primary hero-cta" href={`/claims/${next.claimId}`}>
+          {next.kind === "revision" ? "去修改提交" : "继续提交"}<DiscoveryArrow />
+        </Link>
       </div>
-      <Link
-        className="btn btn-primary hero-cta"
-        href={`/claims/${next.claimId}`}
-      >
-        {next.kind === "revision" ? "去修改提交" : "继续提交"}
-      </Link>
     </section>
   );
 }
@@ -228,16 +225,12 @@ function ClaimRow({
 }) {
   const status = claimStatusView(claim.status);
   return (
-    // Review round 2 motif 1: claims as a TIMELINE, not cards — the
-    // status node on the left rail carries the state (color supplements
-    // the badge text, never replaces it).
     <Link className="claim-row-link" href={`/claims/${claim.claim_id}`}>
       <div className="claim-row" data-tone={status.tone}>
-        <span className="claim-node" aria-hidden="true" />
         <div className="claim-row-main">
           <div className="claim-row-top">
             <span className="claim-title">{claim.task_title}</span>
-            <span className={`badge badge-${status.tone}`}>{status.label}</span>
+            <span className="claim-row-destination"><span className={`badge badge-${status.tone}`}>{status.label}</span><DiscoveryArrow /></span>
           </div>
           {revision ? (
             // Design §14 preferred copy; the revision deadline is not part of
@@ -262,7 +255,7 @@ function PointsProgressSection() {
 
   return (
     <section className="section" aria-label="积分与奖励">
-      <SectionHeading title="积分与奖励" />
+      <SectionHeading title="积分与奖励" action={<Link className="link section-link" href="/rewards">查看奖励</Link>} />
       {wallet.state.status === "error" ? (
         <SectionError error={wallet.state.error} onRetry={wallet.retry} />
       ) : null}
@@ -305,8 +298,10 @@ function WalletBody({
     // (motif 1), earned/frozen/debt as quiet secondary facts.
     <div className="stat-block">
       <span className="metric-label">可用积分</span>
-      <span className="stat-focus">{wallet.available_points}</span>
-      <span className="metric-label stat-sub-label">累计获得 {wallet.earned_points}</span>
+      <div className="wallet-figure">
+        <span className="stat-focus">{wallet.available_points}</span>
+        <span className="metric-label stat-sub-label">累计获得 {wallet.earned_points}</span>
+      </div>
       {shelf.shelf === "loading" ? (
         <span className="skeleton skeleton-line" data-width="narrow" aria-label="正在加载可兑换奖励" />
       ) : null}
@@ -367,7 +362,7 @@ function RankSection() {
 
   return (
     <section className="section" aria-label="本月排名">
-      <SectionHeading title="本月排名" />
+      <SectionHeading title="本月排名" action={<Link className="link section-link" href="/rankings">查看排行榜</Link>} />
       {state.status === "loading" ? <SectionSkeleton lines={3} /> : null}
       {state.status === "error" ? (
         <SectionError error={state.error} onRetry={retry} />
@@ -430,8 +425,8 @@ function TasksPreviewSection({
       <SectionHeading
         title="最新任务"
         action={
-          <Link className="link section-link" href="/tasks">
-            查看全部
+          <Link className="link section-link campus-inline-action" href="/tasks">
+            查看全部<DiscoveryArrow />
           </Link>
         }
       />

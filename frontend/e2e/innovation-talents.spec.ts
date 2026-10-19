@@ -50,7 +50,7 @@ test('R4.1: public materials filter follows publication and withdrawal without c
   await expect(page.getByRole('button',{name:'下载 模拟材料标志.png',exact:true})).toBeVisible();
   await page.getByRole('link',{name:'返回人才列表',exact:true}).click();await expect(page).toHaveURL(/has_public_materials=true/);
   await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  const materialSelect=page.getByLabel('作品/证明材料筛选',{exact:true});await materialSelect.focus();await expect(materialSelect).toBeFocused();await page.keyboard.press('Tab');await expect(page.getByRole('checkbox').first()).toBeFocused();
+  const materialSelect=page.getByLabel('作品/证明材料筛选',{exact:true});await materialSelect.focus();await expect(materialSelect).toBeFocused();await page.keyboard.press('Tab');const skillToggle=page.locator('.campus-talent-filter-tags > summary');await expect(skillToggle).toBeFocused();await page.keyboard.press('Enter');await page.keyboard.press('Tab');await expect(page.getByRole('form',{name:'人才筛选'}).getByRole('checkbox').first()).toBeFocused();
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   const latest=(await ownRecord(page))!;
   const revoked=await page.request.post(`${API_URL}${TALENT_OWN}/files/${record.fields.file_ids[0]}/revoke`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:latest.version}});
@@ -151,10 +151,35 @@ test('R4: selected_ready_file_and_contact_are_visible_only_after_confirmation',a
     const download=viewer.waitForEvent('download');await viewer.getByRole('button',{name:'下载 模拟作品.png',exact:true}).click();
     const file=await download;expect(file.suggestedFilename()).toBe('模拟作品.png');const stream=await file.createReadStream();const chunks:Buffer[]=[];for await(const chunk of stream!)chunks.push(Buffer.from(chunk));expect(Buffer.concat(chunks)).toEqual(PNG);
     await viewer.getByRole('link',{name:'返回人才列表',exact:true}).click();await expect(viewer).toHaveURL(/q=.*&tag_ids=/);
-    await editor(page).getByLabel('自我介绍',{exact:true}).fill('PRIVATE_R4_DRAFT');await saveTalent(page);await viewer.goto(`${BASE_URL}/innovation/talents/${record.id}`);await expect(viewer.getByRole('main')).not.toContainText('PRIVATE_R4_DRAFT');
+    await editor(page).getByLabel('自我介绍',{exact:true}).fill('PRIVATE_R4_DRAFT');await saveTalent(page);
+    expect((await ownRecord(page))!.fields.introduction).toBe('PRIVATE_R4_DRAFT');
+    // Keep the real authorized response, but exercise a read slower than the
+    // DOM assertion's 5s and still inside talentApi's unchanged 15s budget.
+    const detailRoute = `**/api/v1/ie/talents/${record.id}`;
+    await viewer.route(detailRoute, async route => {
+      const response = await route.fetch();
+      await new Promise(resolve => setTimeout(resolve, 6_000));
+      await route.fulfill({ response });
+    });
+    const detailRead = viewer.waitForResponse(response =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/ie/talents/${record.id}`);
+    await viewer.goto(`${BASE_URL}/innovation/talents/${record.id}`);
+    const publicResponse = await detailRead;
+    expect(await publicResponse.finished()).toBeNull();expect(publicResponse.status()).toBe(200);
+    // Observe completion of this exact read, then keep the ordinary DOM and
+    // isolation assertions. A loading shell cannot satisfy the privacy check.
+    await expect(viewer.getByRole('article',{name:'校内人才详情'})).toBeVisible();
+    await viewer.unroute(detailRoute);
+    await expect(viewer.getByRole('main')).not.toContainText('PRIVATE_R4_DRAFT');
     await editor(page).getByRole('button',{name:'立即撤回微信授权',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认撤回授权',exact:true}).click();await expect(result(page)).toContainText('授权已撤回');
-    await viewer.reload();await expect(viewer.getByRole('region',{name:'人才授权联系'})).toContainText('暂未授权');await expect(viewer.getByRole('article')).not.toContainText('PRIVATE_R4_DRAFT');
-  }finally{await context.close();}
+    const revokedRead = viewer.waitForResponse(response =>
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === `/api/v1/ie/talents/${record.id}`);
+    await viewer.reload();const revokedResponse=await revokedRead;
+    expect(await revokedResponse.finished()).toBeNull();expect(revokedResponse.status()).toBe(200);
+    await expect(viewer.getByRole('region',{name:'人才授权联系'})).toContainText('暂未授权');await expect(viewer.getByRole('article')).not.toContainText('PRIVATE_R4_DRAFT');
+  }finally{await viewer.unrouteAll({behavior:'wait'});await context.close();}
 });
 
 test('R4: close_denies_old_profile_contact_and_file_links',async({page})=>{

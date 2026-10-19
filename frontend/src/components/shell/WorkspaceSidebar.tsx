@@ -43,6 +43,7 @@ export { navItemActive } from "./navigationMatch";
 import { PanelCollapseIcon, PanelExpandIcon } from "./navIcons";
 import {
   clampRailWidth,
+  RAIL_WIDTH_ADMIN_DEFAULT_PX,
   RAIL_WIDTH_DEFAULT_PX,
   RAIL_WIDTH_MAX_PX,
   RAIL_WIDTH_MIN_PX,
@@ -69,25 +70,26 @@ export interface SideNavGroup {
 /** Keyboard step for the resizer (a deliberate nudge, not a pixel). */
 const RESIZE_KEY_STEP_PX = 16;
 
-const DEFAULT_PREFERENCE: SidebarPreference = {
-  collapsed: false,
-  widthPx: RAIL_WIDTH_DEFAULT_PX,
-};
-
 export function WorkspaceSidebar({
   brand,
   groups,
   footer,
+  workspaceCaption,
+  density = workspaceCaption ? "compact" : "normal",
+  defaultWidthPx = RAIL_WIDTH_DEFAULT_PX,
 }: {
   brand: { href: string; label: string };
   groups: readonly SideNavGroup[];
   footer?: ReactNode;
+  workspaceCaption?: string;
+  density?: "normal" | "compact";
+  defaultWidthPx?: typeof RAIL_WIDTH_DEFAULT_PX | typeof RAIL_WIDTH_ADMIN_DEFAULT_PX;
 }) {
   const pathname = usePathname();
   // SSR and the first client render agree on the defaults; the stored
   // preference is applied in the mount effect (post-hydration), and
   // hydration itself never reads localStorage.
-  const [pref, setPref] = useState<SidebarPreference>(DEFAULT_PREFERENCE);
+  const [pref, setPref] = useState<SidebarPreference>(() => ({ collapsed: false, widthPx: defaultWidthPx }));
   const dragStart = useRef<{
     pointerId: number;
     startX: number;
@@ -117,21 +119,22 @@ export function WorkspaceSidebar({
   // consumes. Collapsed resolves THROUGH the collapsed token so the
   // icon-rail width stays rem-based (it scales with the user's font
   // size even though the drag itself works in screen pixels). At the
-  // DEFAULT expanded width we clear the inline override instead of
-  // writing `232px` — the rem-based CSS fallback keeps serving users
+  // Contextual default uses its rem token instead of a fixed pixel
+  // override. A saved former-default232 remains an explicit preference.
+  // The rem-based CSS default keeps serving users
   // whose root font differs from 16px (reviewer P3, PR #19).
   useEffect(() => {
     const rootStyle = document.documentElement.style;
     if (pref.collapsed) {
       rootStyle.setProperty("--rail-width", "var(--rail-width-collapsed)");
-      return;
+    } else if (pref.widthPx === defaultWidthPx) {
+      if (defaultWidthPx === RAIL_WIDTH_ADMIN_DEFAULT_PX) rootStyle.setProperty("--rail-width", "var(--rail-width-admin)");
+      else rootStyle.removeProperty("--rail-width");
+    } else {
+      rootStyle.setProperty("--rail-width", `${pref.widthPx}px`);
     }
-    if (pref.widthPx === RAIL_WIDTH_DEFAULT_PX) {
-      rootStyle.removeProperty("--rail-width");
-      return;
-    }
-    rootStyle.setProperty("--rail-width", `${pref.widthPx}px`);
-  }, [pref]);
+    return () => { rootStyle.removeProperty("--rail-width"); };
+  }, [pref, defaultWidthPx]);
 
   /** Every user-initiated change: state + explicit persist (no write
    * effect — mount/default reloads must not create a preference). */
@@ -237,7 +240,11 @@ export function WorkspaceSidebar({
       className="app-sidebar"
       id="app-sidebar-rail"
       data-collapsed={pref.collapsed ? "true" : "false"}
+      data-density={density}
+      data-captioned={workspaceCaption ? "true" : "false"}
+      data-workspace={defaultWidthPx === RAIL_WIDTH_ADMIN_DEFAULT_PX ? "admin" : "ordinary"}
     >
+      <div className="app-sidebar-identity">
       <div className="app-sidebar-brandbar">
         <Link
           className="app-sidebar-brand"
@@ -258,6 +265,8 @@ export function WorkspaceSidebar({
         >
           {pref.collapsed ? <PanelExpandIcon /> : <PanelCollapseIcon />}
         </button>
+      </div>
+      {workspaceCaption ? <p className="app-sidebar-workspace">{workspaceCaption}</p> : null}
       </div>
       {groups.map((group) => (
         <nav key={group.label} className="side-nav" aria-label={group.label}>
@@ -293,4 +302,32 @@ export function WorkspaceSidebar({
       />
     </aside>
   );
+}
+
+const APPROVED_NAV_SHAPES = {
+  home: <><path d="m3 10 9-7 9 7v10H5V10m4 10v-7h6v7" /></>,
+  tasks: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 3h6v4H9zM9 12h6m-6 4h6" /></>,
+  innovation: <><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5m-18 5 9 5 9-5" /></>,
+  rankings: <><path d="M5 20v-7h4v7m2 0V4h4v16m2 0v-10h4v10" /></>,
+  rewards: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v9h14v-9M12 8v13M12 8C5 8 5 2 8 3s4 5 4 5Zm0 0c7 0 7-6 4-5s-4 5-4 5Z" /></>,
+  notifications: <><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5l-2 3Zm5 3h4" /></>,
+  profile: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-8 16-8 16 0" /></>,
+  teacherReviews: <><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8 12 3 3 5-6" /></>,
+  teacherTasks: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 3h6v4H9zM9 12h6m-6 4h6" /></>,
+  adminUsers: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-8 16-8 16 0" /></>,
+  adminOperations: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3" /></>,
+  adminQualification: <><path d="M12 3 3 7v6c0 4 9 8 9 8s9-4 9-8V7L12 3Z" /><path d="m8 12 3 3 5-6" /></>,
+  adminWhitelist: <><path d="M7 4h12v17H5V6m4 3h6m-6 4h6m-6 4h4" /></>,
+  adminRewards: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v9h14v-9M12 8v13M12 8C5 8 5 2 8 3s4 5 4 5Zm0 0c7 0 7-6 4-5s-4 5-4 5Z" /></>,
+  adminRedemptions: <><path d="M3 7h16m-4-4 4 4-4 4M21 17H5m4-4-4 4 4 4" /></>,
+  adminAudit: <><path d="M14 3H5v18h14V8l-5-5Zm0 0v5h5M9 12h6m-6 4h6" /></>,
+  adminSystem: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="8" cy="6" r="2" /><circle cx="16" cy="12" r="2" /><circle cx="10" cy="18" r="2" /></>,
+  mentorProfile: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-8 16-8 16 0" /></>,
+  mentorProjects: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 3h6v4H9zM9 12h6m-6 4h6" /></>,
+  mentorDirectory: <><circle cx="8" cy="7" r="3" /><circle cx="17" cy="8" r="3" /><path d="M2 20c0-8 12-8 12 0m0-7c4-2 8 1 8 7" /></>,
+} as const;
+
+/** Navigation geometry copied from the approved R5-inclusive source. */
+export function ApprovedNavIcon({ name }: { name: keyof typeof APPROVED_NAV_SHAPES }) {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{APPROVED_NAV_SHAPES[name]}</svg>;
 }

@@ -134,7 +134,7 @@ export function TaskRating({ taskId }: TaskRatingProps) {
                 data-active={myRating !== null && value <= myRating}
                 aria-hidden="true"
               >
-                ★
+                {myRating !== null && value <= myRating ? '★' : '☆'}
               </span>
             </label>
           ))}

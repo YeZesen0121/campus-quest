@@ -198,7 +198,7 @@ export function AvatarSection() {
   }
 
   return (
-    <SettingsSection title="头像" hint="支持 PNG、JPEG、WebP，最大 2 MB；上传前自动裁剪为方形，每 10 分钟可修改一次。">
+    <SettingsSection title="头像">
       <div className="avatar-row">
         {objectUrl !== null ? (
           <span className="avatar-figure">
@@ -234,6 +234,7 @@ export function AvatarSection() {
           ) : null}
         </div>
       </div>
+      <p className="field-hint">支持 PNG、JPEG、WebP，最大 2 MB；上传前自动裁剪为方形，每 10 分钟可修改一次。</p>
       {error !== null ? (
         <p className="field-error" role="alert">
           {error}

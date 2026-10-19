@@ -18,33 +18,29 @@
  * moderation context where the comment rows are.
  */
 import Link from "next/link";
+import { AuthFrame } from "@/features/auth/AuthFrame";
+import { AuthPage } from "@/features/auth/AuthPage";
+import { WorkspaceContext } from "@/components/shell/WorkspaceContext";
+import { RAIL_WIDTH_ADMIN_DEFAULT_PX } from "@/lib/sidebarPreference";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { SectionError } from "@/components/ui/sectionStates";
 import { StaffMenuSheet } from "@/components/shell/StaffMenuSheet";
-import { WorkspaceSidebar } from "@/components/shell/WorkspaceSidebar";
-import {
-  GiftIcon,
-  InboxIcon,
-  ReviewIcon,
-  TasksIcon,
-  UserIcon,
-} from "@/components/shell/navIcons";
+import { ApprovedNavIcon, WorkspaceSidebar } from "@/components/shell/WorkspaceSidebar";
 import { useSession } from "@/features/auth/session";
 import { adminWorkspaceGate } from "@/features/auth/workspace";
-import { Button } from "@/components/ui/button";
 import { INNOVATION_NAV } from "@/features/innovation/InnovationNavigation";
 
 const NAV_ITEMS = [
-  { href: "/admin/users", label: "用户与账户", icon: <UserIcon /> },
-  { href: "/admin/innovation-operations", label: "双创运营授权", icon: <UserIcon /> },
-  { href: "/admin/owner-qualifications", label: "负责人资格", icon: <UserIcon /> },
-  { href: "/admin/whitelist", label: "注册白名单", icon: <TasksIcon /> },
-  { href: "/admin/rewards", label: "奖励目录", icon: <GiftIcon /> },
-  { href: "/admin/redemptions", label: "兑换审核", icon: <ReviewIcon /> },
-  { href: "/admin/audit", label: "审计日志", icon: <InboxIcon /> },
-  { href: "/admin/system", label: "系统设置", icon: <TasksIcon /> },
+  { href: "/admin/users", label: "用户与账户", icon: <ApprovedNavIcon name="adminUsers" /> },
+  { href: "/admin/innovation-operations", label: "双创运营授权", icon: <ApprovedNavIcon name="adminOperations" /> },
+  { href: "/admin/owner-qualifications", label: "负责人资格", icon: <ApprovedNavIcon name="adminQualification" /> },
+  { href: "/admin/whitelist", label: "注册白名单", icon: <ApprovedNavIcon name="adminWhitelist" /> },
+  { href: "/admin/rewards", label: "奖励目录", icon: <ApprovedNavIcon name="adminRewards" /> },
+  { href: "/admin/redemptions", label: "兑换审核", icon: <ApprovedNavIcon name="adminRedemptions" /> },
+  { href: "/admin/audit", label: "审计日志", icon: <ApprovedNavIcon name="adminAudit" /> },
+  { href: "/admin/system", label: "系统设置", icon: <ApprovedNavIcon name="adminSystem" /> },
   INNOVATION_NAV,
 ] as const;
 
@@ -59,7 +55,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/admin/users">华师令</Link>
           </div>
         </div>
         <main className="app-main" aria-busy="true">
@@ -72,26 +68,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   if (state.status === "anonymous") {
-    return (
-      <div className="app-shell">
-        <main className="auth-shell">
-          <div className="auth-card">
-            <div className="auth-head">
-              <h1 className="auth-title">管理后台</h1>
-              <p className="auth-subtitle">运营管理需要管理员账号登录</p>
-            </div>
-            <Button asChild variant="primary" block>
-            <Link href="/staff/login">前往员工登录</Link>
-          </Button>
-            <p className="auth-alt-action">
-              <Link className="link" href="/login">
-                返回学生入口
-              </Link>
-            </p>
-          </div>
-        </main>
-      </div>
-    );
+    return <AuthFrame><AuthPage title="管理后台" kicker="校内空间" description="运营管理需要管理员账号登录" links={<Link href="/login">返回学生入口</Link>}><Link className="btn btn-primary" href="/staff/login">前往员工登录</Link></AuthPage></AuthFrame>;
   }
 
   if (state.status === "error") {
@@ -99,7 +76,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/admin/users">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -120,7 +97,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/admin/users">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -143,13 +120,16 @@ export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <WorkspaceSidebar
-        brand={{ href: "/admin/users", label: "CampusQuest" }}
+        brand={{ href: "/admin/users", label: "华师令" }}
         groups={SIDEBAR_GROUPS}
+        workspaceCaption="管理后台"
+        defaultWidthPx={RAIL_WIDTH_ADMIN_DEFAULT_PX}
       />
       <div className="app-body">
         <header className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/admin/users">华师令</Link>
+            <WorkspaceContext />
             <nav className="app-nav" aria-label="管理后台导航">
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -163,15 +143,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="app-topbar-actions">
               <span className="app-user" title={state.me.nickname}>
-                {state.me.nickname}
+                <span className="app-user-name">{state.me.nickname}</span>
                 <span className="staff-role-tag">管理员</span>
               </span>
-              <StaffMenuSheet label="管理后台菜单" items={NAV_ITEMS} />
-              <Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link>
+              <StaffMenuSheet label="管理后台菜单" items={NAV_ITEMS} footer={<><p>{state.me.nickname} · 管理员</p><Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link></>} />
+              <Link className="btn btn-ghost app-logout" href="/logout" prefetch={false}>退出登录</Link>
             </div>
           </div>
         </header>
-        <main className="app-main">{children}</main>
+        <main className="app-main campus-admin-main">{children}</main>
       </div>
     </div>
   );

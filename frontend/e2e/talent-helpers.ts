@@ -19,7 +19,16 @@ export async function prepareTalent(page:Page){
     for(const file of (await files.json()).items){const removed=await page.request.post(`${API_URL}${TALENT_OWN}/files/${file.id}/remove`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version}});expect(removed.status()).toBe(200);record=(await removed.json()).current;}
     const reset=await page.request.put(`${API_URL}${TALENT_OWN}`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:record!.version,fields:{headline:'模拟资料：待完善档案'}}});expect(reset.status()).toBe(200);
   }
-  await page.goto(`${BASE_URL}/profile/talent-profile`);await expect(editor(page)).toBeVisible();
+  // The editor depends on tags/profile, then files only for an existing
+  // draft. Observe its own completed reads before checking the ready UI.
+  const paths = ['/api/v1/ie/talent-tags', `/api/v1${TALENT_OWN}`,
+    ...(record ? [`/api/v1${TALENT_OWN}/files`] : [])];
+  const initialReads = paths.map(path => page.waitForResponse(async response =>
+    response.request().method() === 'GET' && new URL(response.url()).pathname === path &&
+    response.status() === 200 && (await response.finished()) === null));
+  await page.goto(`${BASE_URL}/profile/talent-profile`);
+  await Promise.all(initialReads);
+  await expect(editor(page)).toBeVisible();
   return editor(page);
 }
 export async function fillTalent(page:Page,name='模拟新同学'){

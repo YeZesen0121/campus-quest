@@ -23,7 +23,7 @@ import { formatFileSize } from "@/features/submissions/api";
 import { rarityView } from "@/features/tasks/display";
 
 import { getTeacherTask, type TaskTransitionDto, type TeacherTaskDto } from "./teacherApi";
-import { taskEditable, taskStatusView } from "./teacherView";
+import { taskEditable, taskStatusView, TASK_NOTIFICATION_CHANNEL_OPTIONS } from "./teacherView";
 import { TaskLifecycleActions } from "./TaskLifecycleActions";
 import { EditTaskDialog } from "./EditTaskDialog";
 import { AssignmentImport } from "./AssignmentImport";
@@ -126,10 +126,14 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
   const createdMs = parseServerInstant(task.created_at);
 
   return (
-    <>
+    <div className="campus-teacher-task">
+      <Link className="campus-staff-back" href="/teacher/tasks"><span aria-hidden="true">← </span>返回任务管理</Link>
       <div className="page-head">
         <div>
           <h1 className="page-title">{task.title}</h1>
+          <p className="page-subtitle">任务配置、参与情况与协作管理。</p>
+        </div>
+        <div className="campus-staff-heading-row">
           <p className="task-detail-badges">
             <span className={`badge badge-${status.tone}`}>{status.label}</span>
             <span className="rarity-badge" data-rarity={rarity.rarity}>
@@ -137,7 +141,6 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
             </span>
             <span className="page-subtitle">创建于 {formatDeadlineDateTime(createdMs)}</span>
           </p>
-        </div>
         <div className="dialog-actions">
           {taskEditable(task.status) ? (
             <Button
@@ -153,9 +156,14 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
             onTransitioned={onTransitioned}
           />
         </div>
+        </div>
       </div>
 
-      <section className="section" aria-label="任务配置">
+      <nav className="campus-staff-tabs" aria-label="任务管理章节">
+        <a href="#teacher-configuration">配置</a><a href="#teacher-statistics">统计</a><a href="#teacher-assignments">任务单元</a><a href="#teacher-collaborators">协作者</a><a href="#teacher-community">社区治理</a>
+      </nav>
+
+      <section className="section campus-teacher-configuration" aria-label="任务配置" id="teacher-configuration">
         <div className="section-head">
           <h2 className="section-title">任务配置</h2>
         </div>
@@ -177,7 +185,7 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
           </div>
           <div className="fact-row">
             <dt className="fact-label">领取截止</dt>
-            <dd className="fact-value">发布后 {task.claim_cutoff_minutes} 分钟</dd>
+            <dd className="fact-value">{task.deadline_mode === "FIXED" ? `固定截止前 ${task.claim_cutoff_minutes} 分钟停止新领取` : "按领取时限计时，不使用固定截止领取窗口"}</dd>
           </div>
           <div className="fact-row">
             <dt className="fact-label">宽限期</dt>
@@ -194,10 +202,16 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
           <div className="fact-row">
             <dt className="fact-label">提交校验 schema</dt>
             <dd className="fact-value mono">
-              {task.submission_schema !== null
-                ? `v${task.submission_schema_version ?? "—"} ${JSON.stringify(task.submission_schema)}`
-                : "未配置（发布前必填）"}
+              {task.submission_schema !== null ? <details className="campus-task-schema"><summary>查看校验规则 · v{task.submission_schema_version ?? "—"}</summary><pre>{JSON.stringify(task.submission_schema, null, 2)}</pre></details> : "未配置（发布前必填）"}
             </dd>
+          </div>
+          <div className="fact-row">
+            <dt className="fact-label">截止提醒</dt>
+            <dd className="fact-value">24 小时：{task.notify_24h ? "开启" : "关闭"}；4 小时：{task.notify_4h ? "开启" : "关闭"}</dd>
+          </div>
+          <div className="fact-row">
+            <dt className="fact-label">通知渠道</dt>
+            <dd className="fact-value">{task.notification_channels.map((channel) => TASK_NOTIFICATION_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ?? channel).join("、") || "未选择通知渠道"}</dd>
           </div>
           {task.published_at !== null ? (
             <div className="fact-row">
@@ -234,7 +248,7 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
       <AssignmentImport taskId={task.id} onImported={onImported} />
       <CollaboratorsPanel taskId={task.id} />
       <CommunityModeration taskId={task.id} />
-    </>
+    </div>
   );
 }
 

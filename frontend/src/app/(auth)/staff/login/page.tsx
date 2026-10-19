@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { StaffLoginForm } from "@/features/auth/StaffLoginForm";
+import { AuthPage } from "@/features/auth/AuthPage";
 
 export const metadata: Metadata = {
-  title: "员工登录 · CampusQuest",
+  title: "员工登录 · 华师令",
   description: "使用员工邮箱、密码和动态口令登录 CampusQuest",
 };
 
@@ -15,17 +16,15 @@ export const metadata: Metadata = {
  */
 export default function StaffLoginPage() {
   return (
-    <>
-      <div className="auth-head">
-        <h1 className="auth-title">员工登录</h1>
-        <p className="auth-subtitle">使用员工邮箱、密码和动态验证码登录</p>
-      </div>
-      <StaffLoginForm />
-      <p className="auth-alt-action">
+    <AuthPage title="员工登录" kicker="教师与管理员"
+      description="使用员工邮箱、密码和动态验证码登录。"
+      links={<p className="auth-alt-action">
         <Link className="link" href="/login">
           学生入口：使用学号登录
         </Link>
-      </p>
-    </>
+      </p>}>
+      <p className="auth-brief">教师与管理员使用独立员工账号登录。</p>
+      <StaffLoginForm />
+    </AuthPage>
   );
 }

@@ -53,7 +53,7 @@ test("field limits count Unicode code points, including astral characters", () =
 
 test("editing a saved project excludes resource metadata and detects every unsaved field", () => {
   const populated = { title: fields.title, summary: "调研校园垃圾分类现状", direction: "环保", stage: "调研中", team_status: "两人负责问卷，一人整理数据" };
-  const saved = { ...populated, id, version: 3, created_at: "2026-10-08T01:00:00Z", updated_at: "2026-10-08T01:00:00Z" };
+  const saved = { ...populated, id, lifecycle: 'ACTIVE' as const, version: 3, created_at: "2026-10-08T01:00:00Z", updated_at: "2026-10-08T01:00:00Z" };
   const editable = draftFields(saved);
   assert.deepEqual(editable, populated);
   assert.equal(sameDraftFields(editable, { ...populated }), true);

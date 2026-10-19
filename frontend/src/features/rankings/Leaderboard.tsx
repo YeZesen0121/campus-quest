@@ -28,6 +28,7 @@
  * DTO's own display_honor, verbatim).
  */
 import Link from "next/link";
+import { DiscoveryArrow } from "@/features/innovation/PublicDiscoveryFrame";
 
 import {
   EmptyState,
@@ -36,6 +37,7 @@ import {
   SectionSkeleton,
 } from "@/components/ui/sectionStates";
 import { useSection } from "@/components/ui/useSection";
+import { DividedSections } from "@/components/ui/dividedSections";
 import {
   aroundMeBoard,
   boardForPeriod,
@@ -53,8 +55,8 @@ export function Leaderboard({ period }: { period: RankingPeriodKey }) {
   const board = useSection(() => boardForPeriod(period), `GET /api/v1/rankings/${period}`);
   const around = useSection(() => aroundMeBoard(period), `GET /api/v1/rankings/${period}/around-me`);
 
-  const meInTopList =
-    board.state.status === "ready" ? boardView(board.state.data).meInTopList : null;
+  const currentBoard = board.state.status === "ready" ? boardView(board.state.data) : null;
+  const meInTopList = currentBoard?.meInTopList ?? null;
 
   return (
     <div className="rankings-view">
@@ -71,20 +73,33 @@ export function Leaderboard({ period }: { period: RankingPeriodKey }) {
         ))}
       </nav>
 
-      <BoardSection
-        status={board.state.status}
-        error={board.state.status === "error" ? board.state.error : null}
-        data={board.state.status === "ready" ? board.state.data : null}
-        retry={board.retry}
-      />
-      <AroundMeSection
-        status={around.state.status}
-        error={around.state.status === "error" ? around.state.error : null}
-        myRank={board.state.status === "ready" ? board.state.data.my_rank ?? null : null}
-        meInTopList={meInTopList}
-        entries={around.state.status === "ready" ? around.state.data.entries : null}
-        retry={around.retry}
-      />
+      {currentBoard !== null ? (
+        <div className="my-standing">
+          <div>
+            <p className="standing-label">我的名次</p>
+            <p className="board-my-standing">
+              {currentBoard.myRank !== null ? <>第 <strong>{currentBoard.myRank}</strong> 名{currentBoard.myScore !== null ? <span> · {currentBoard.myScore} 积分</span> : null}</> : '暂未上榜，完成任务后即可登上榜单'}
+            </p>
+          </div>
+          <a className="section-link campus-inline-action" href="#ranking-around">查看我的附近<DiscoveryArrow /></a>
+        </div>
+      ) : null}
+      <DividedSections className="rank-layout">
+        <BoardSection
+          status={board.state.status}
+          error={board.state.status === "error" ? board.state.error : null}
+          data={board.state.status === "ready" ? board.state.data : null}
+          retry={board.retry}
+        />
+        <AroundMeSection
+          status={around.state.status}
+          error={around.state.status === "error" ? around.state.error : null}
+          myRank={board.state.status === "ready" ? board.state.data.my_rank ?? null : null}
+          meInTopList={meInTopList}
+          entries={around.state.status === "ready" ? around.state.data.entries : null}
+          retry={around.retry}
+        />
+      </DividedSections>
     </div>
   );
 }
@@ -105,7 +120,7 @@ function BoardSection({
   const view = data === null ? null : boardView(data);
   return (
     <section className="section" aria-label="排行榜">
-      <SectionHeading title="排行榜" />
+      <SectionHeading title="本期排名" />
       {status === "loading" ? <SectionSkeleton lines={5} /> : null}
       {status === "error" ? <SectionError error={error} onRetry={retry} /> : null}
       {status === "ready" && view !== null ? (
@@ -116,16 +131,6 @@ function BoardSection({
           />
         ) : (
           <div className="panel">
-            {view.myRank !== null ? (
-              <p className="board-my-standing">
-                我的名次：第 <span className="meta-num">{view.myRank}</span> 名
-                {view.myScore !== null ? (
-                  <span className="metric-unit"> · {view.myScore} 积分</span>
-                ) : null}
-              </p>
-            ) : (
-              <p className="board-my-standing">暂未上榜，完成任务后即可登上榜单</p>
-            )}
             <ol className="board-rows">
               {view.rows.map((row, index) => (
                 <BoardRow
@@ -166,7 +171,7 @@ export function BoardRow({
     >
       <span className="board-rank meta-num">#{row.rank}</span>
       <span className="board-nick">
-        {row.nickname}
+        <span className="board-nick-name">{row.nickname}</span>
         {row.displayHonor !== null ? (
           <span className="board-honor">{row.displayHonor}</span>
         ) : null}
@@ -201,7 +206,7 @@ function AroundMeSection({
 }) {
   const view = entries === null ? null : aroundMeView(entries, myRank);
   return (
-    <section className="section" aria-label="我的附近">
+    <section className="section" aria-label="我的附近" id="ranking-around">
       <SectionHeading title="我的附近" />
       {status === "loading" ? <SectionSkeleton lines={3} /> : null}
       {status === "error" ? <SectionError error={error} onRetry={retry} /> : null}
@@ -227,6 +232,7 @@ function AroundMeSection({
                 <BoardRow key={row.rank} row={row} isMe={row.isMe} />
               ))}
             </ol>
+            <Link className="section-link campus-inline-action" href="/profile">查看我的成长<DiscoveryArrow /></Link>
           </div>
         )
       ) : null}

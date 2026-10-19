@@ -7,6 +7,7 @@
  * Opt-in via CQ_E2E_FENCE=1 (+ CQ_E2E=1 for the world seed).
  */
 import { expect, test } from "@playwright/test";
+import { loginThroughUi } from "./fixtures";
 
 const FENCE = process.env.CQ_E2E_FENCE === "1";
 
@@ -27,13 +28,9 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
 
   // Tab A: student A logged in (form login = explicit transition).
   const pageA = await context.newPage();
-  await pageA.goto("/login");
-  await pageA.getByLabel("学号").fill(aName);
-  await pageA.getByLabel("密码").fill(aPass);
-  await pageA.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(pageA).not.toHaveURL(/\/login/);
+  await loginThroughUi(pageA, { username: aName, password: aPass });
   // A's app-shell /me has landed; the in-memory bearer is live.
-  await expect(pageA.getByRole("heading", { name: "我的主页" })).toBeVisible();
+  await expect(pageA.getByRole("heading", { name: "首页", level: 1, exact: true })).toBeVisible();
   // Capture A's OWN nickname — world nicknames share a prefix, so the
   // post-fence assertion must target this tab's specific identity.
   const aNickname = (await pageA.locator(".app-user, .rail-account-name").first().innerText()).trim();
@@ -41,11 +38,7 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
 
   // Tab B (same jar): explicit login as student B -> context reset.
   const pageB = await context.newPage();
-  await pageB.goto("/login");
-  await pageB.getByLabel("学号").fill(bName);
-  await pageB.getByLabel("密码").fill(bPass);
-  await pageB.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(pageB).not.toHaveURL(/\/login/);
+  await loginThroughUi(pageB, { username: bName, password: bPass });
 
   // Round-3 P0: NO RELOAD. The reset must fence the MOUNTED tab: the
   // session cache is invalidated and useSession revalidates in place —
@@ -69,7 +62,7 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
   const fencedState = await pageA.evaluate(() => {
     const text = document.body.innerText;
     if (text.includes("去登录")) return "anonymous";
-    if (text.includes("我的主页")) return "still-authed";
+    if (document.querySelector('main h1')?.textContent?.trim() === '首页') return "still-authed";
     return "other";
   });
   // After the fence the tab either shows anonymous, or — if /me resumed
@@ -98,7 +91,7 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
   const anonymousOrB = await pageA.evaluate(() => {
     const text = document.body.innerText;
     if (text.includes("去登录")) return "anonymous";
-    if (text.includes("我的主页")) return "authed";
+    if (document.querySelector('main h1')?.textContent?.trim() === '首页') return "authed";
     return "other";
   });
   // With B's cookie shared in the jar, a reload may resume B — that is
@@ -137,12 +130,8 @@ test("out-of-order /me: a straggler answering OLD identity after the reset NEVER
       aMeBody = await response.text().catch(() => null);
     }
   });
-  await pageA.goto("/login");
-  await pageA.getByLabel("学号").fill(aName);
-  await pageA.getByLabel("密码").fill(aPass);
-  await pageA.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(pageA).not.toHaveURL(/\/login/);
-  await expect(pageA.getByRole("heading", { name: "我的主页" })).toBeVisible();
+  await loginThroughUi(pageA, { username: aName, password: aPass });
+  await expect(pageA.getByRole("heading", { name: "首页", level: 1, exact: true })).toBeVisible();
   const aNickname = (await pageA.locator(".rail-account-name, .app-user").first().innerText()).trim();
   expect(aNickname.length).toBeGreaterThan(0);
   expect(aMeBody).not.toBeNull();
@@ -181,11 +170,7 @@ test("out-of-order /me: a straggler answering OLD identity after the reset NEVER
   // Sibling tab B logs in (explicit transition): the reset fences A, A
   // drops to loading, and its NEW /me settles FIRST — as B.
   const pageB = await context.newPage();
-  await pageB.goto("/login");
-  await pageB.getByLabel("学号").fill(bName);
-  await pageB.getByLabel("密码").fill(bPass);
-  await pageB.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(pageB).not.toHaveURL(/\/login/);
+  await loginThroughUi(pageB, { username: bName, password: bPass });
   const bNickname = (await pageB.locator(".rail-account-name, .app-user").first().innerText()).trim();
   expect(bNickname.length).toBeGreaterThan(0);
 

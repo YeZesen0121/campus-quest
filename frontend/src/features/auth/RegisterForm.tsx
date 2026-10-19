@@ -220,11 +220,11 @@ export function RegisterForm() {
 
   return (
     <form className="form" onSubmit={onSubmit} noValidate>
+      <p className="auth-brief">仅支持老师导入的白名单学号。</p>
       <FormErrorSummary view={summary} />
       <AuthField
         name="student_number"
         label="学号"
-        hint="只有在老师导入的白名单中的学号可以注册。"
         error={fieldErrors.student_number}
         inputProps={{
           value: values.student_number,
@@ -244,7 +244,7 @@ export function RegisterForm() {
         label="昵称"
         counter={`${nicknameCount}/${NICKNAME_MAX_GRAPHEME_CLUSTERS}`}
         counterOver={nicknameCount > NICKNAME_MAX_GRAPHEME_CLUSTERS}
-        hint="展示给其他同学的名称；按显示字符计数，emoji 算 1 个。"
+        hint="最多 16 个显示字符，emoji 按 1 个计数。"
         error={fieldErrors.nickname}
         inputProps={{
           value: values.nickname,
@@ -309,7 +309,6 @@ export function RegisterForm() {
       <AuthField
         name="code"
         label="短信验证码"
-        hint="验证码以短信发送到上述手机号。"
         error={fieldErrors.code}
         inputProps={{
           value: values.code,
@@ -336,7 +335,7 @@ export function RegisterForm() {
           disabled: submitting,
         }}
       />
-      <SubmitButton loading={submitting}>注册</SubmitButton>
+      <SubmitButton loading={submitting} block={false}>注册</SubmitButton>
     </form>
   );
 }

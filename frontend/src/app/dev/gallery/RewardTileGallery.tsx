@@ -60,6 +60,10 @@ export function RewardTileGallery() {
       <ul className="reward-grid">
         <RewardCard item={INSUFFICIENT} spendablePoints={30} onRedeem={noop} />
       </ul>
+      <p className="progress-note">开发示例：长奖励标题与完整说明自然换行，不改变卡片中的价格和操作关系。</p>
+      <ul className="reward-grid">
+        <RewardCard item={fixture({ id: "00000000-0000-4000-8000-0000000000a5", name: "信息检索与数据整理实践参考书及校园共建纪念学习资料套装", description: "用于核对长内容排版的开发示例。奖励详情和领取条件应完整显示，价格与兑换操作保持清楚。".repeat(3) })} spendablePoints={120} onRedeem={noop} />
+      </ul>
     </section>
   );
 }

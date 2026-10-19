@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    FetchedValue,
     ForeignKey,
     Index,
     Integer,
@@ -60,6 +61,12 @@ class AchievementEvidence(Base):
         primary_key=True, server_default=text("gen_random_uuid()")
     )
     achievement_id: Mapped[UUID] = mapped_column(ForeignKey("ie_achievement_drafts.id"))
+    uploaded_by_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), server_default=FetchedValue()
+    )
+    uploaded_owner_generation: Mapped[int] = mapped_column(
+        Integer, server_default=FetchedValue()
+    )
     creation_request_id: Mapped[UUID] = mapped_column()
     creation_payload_fingerprint: Mapped[str] = mapped_column(String(64))
     object_key: Mapped[str] = mapped_column(Text)

@@ -10,8 +10,13 @@
  * an over-broad fragment hides future skips — keep them specific).
  */
 export const NOSKIP_EXEMPTIONS = [
+  ...['home at 390','workspace at 390','home at 1440','workspace at 1440'].map(surface=>({
+    file:'innovation-collaboration-visual.spec.ts',title:`R6 visual: ${surface}`,gate:'CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1',
+    reason:'R6 collaboration pixels and axe use a separate pinned-font Linux world; the required dedicated visual run owns these four stable screens.',
+  })),
   ...[
     'R5 mentor long content stays usable on mobile and desktop',
+    'R5 mentor approved composition preserves independent columns, contact band and native fields',
     'R5 mentor lifecycle: operations, explicit consent, scoped maintenance, contact and project links',
     'R5 mentor conflict preserves operations input and resets stale personal consent',
     'R5 mentor uncertain save retries the same command and account changes clear private inputs',

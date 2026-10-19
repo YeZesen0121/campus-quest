@@ -11,13 +11,15 @@
  * boundary of the shell (patterns §2: isolate the interactive child).
  */
 import Link from "next/link";
+import { AuthFrame } from "@/features/auth/AuthFrame";
+import { AuthPage } from "@/features/auth/AuthPage";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { SectionError } from "@/components/ui/sectionStates";
 import { BottomNav } from "@/components/shell/BottomNav";
-import { WorkspaceSidebar, navItemActive, type SideNavItem } from "@/components/shell/WorkspaceSidebar";
-import { GiftIcon, HomeIcon, InboxIcon, TasksIcon, TrophyIcon, UserIcon } from "@/components/shell/navIcons";
+import { WorkspaceContext } from "@/components/shell/WorkspaceContext";
+import { ApprovedNavIcon, WorkspaceSidebar, navItemActive, type SideNavItem } from "@/components/shell/WorkspaceSidebar";
 import { useSession } from "@/features/auth/session";
 import { studentWorkspaceGate } from "@/features/auth/workspace";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
@@ -32,28 +34,27 @@ import { getAuthEpoch } from "@/lib/accessToken";
  * 我的任务 stays anchored on the dashboard (its only list surface);
  * 社区 stays anchored on task detail — V1 has neither route. */
 const SIDEBAR_PRIMARY = [
-  { href: "/", label: "首页", icon: <HomeIcon /> },
-  { href: "/tasks", label: "任务", icon: <TasksIcon /> },
+  { href: "/", label: "首页", icon: <ApprovedNavIcon name="home" /> },
+  { href: "/tasks", label: "任务", icon: <ApprovedNavIcon name="tasks" /> },
   INNOVATION_NAV,
-  { href: "/rankings", label: "排行榜", icon: <TrophyIcon /> },
-  { href: "/rewards", label: "积分奖励", icon: <GiftIcon /> },
+  { href: "/rankings", label: "排行榜", icon: <ApprovedNavIcon name="rankings" /> },
+  { href: "/rewards", label: "积分奖励", icon: <ApprovedNavIcon name="rewards" /> },
 ] as const;
 
 const SIDEBAR_SECONDARY = [
-  { href: "/notifications", label: "通知", icon: <InboxIcon /> },
-  { href: "/profile", label: "我的", icon: <UserIcon /> },
+  { href: "/notifications", label: "通知", icon: <ApprovedNavIcon name="notifications" /> },
+  { href: "/profile", label: "我的", icon: <ApprovedNavIcon name="profile" /> },
 ] as const;
 
-/* Medium band (40–64rem): the horizontal top nav keeps every
- * destination — no reachability is lost between sidebar and bottom. */
+/* The medium menu keeps every destination between sidebar and bottom. */
 const MEDIUM_NAV = [...SIDEBAR_PRIMARY, ...SIDEBAR_SECONDARY];
 
 const BOTTOM_NAV = [
-  { href: "/", label: "首页", icon: <HomeIcon /> },
-  { href: "/tasks", label: "任务", icon: <TasksIcon /> },
+  { href: "/", label: "首页", icon: <ApprovedNavIcon name="home" /> },
+  { href: "/tasks", label: "任务", icon: <ApprovedNavIcon name="tasks" /> },
   INNOVATION_NAV,
-  { href: "/rankings", label: "排行榜", icon: <TrophyIcon /> },
-  { href: "/profile", label: "我的", icon: <UserIcon /> },
+  { href: "/rankings", label: "排行榜", icon: <ApprovedNavIcon name="rankings" /> },
+  { href: "/profile", label: "我的", icon: <ApprovedNavIcon name="profile" /> },
 ] as const;
 
 /* Audit #4: one grapheme-safe initial helper (nicknames are validated
@@ -72,7 +73,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/">华师令</Link>
           </div>
         </div>
         <main className="app-main" aria-busy="true">
@@ -85,29 +86,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
   }
 
   if (state.status === "anonymous") {
-    return (
-      <div className="app-shell">
-        <main className="auth-shell">
-          <div className="auth-card">
-            <div className="auth-head">
-              <h1 className="auth-title">登录 CampusQuest</h1>
-              <p className="auth-subtitle">
-                领取任务单元、累积积分并兑换奖励
-              </p>
-            </div>
-            <Link className="btn btn-primary btn-block" href="/login">
-              去登录
-            </Link>
-            <p className="auth-alt-action">
-              还没有账号？
-              <Link className="link" href="/register">
-                注册学生账号
-              </Link>
-            </p>
-          </div>
-        </main>
-      </div>
-    );
+    return <AuthFrame><AuthPage title="登录华师令" kicker="校内空间" description="领取任务单元、累积积分并兑换奖励" links={<Link href="/register">注册学生账号</Link>}><Link className="btn btn-primary" href="/login">去登录</Link></AuthPage></AuthFrame>;
   }
 
   if (state.status === "error") {
@@ -115,7 +94,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -136,7 +115,7 @@ export function StudentShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -172,8 +151,10 @@ function StudentNavigationShell({ children, nickname, active }: { children: Reac
   return (
     <div className="app-shell">
       <WorkspaceSidebar
-        brand={{ href: "/", label: "CampusQuest" }}
+        brand={{ href: "/", label: "华师令" }}
         groups={groups}
+        workspaceCaption={pathname.startsWith('/innovation/operations/') || pathname.startsWith('/innovation/reviews') ? '双创运营' : undefined}
+        density={pathname.startsWith('/innovation/mentors') ? 'compact' : undefined}
         footer={
           // Review round 2: the account lives in the rail footer — a
           // purposeful bottom anchor for the dark rail, and one less
@@ -189,7 +170,8 @@ function StudentNavigationShell({ children, nickname, active }: { children: Reac
       <div className="app-body">
         <header className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/">华师令</Link>
+            <WorkspaceContext />
             <nav className="app-nav" aria-label="主导航">
               {nav.map((item) => (
                 <Link
@@ -204,14 +186,14 @@ function StudentNavigationShell({ children, nickname, active }: { children: Reac
             <div className="app-topbar-actions">
               <NotificationBell />
               <Link
-                className="avatar-chip"
+                className="app-user app-account-name"
                 href="/profile"
                 aria-label="我的账户"
                 title="我的账户"
               >
-                <UserIcon />
+                {nickname}
               </Link>
-              <StaffMenuSheet label="全部导航" items={nav} />
+              <StaffMenuSheet label="全部导航" items={nav} footer={<><p>{nickname}</p><Link className="btn btn-ghost" href="/profile?tab=info">个人信息</Link><Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link></>} />
             </div>
           </div>
         </header>

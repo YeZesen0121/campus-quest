@@ -73,7 +73,7 @@ const noop = () => {};
 
 export function CommentGallery() {
   return (
-    <section className="section" aria-label="评论区">
+    <section className="section student-community-surface" aria-label="评论区">
       <h2 className="section-title">评论区行 × 状态</h2>
       <p className="progress-note">
         具名根评论 + 匿名 · 已编辑回复（二级缩进轨，回复保持视觉连接）。

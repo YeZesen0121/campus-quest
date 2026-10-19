@@ -1,0 +1,128 @@
+# R6 owns this entire project. Never combine this file with the UI compose file.
+name: campusquest-r6
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: campusquest-r6-postgres
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: campusquest_test_r6
+    ports: ["127.0.0.1:16438:5432"]
+    volumes: ["r6-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U test -d campusquest_test_r6"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: campusquest-r6-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:6478:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: campusquest-r6-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: campusquest
+      MINIO_ROOT_PASSWORD: campusquest-dev
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:3308,http://127.0.0.1:3308
+    ports: ["127.0.0.1:9125:9000"]
+    volumes: ["r6-minio:/data"]
+
+  minio-e2e:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: campusquest-r6-minio-e2e
+    command: ["server", "/data", "--certs-dir", "/etc/minio/certs", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: campusquest
+      MINIO_ROOT_PASSWORD: campusquest-dev
+      MINIO_API_CORS_ALLOW_ORIGIN: https://localhost:3308,https://127.0.0.1:3308
+    ports: ["127.0.0.1:9126:9000"]
+    volumes:
+      - ./.runtime/minio-certs:/etc/minio/certs:ro
+      - r6-minio-e2e:/data
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: campusquest-r6-minio-init
+    depends_on: [minio, minio-e2e]
+    environment:
+      MINIO_ROOT_USER: campusquest
+      MINIO_ROOT_PASSWORD: campusquest-dev
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export MC_HOST_r6="http://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000"
+        export MC_HOST_r6tls="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio-e2e:9000"
+        until mc ready r6 >/dev/null 2>&1; do sleep 1; done
+        until mc --insecure ready r6tls >/dev/null 2>&1; do sleep 1; done
+        mc mb --ignore-existing r6/campusquest-test-r6
+        mc --insecure mb --ignore-existing r6tls/campusquest-test-r6
+
+  clamav:
+    image: clamav/clamav:1.4.6
+    container_name: campusquest-r6-clamav
+    ports: ["127.0.0.1:3318:3310"]
+    volumes: ["r6-clamav:/var/lib/clamav"]
+
+  runner:
+    # Immutable image layers are reused; this container, mounts and caches are new.
+    image: campusquest-r3-runtime:20261011
+    container_name: campusquest-r6-runner
+    network_mode: host
+    command: ["sleep", "infinity"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - r6-node-modules:/workspace/frontend/node_modules
+      - r6-next:/workspace/frontend/.next
+    environment:
+      DATABASE_URL: postgresql+asyncpg://test:test@127.0.0.1:16438/campusquest_test_r6
+      REDIS_URL: redis://127.0.0.1:6478/0
+      S3_ENDPOINT_URL: http://127.0.0.1:9125
+      S3_BUCKET: campusquest-test-r6
+      S3_ACCESS_KEY: campusquest
+      S3_SECRET_KEY: campusquest-dev
+      BUSINESS_TIMEZONE: Asia/Shanghai
+      ENVIRONMENT: development
+      CLAMD_HOST: 127.0.0.1
+      CLAMD_PORT: "3318"
+      CQ_E2E_DATABASE_URL: postgresql+asyncpg://test:test@127.0.0.1:16438/campusquest_test_r6
+      CQ_E2E_REDIS_URL: redis://127.0.0.1:6478/1
+      CQ_E2E_BASE_URL: https://localhost:3308
+      CQ_E2E_API_URL: http://localhost:8308/api/v1
+      CQ_E2E_S3_ENDPOINT_URL: https://127.0.0.1:9126
+      CQ_E2E_S3_BUCKET: campusquest-test-r6
+      CQ_E2E_S3_CA_BUNDLE: /workspace/infra/r6/.runtime/minio-certs/public.crt
+      CQ_E2E_REUSE_EXISTING: "0"
+      UV_PROJECT_ENVIRONMENT: /opt/cq-noble-venv
+      UV_CACHE_DIR: /tmp/cq-r6-uv-cache
+      RUFF_CACHE_DIR: /tmp/cq-r6-ruff-cache
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+      PYTHONUNBUFFERED: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  r6-postgres:
+  r6-minio:
+  r6-minio-e2e:
+  r6-node-modules:
+  r6-next:
+  r6-clamav:

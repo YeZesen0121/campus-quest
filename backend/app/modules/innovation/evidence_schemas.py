@@ -23,6 +23,7 @@ class EvidenceResponse(BaseModel):
     failure_code: str | None
     version: int
     created_at: datetime
+    read_only: bool = False
 
 
 class EvidenceIntentResponse(BaseModel):

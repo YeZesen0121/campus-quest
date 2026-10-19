@@ -77,6 +77,7 @@
 
 import { BASE_URL, expect, test } from "./fixtures";
 import { authenticate, SHOTS, type Locator } from "./shot-surfaces";
+import { captureR6Evidence } from "./collaboration-screenshots";
 
 const ENABLED =
   process.env.CQ_E2E === "1" &&
@@ -124,10 +125,12 @@ for (const shot of SHOTS) {
     // (the admin table's username column). Pin BOTH stacks to families
     // both environments carry (Liberation Mono ships with every Ubuntu
     // image) so baselines compare identical rendering everywhere.
+    await expect(page.locator('nextjs-portal [data-nextjs-dialog-overlay]')).toHaveCount(0);
     await page.addStyleTag({
-      content: `:root { --font-sans: "Noto Sans CJK SC", sans-serif; }
-        .mono { font-family: "Liberation Mono", monospace !important; }`,
+      content: `:root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; }
+        .mono { font-family: "Liberation Mono", monospace !important; } nextjs-portal { display: none !important; }`,
     });
+  await page.evaluate(() => document.fonts.ready);
     // The capture harness's wrong-artifact guard: the shot is only valid
     // if THIS pass rendered the page's own header and (for authenticated
     // surfaces) the desktop sidebar landmark.
@@ -158,5 +161,8 @@ for (const shot of SHOTS) {
       maxDiffPixelRatio: 0.01,
       mask: masks,
     });
+    if (["student-owner-profile-form", "student-project-draft-form", "admin-owner-qualifications", "admin-innovation-operations"].includes(shot.name)) {
+      await captureR6Evidence(page, page.getByRole("main"), test.info().outputPath(`guide-${shot.name}.png`));
+    }
   });
 }

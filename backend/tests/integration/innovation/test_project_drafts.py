@@ -99,6 +99,7 @@ async def test_owner_round_trip(client, db_session, api_clock) -> None:
         "direction",
         "stage",
         "team_status",
+        "lifecycle",
         "version",
         "created_at",
         "updated_at",

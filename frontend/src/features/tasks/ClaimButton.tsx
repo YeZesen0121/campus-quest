@@ -13,6 +13,7 @@
  * the sole verdict. On success the owning view refetches server state at
  * this boundary (availability, my_claim; patterns §3).
  */
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -144,6 +145,9 @@ function AssignedClaimPanel({ claim, nowMs }: { claim: ClaimDto; nowMs: number }
       <p className="progress-note" suppressHydrationWarning>
         超过截止时间后至 {formatDeadlineDateTime(graceMs)} 仍可提交，积分按实际提交时间结算。
       </p>
+      <Link className="btn btn-primary btn-block claim-continuation" href={`/claims/${claim.claim_id}`}>
+        {claim.status === 'CLAIMED' || claim.status === 'REVISION_REQUIRED' ? '继续提交' : '查看提交'}
+      </Link>
     </section>
   );
 }

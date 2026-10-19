@@ -86,7 +86,7 @@ const CLOSE_ACTION: LifecycleActionView = {
   confirmRequired: true,
   confirmTitle: "关闭任务",
   confirmBody:
-    "关闭后学生不能再领取或提交，该操作不可撤销；进行中的领取与提交以服务端截止规则结算。仅在确认不再接收工作时关闭。",
+    "关闭后学生不能再领取，该操作不可撤销；已有领取继续按领取时保存的截止与宽限规则提交和审核。仅在确认不再接收新领取时关闭。",
   confirmLabel: "确认关闭",
 };
 
@@ -163,6 +163,12 @@ export const DEADLINE_MODE_OPTIONS: readonly {
 
 export type DeadlineModeKey = "FIXED" | "RELATIVE";
 
+export const TASK_NOTIFICATION_CHANNEL_OPTIONS = [
+  { value: "IN_APP", label: "站内" },
+  { value: "SMS", label: "短信" },
+  { value: "EMAIL", label: "已验证邮箱" },
+] as const;
+
 /** The publish-validation fields the dialog collects (binding constraint). */
 export interface TaskFormValues {
   title: string;
@@ -179,6 +185,9 @@ export interface TaskFormValues {
   /** Raw JSON textarea; draft-legal to leave empty (publish requires it). */
   submissionSchema: string;
   submissionSchemaVersion: string;
+  notify24h: boolean;
+  notify4h: boolean;
+  notificationChannels: string[];
 }
 
 export const EMPTY_TASK_FORM: TaskFormValues = {
@@ -194,6 +203,9 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   maxFileSizeMb: "50",
   submissionSchema: "",
   submissionSchemaVersion: "",
+  notify24h: true,
+  notify4h: true,
+  notificationChannels: ["SMS", "EMAIL", "IN_APP"],
 };
 
 export type TaskFormField =
@@ -351,9 +363,9 @@ export function taskFormToBody(
       submission_schema: schema,
       submission_schema_version:
         versionText.length > 0 ? parseIntOrNaN(versionText) : null,
-      notify_24h: true,
-      notify_4h: true,
-      notification_channels: ["SMS", "EMAIL", "IN_APP"],
+      notify_24h: values.notify24h,
+      notify_4h: values.notify4h,
+      notification_channels: [...values.notificationChannels],
     },
   };
 }
@@ -373,7 +385,10 @@ export type TaskFormFieldKey =
   | "fileTypes"
   | "maxFileSizeMb"
   | "submissionSchema"
-  | "submissionSchemaVersion";
+  | "submissionSchemaVersion"
+  | "notify24h"
+  | "notify4h"
+  | "notificationChannels";
 
 /**
  * The frozen set in form terms: the backend's `_CONTRACT_FIELDS` plus
@@ -448,6 +463,9 @@ export function taskFormFromTask(task: TeacherTaskDto): TaskFormValues {
       task.submission_schema_version !== null
         ? String(task.submission_schema_version)
         : "",
+    notify24h: task.notify_24h,
+    notify4h: task.notify_4h,
+    notificationChannels: [...task.notification_channels],
   };
 }
 
@@ -494,6 +512,15 @@ export function taskFormToUpdateBody(
   }
   if (values.description.trim() !== task.description) {
     body.description = values.description.trim();
+  }
+  if (values.notify24h !== task.notify_24h) {
+    body.notify_24h = values.notify24h;
+  }
+  if (values.notify4h !== task.notify_4h) {
+    body.notify_4h = values.notify4h;
+  }
+  if (!sameSet(values.notificationChannels, task.notification_channels)) {
+    body.notification_channels = [...values.notificationChannels];
   }
 
   if (draft) {

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { randomUUID } from "node:crypto";
-import { API_URL, BASE_URL, ensureStudentLogin, expect, mintToken, test } from "./fixtures";
+import { captureOwnedVisual, API_URL, BASE_URL, ensureStudentLogin, expect, mintToken, test } from "./fixtures";
+import { captureR6Evidence } from "./collaboration-screenshots";
 
 test.skip(process.env.CQ_E2E !== "1" || process.env.CQ_VISUAL !== "1" || process.env.CQ_E2E_FIXED_LABELS !== "1", "CQ_E2E=1 CQ_VISUAL=1 CQ_E2E_FIXED_LABELS=1 pins Linux fonts and disposable labels");
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -39,22 +40,28 @@ test("achievement review visual: owner proof workspace, operator queue and campu
   const projectId = new URL((await created).url()).pathname.match(/\/project-drafts\/([^/]+)\/achievements$/)![1];
   await expect(page.getByRole("region", { name: "成果核实与证明" })).toContainText("还没有证明材料");
   await page.getByLabel("成果名称", { exact: true }).blur();
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } .mono { font-family: "Liberation Mono", monospace !important; } * { animation: none !important; transition: none !important; }' });
-  await expect(page).toHaveScreenshot("achievement-owner-proof-workspace.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } .mono { font-family: "Liberation Mono", monospace !important; } * { animation: none !important; transition: none !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  await captureOwnedVisual(page, page.getByRole("main"), "achievement-owner-proof-workspace.png");
+  await captureR6Evidence(page, page.getByRole("main"), test.info().outputPath("guide-achievement-proof-workspace.png"));
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.goto(`${BASE_URL}/innovation/reviews`);
   await expect(page.getByRole("region", { name: "成果核实待办" })).toContainText("暂无可领取的成果");
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } * { animation: none !important; transition: none !important; }' });
-  await expect(page).toHaveScreenshot("achievement-operator-empty-queue.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } * { animation: none !important; transition: none !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  // R6 expands the participation/recusal and administrator-coordination note.
+  // Keep the legacy UI13 reference untouched; this is the new R6 empty state.
+  await captureOwnedVisual(page, page.getByRole("main"), "achievement-operator-participation-queue-r6.png");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.goto(`${BASE_URL}/innovation/achievements`);
   await expect(page.getByRole("region", { name: "校内已核实成果" })).toContainText("暂无可浏览的成果");
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } * { animation: none !important; transition: none !important; }' });
-  await expect(page).toHaveScreenshot("achievement-campus-empty-list.png", { fullPage: true, maxDiffPixelRatio: 0.01 });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } * { animation: none !important; transition: none !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  await captureOwnedVisual(page, page.getByRole("main"), "achievement-campus-empty-list.png");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
-  // R2 stable states use real revisions and decisions. Create only the two
-  // new baselines; the three existing screens above retain their exact files.
+  // R2 stable states use real revisions and decisions. Their two references,
+  // plus the owner and campus references above, retain their exact files.
   // browser_world exports the secondary student's UUID as the final entry
   // of its negative-DOM-search contract; this ID stays in test setup only.
   const operatorId = process.env.CQ_E2E_AUTHOR_SECRETS!.split(",").at(-1)!;
@@ -92,8 +99,11 @@ test("achievement review visual: owner proof workspace, operator queue and campu
   await page.getByRole("button", { name: "编辑成果：校园循环利用原型", exact: true }).click();
   const ownerPanel = page.getByRole("region", { name: "成果核实与证明" });
   await expect(ownerPanel).toContainText("等待更新复审");
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } * { animation: none !important; transition: none !important; }' });
-  await expect(ownerPanel).toHaveScreenshot("achievement-update-pending.png", { maxDiffPixelRatio: 0.01 });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } * { animation: none !important; transition: none !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  // The approved owner composition places proof and workflow beside the form.
+  // Pin their physical editor region together, including the pending state.
+  await captureOwnedVisual(page, page.getByRole("region", { name: "成果草稿编辑器", exact: true }), "achievement-update-pending.png");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await approve(pending);
   await page.goto(`${BASE_URL}/innovation/achievements/${achievement.id}`);
@@ -101,7 +111,8 @@ test("achievement review visual: owner proof workspace, operator queue and campu
   await expect(publicDetail).toContainText("当前为更新复审通过的版本。");
   await expect(publicDetail).not.toContainText("00889900");
   await expect(publicDetail.locator("time")).toHaveCount(2);
-  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; } * { animation: none !important; transition: none !important; }' });
-  await expect(publicDetail).toHaveScreenshot("achievement-update-approved.png", { mask: [publicDetail.locator("time")], maxDiffPixelRatio: 0.01 });
+  await page.addStyleTag({ content: ':root { --font-sans: "Noto Sans CJK SC", sans-serif; --font-display: "Noto Serif CJK SC", serif; --font-mono: "Liberation Mono", monospace; } * { animation: none !important; transition: none !important; }' });
+  await page.evaluate(() => document.fonts.ready);
+  await captureOwnedVisual(page, publicDetail, "achievement-update-approved.png", [publicDetail.locator("time")]);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

@@ -1,5 +1,8 @@
 # CampusQuest Frontend Design System
 
+> 已确认样张及后续专用配方继续有效。UI13 产品视觉验收与 UI14 代码交付状态见 [交付评审](ui-migration-delivery-review.md)；下文按阶段保留的验证进度不代替当前回执。
+
+
 > Purpose: give frontend and design agents one stable visual language across Student, Teacher, and Admin surfaces.
 >
 > Product direction: **academic productivity with restrained gamification**.
@@ -50,7 +53,7 @@ Recommended token groups:
 
 ~~~text
 surface:
-  background          (warm-neutral near-white, Plan 11)
+  background          (approved warm paper, 2026-10-16)
   surface-1
   surface-2
   surface-brand       (the ONE soft brand wash: hero/progress emphasis
@@ -59,6 +62,7 @@ surface:
 
 text:
   foreground
+  body-foreground
   muted-foreground
   subtle-foreground
   inverse-foreground
@@ -66,6 +70,7 @@ text:
 border:
   border              (soft; background contrast carries hierarchy first)
   border-strong
+  divider             (independent two-column separator)
   focus-ring
 
 semantic:
@@ -111,9 +116,26 @@ Prefer OKLCH custom properties in `:root` (the settled pipeline above bridges th
 
 Default experience should be light-first, with tokens structured so a complete dark theme remains possible.
 
-**Identity ruling (Plan 11 direction shoot-out, owner pick "ink")**: the product's identity is a DARK navigation rail (the wide sidebar, `oklch(21% 0.018 262)`; the narrow student bottom nav is a light frosted bar — see §8) beside warm light content — the rail is quiet in weight but bold in tone. The primary is `oklch(50% 0.18 264)` (#2b59c8), one notch more saturated than V1 so it carries the dark rail; display type (page titles, hero, metric numerals) rides the display rung (`--text-2xl` / 1.625rem) — scale contrast is the product's typographic signature.
+**Current visual decision (owner-approved samples, 2026-10-16):** warm paper, light navigation, restrained blue, and Song-style display headings supersede the earlier Plan 11 dark rail. The approved source is the whole-site migration plan and its R5-inclusive sample coverage. Business and permission contracts are unchanged.
 
-Recommended behavior:
+| Role | sRGB reference |
+| --- | --- |
+| Paper / content / secondary and rail | `#f5f3ec` / `#fdfcf8` / `#efeee6` |
+| Heading / body | `#262820` / `#45483f` |
+| Auxiliary text | `#6c6d62` (minimally darkened from sample `#74756a` to meet AA) |
+| Group border / independent section divider | `#deded3` / `#b6bdab` |
+| Primary and focus / local brand wash | `#335d99` / `#e9eef5` |
+
+CSS remains the OKLCH source of truth. `--border-strong` retains the divider's hue/chroma with lower lightness for control boundaries; group borders are not control outlines. Muted and subtle text both remain readable on paper, content, secondary and brand surfaces. Semantic and rarity colors retain their meanings.
+
+The approved whole-site source supersedes the earlier workflow badge and
+destructive-trigger palette: status labels use its neutral gray-green tag,
+with blue only in explicitly represented source contexts. Root alerts, field
+errors, and rarity accents retain their semantic colors. The exact source
+recipes and exceptions are recorded below; a semantic class name alone does
+not select a blue, green, or orange badge.
+
+Recommended behavior for alerts and feedback:
 
 - large page backgrounds: neutral;
 - cards and panels: one subtle surface step above background;
@@ -141,18 +163,22 @@ The product is information-heavy. Body typography must prioritize readability ov
 Use:
 
 - a highly legible sans-serif body and UI font;
-- optional restrained display treatment for product or marketing headings only;
+- local Song-style display type on brand and page/authentication titles only;
 - tabular numbers for points, ranks, dates, counts, and table metrics where alignment matters.
 
 Hierarchy guideline:
 
-- page title: strong but not oversized;
+- page title: regular Song-style,31px below40rem and38px at/above40rem; section titles and body remain sans-serif. Authentication uses the approved access-page composition:29px below768px and32px otherwise, with a brand header, heading outside the form card,420px desktop card and18px mobile page gutters (`auth-login.html`,2026-10-16). A component gallery or our own regenerated PNG does not establish approved-reference fidelity;
+- owner profile title: the approved account sample uses29px below40rem and34px
+  otherwise; this is a page-specific exception to the general title scale;
 - section title: distinct from card titles;
 - body: comfortable line height;
 - metadata: muted, never so faint that it harms readability;
 - dense table text: compact, but not uncomfortably small.
 
 Avoid giant dashboard headings and oversized KPI numbers that push useful information below the fold.
+
+Production uses local stacks: `Microsoft YaHei, PingFang SC, Noto Sans CJK SC, system-ui, sans-serif` for UI/body and `SimSun, Songti SC, Noto Serif CJK SC, serif` for display. Fonts are not downloaded or redistributed. Metrics and code use the existing system mono stack through `--font-mono`. Linux screenshots pin sans/serif/mono and wait for `document.fonts.ready`; see `ui-migration-fonts.md` for evidence and platform limitations.
 
 ## 6. Spacing and density
 
@@ -202,7 +228,7 @@ All authenticated workspaces share one navigation geometry, three
 bands by viewport:
 
 - **Wide (≥64rem)**: a visually QUIET sidebar owns the primary
-  navigation — the INK dark rail (light links, brand-tinted active
+  navigation — the warm light rail (readable dark links, blue active
   state with an inset keyline; exactly one `aria-current="page"` per
   nav landmark); the top bar degrades to a context/actions strip
   (bell, user — no nav, no brand).
@@ -210,13 +236,23 @@ bands by viewport:
   destination.
 - **Narrow (<40rem)**: Student gets a fixed 5-slot bottom nav — a
   light frosted bar (translucent `--surface-1` + backdrop blur,
-  saturated primary active accent; the INK dark rail stays on the
+  restrained primary active accent; the warm rail stays on the
   wide sidebar) — with safe-area inset and reserved content
   bottom padding (the fixed bar never covers a primary action);
   Teacher/Admin get a hamburger menu sheet carrying the FULL staff
   list (native dialog semantics: focus trap, Escape, backdrop close).
 
 Routes never change with the band; reachability does not either.
+
+The approved 2026-10-16 shell uses a blue vertical brand keyline and Song-style
+“华师令”, a warm paper context bar (69px outer height on desktop), and plain
+actions in that bar. The earlier floating rounded action pill is superseded.
+Keep the existing rem-based rail defaults, width preference and collapse/resize
+behavior; a static sample's200px rail does not replace that interaction contract.
+Anonymous workspace gates reuse the auth header, independent heading and card.
+Account settings use independent avatar/nickname and phone/email section pairs,
+with the parent owning the divider; on phones they stack. Password fields form
+their own row, and current URL tabs use an underline rather than a filled pill.
 
 ### Student
 
@@ -484,11 +520,7 @@ Plan 13 thread grammar:
 
 ### Inbox lists
 
-Read/unread grammar: unread steps up through typography weight plus a
-raised `--surface-1` lift on the page ground; read stays a quiet
-ground row. Never heavy borders; never an unread tint that collides
-with the identity anchor — `--surface-brand` belongs to the
-current-user row.
+Read/unread grammar: use a small surface difference, explicit unread text and restrained weight. Keep rows on the same visual level; no large status block or floating unread card. The current-user ranking emphasis remains a separate meaning. Notification rendering migrates in T5; this paragraph records the approved direction.
 
 When a row has both a CATEGORY and a RESULT, use two channels: kind
 rides a quiet structural anchor (a 2px left keyline on the glyph tile,
@@ -673,3 +705,197 @@ Before frontend work is accepted, inspect at minimum:
 - no sensitive identity leakage.
 
 See docs/quality/quality-gates.md for the full gate.
+
+## 17. Approved student-task sample restoration (2026-10-17)
+
+The owner-approved `innovation-round-1` home/tasks/task/active-claim/claim samples
+are the presentation authority for this migration. Their quiet typography and
+surfaces supersede the older bold hero and timeline treatment above. This is a
+restoration of the accepted samples, not a new visual direction. Verification
+and remaining limitations live in `ui-migration-verification.md`.
+
+- Student home/discovery/detail use1046px maximum content width; own-claim work
+  uses966px. Insets follow the actual sample CSS:42px normally,28px at
+  1024–1250,25px below1024,17px below640 and14px below360. Preserve the existing
+  adjustable app rail and its gates. The approved default is200px (administrator208px); saved user widths, including232px, remain authoritative. Collapse/drag/keyboard/root-font scaling remain intact.
+- Discovery cards use two columns from640px and one below. Titles are normal
+  sans19/18/17px across the sample breakpoints, with a quiet rarity glyph and
+  text, separate metadata and rating lines. RARE/EPIC use approved border and
+  surface tokens; NORMAL stays neutral and the four non-color shapes remain.
+  The title's real link covers the full card, with a primary keyboard outline;
+  a permanent underline is not the card affordance.
+- Page/work h1 retains the display family; card and action h2 remain sans.
+  Home uses one subdued next-action surface, an asymmetric wallet/rank band,
+  and thin own-claim rows. The phone action fills its container.
+- Task description precedes decision facts and the action in both source and
+  visual reading order. Decision widths are280px/255px and stack below640px.
+  Assignment identifiers appear only after a real allocation.
+  The allocated platform/keyword/status use inline facts and quiet dividers,
+  rather than three nested boxes inside the decision surface.
+- Own work uses five compact top-rule stages, a neutral facts surface, revision
+  context first, and the complete server reward verdict. Native file selection,
+  upload/finalize recovery, validation reports and status announcements retain
+  their actual contracts. Never copy sample numbers, deadlines or status logic.
+  Anchor the visually hidden native picker inside its visible control group;
+  keyboard focus must scroll its visible label clear of the fixed phone nav.
+- Discussion stays on task detail. Identity choices remain native radios with
+  an explicit anonymous preview; long text, deleted-parent context, replies,
+  counters, reactions and rating keep their accessibility and privacy behavior.
+  The existing filled CommentGallery uses the same presentation scope.
+
+## 18. Approved rewards and growth restoration (2026-10-17)
+
+Use the approved `growth.css` followed by its final `compact.css`, rather than
+the older59px ranking density. The T5 family shares student content insets and
+1046px content width while retaining the existing shell/navigation contracts.
+
+- Growth-family display h1 is37px normally,31px on phone and29px below360px.
+  Account-info keeps its already-verified T3 presentation; only the growth tab
+  takes the new composition. Existing management and logout destinations remain.
+- Wallet data stays spendable/available/earned with explicit frozen/debt facts.
+  The46px/43px balance may wrap for extreme values. A next-reward strip uses
+  existing server-derived presentation helpers, not a sample balance or target.
+- Reward titles are normal18px/17px. Description and conditions span both grid
+  columns, then price and action share the final row. Buttons have66/64/60px
+  width bands and44px hit height; the shared30px visible frame remains. Native
+  list indentation is removed. Unavailable and insufficient states remain true.
+- Readonly ranking rows normally35px desktop/36px phone. Long nickname/honor,
+  large rank and score values grow naturally. This rule never sizes action rows.
+  Reuse DividedSections for the two independent ranking groups, with the divider
+  centered in the6:5 gutter, full parent height and hidden in one-column mode.
+- Notifications use the approved#f8f6f0 unread surface, explicit unread wording
+  and event glyph/type. Preserve full long content,44px mark-read actions and
+  inline error recovery. The filter and count share one quiet toolbar; its h2
+  remains available to assistive technology. Existing filtering/rollback owns state.
+- Growth shows all six server metrics, on-time numerator/denominator and ratio,
+  best historical month and readonly owned honors. Keep source null/zero meanings.
+  The sample's honor selection control is omitted because no such API exists.
+
+Current verification and remaining manual QA are tracked in the migration record
+and `test-matrix/frontend-growth-ui.md`; these rules do not imply owner acceptance.
+T5 notification and readonly-honor illustrations reuse the approved local SVG stroke paths and muted tile/medal tokens. Visible event/type text remains authoritative; unknown events keep their generic label and bell illustration. Only `.notif-item .notif-time` receives inbox11px styling; the shared default remains13px, while the approved teacher-review queue explicitly uses12px; neither inherits the11px inbox rule.
+
+## 19. Approved public innovation restoration (2026-10-17)
+
+Use R5 completion for the discovery home, public recruitments and project detail;
+the earlier innovation reading samples remain the source for achievements and
+talents. `PublicDiscoveryFrame` is presentation only. The campus session gate,
+real resource IDs, public snapshots and command/version ownership stay in the
+existing feature islands. Private editors and staff forms do not inherit it.
+
+- The six public destinations form one compact navigation row on phone. The
+  three-library strip leads to projects, talents and mentors. Home previews use
+  at most three results in server order, with real full-directory links.
+  The role reading sample retains its direct return link without adding this
+  category bar. Directory headers use the overview tab to return to discovery.
+- Project search stays visible; its advanced filters expand from a real button,
+  start open when the URL contains advanced filters, and retain native GET/Enter
+  submission and clear behavior. R5 recruitment retains its full visible filter.
+  Talent state/material selects share a phone row; native skill details retain
+  the five-tag/all-selected-tags contract and keyboard summary/checkbox order.
+- Home has equal achievement/recruitment feeds and a divider spanning the taller
+  group. Project detail has recruitment on the left, approved achievements on the
+  right and confirmed mentors below both. These groups stack below768px.
+- Project, talent and achievement directory cards use two columns from640px,
+  one on smaller phones,18px titles on desktop and17px on phone. R5 recruitment
+  remains a quiet single list with real44px detail actions and side facts that
+  move below the text on phone. Feed titles use their smaller16px scale.
+- Preserve the measured heading variants: R5 bridge34/32/29px; project list38/31px;
+  achievement/talent37/31/28px; role detail43/37/33px. Insets use36px bridge or42px
+  reading desktop, then25/17/14px. Responsive selectors must match the bridge
+  selector's specificity so desktop insets cannot override phone rules.
+- Talent contact is a compact band above the reading groups, with the existing
+  explicit contact action, current-version refresh and session cancellation.
+  Public file downloads retain their own current-version/READY checks. The
+  material marker is neutral and never claims authenticity or capability checks.
+- Role facts precede its long introduction in phone source/reading order, with
+  contact after the reading content; desktop places the facts and contact in
+  the decision column. There is one mounted contact island in both layouts.
+- Same-list project/recruitment context is a whitelist of public filters carried
+  by fixed internal detail/return paths. Project child-pagination parameters are
+  separate from that return context and remain the only detail API parameters.
+  Achievement pagination retains its existing component-owned state.
+
+The public migration matrix and verification record carry current evidence;
+these presentation rules do not claim completed verification or owner acceptance.
+
+## Approved private maintenance composition (T6b)
+
+Owner profile and qualification use1.35:1 desktop columns, stacking at850px.
+The inline R5 project form stays full width with the original mentor child below
+its closed form. Achievement content and private proofs stay left, workflow
+status right; phone order is content, proofs, status. Existing state owners and
+record/account keys remain authoritative.
+
+Controlled native textareas follow the approved content sizing: CSS bounds of
+78–240px, measured after value, width and font changes. The R5 inline project's
+later completion stylesheet sets a90px floor with1.5 line-height. Achievement
+description starts at105px or103px below640px. Its two native rows and other source-specific
+row floors remain presentation details; validation limits and pending/editing
+rules remain in their original form owners. Keep native vertical resizing and
+all labelled focus targets. Proof files precede upload controls; the heading's
+selection count uses actual current selection without claiming verification.
+
+Private list toolbars wrap their caption and intrinsic create action as whole
+items on narrow screens. Talent skill choices use13px source typography,16px
+native checkboxes and17px column gaps inside44px label targets; field labels
+remain14px. The standard-skill caption stays visible. Recruitment authorized
+contact values span the form width; talent contact groups retain their separate
+paired desktop composition.
+
+### R5导师样张落实（2026-10-17，当前批次待完整验证）
+
+导师名录的姓名使用样张中21px宋体（正文仍Sans）；R5页面标题34/32/29px，14px原生填写字段，90–240px正文框、呈现rows3/2/3/2。独立双列间距28px、2px中线，768px以下改单列并隐藏中线；勾选与按钮维持44px目标。候选、旧公开、展示、联系和代维护保持各自真实版本与授权语义。
+
+### T8教师与成果核实样张落实（2026-10-17，局部工程验证完成）
+
+复用已确认staff源码及最后加载的layout-feedback.css。标题在1440/800/390/320px分别为34/32/29/27px；教师审核为非等宽双列，间距28px、平板20px，2px完整中线。手机选中详情后隐藏队列，原页返回并恢复原行焦点。任务列表为直线分隔，状态表头与数据同轴；手机转为可换行记录。真实新建按钮与任务标题对齐，任务配置、统计、导入、协作和社区仍在原任务详情内。
+
+任务新建/编辑保留既有dialog，原生14px字段分为基本资料、奖励与时限、文件与校验规则。奖励/截止模式在先，真实截止/领取截止在后；所有值、错误、冻结规则及提交归属不变。权限和文件类型恢复原生复选框，44px标签目标；独立授权字段在桌面并排、手机堆叠。操作按钮保持内容宽度。
+
+成果核实保留原路由领取与固定快照：提交项目/成果并排、核实负责人/私密证明并排，决定说明/动作分别归组。公开内容、私密材料与决策使用各自独立中线；手机单列隐藏中线并保留分组横线。队列日期只来自实际队列DTO，不为详情补造没有的时间或版次。
+
+无Radix Trigger的受控弹窗通过useDialogReturnFocus捕获实际打开按钮及当前auth epoch；同一身份关闭时回到仍存在的按钮，已完成操作移除按钮时回到结果或列表区域。匿名身份保持显式读取，管理员揭示身份权限不等于任务治理删除权限。界面样式不能改变这些业务边界。
+
+### Task12 approved source paint and workspace details
+
+The measured R5-inclusive HTML/CSS controls these presentation recipes. CSS `:root` remains the only runtime token owner; all reference sRGB values below are authored as OKLCH there.
+
+| Context | Source recipe |
+| --- | --- |
+| Workflow status | 11px,400,1.6 line height,3px radius,2px6px padding,no border; ink #5f6855 on #e8e9df |
+| Explicit blue status | #355e82 on #e7edf0; public talent LOOKING, published private talent, accepted owner-project mentor link, UPDATE review kind and selected frozen review kind |
+| Private talent visibility | Same recipe,12px; private project/recruitment and mentor states remain11px |
+| Skill and mentor scope | 11px,400,1.6,3px,1px6px padding,1px #dedfd2 frame,body ink on secondary ground; long labels may wrap |
+| Unread label | 10px,500,1.5,3px,transparent ground,#3c6384 ink and1px #b9c6cd frame; phone0px4px,desktop1px5px |
+| Ranking self label | 10px,500,1.5,3px,1px5px padding,no border,#244f87 on #d5e0e7 |
+| Qualification/whitelist consequence | 14px at phone and desktop,#45483f on #edece3,2px #afbaa4 left rule; phone9px11px/12px margin,desktop10px13px/14px margin |
+
+The available source warning primitive #856231 on #eee6d5 fails4.5:1 (4.46455). This batch does not introduce that primitive or replace root warning alerts. A calculated one-channel alternative is diagnostic evidence only, not a shipped token or an owner visual decision.
+
+Represented destructive triggers use the source quiet body ink/content fill and a visible frame, including hover. Their original explicit confirmation, reasons, consequence text and native targets remain; final dialog confirmation uses primary paint. Field errors and alert semantics remain independent. Staff section-heading refresh actions have frames; ordinary textual logout/back/local anchors keep their existing navigation role. Qualification table row fill is hover, not persistent selection; no selection owner is added.
+
+Expanded rails reuse approved20px navigation SVG geometry (viewBox24,stroke1.6),26px display brand,normal14px/44px rows and compact13px/42px rows. Optional role-shell captions are 管理后台/教师工作台/导师工作区; the student operations-area caption 双创运营 describes the current area without granting capability. Source brand/caption/navigation offsets accommodate the existing40px collapse target. Saved rail width, legacy232px preference, resize and collapsed accessible names remain authoritative. The mentor's three existing destinations follow the source order; no sample-only gallery link is added.
+
+Current route labels include the existing destination in the context bar. Inline editor context and private entity names remain owned by their page; the global header uses public route labels without additional private reads. Desktop identity uses the current session nickname and role, with only the nickname ellipsized. Verification is pending the current focused and whole-site gates; these source recipes do not assert final acceptance.
+
+
+Task12 source action-ink correction (verification in progress): enabled outlined actions in campus/staff owned pages use body #45483f. Disabled controls keep their existing treatment. The mentor withdrawal trigger is an explicit source exception, #8b4f43 (OKLCH root token); its original confirmation and request owner remain. The recruitment related-project title link follows the approved inline-flex, centered 9px gap and blue 16px arrow; its actual project destination is unchanged.
+
+Stable owned-content visual captures exclude only external fixed top/bottom shell bars. The helper first rejects an owner containing those bars and restores their visibility afterward. All actual content, status and consent controls remain captured. Existing timestamp masks and 0.01 tolerance are preserved. Shell visual cases and natural viewport/native focus checks remain separate requirements; these owned captures do not establish viewport clearance.
+
+Reward catalogue native heading/table rhythm: no inherited section/table gap; heading tail12px at desktop/tablet and0px on phone. Actual pagination and guidance retain their own12px spacing. Source probe binds all four widths; this does not add fictional sample rows or merge the independent audited grant/revoke forms.
+
+Visual QA excludes only external Next development tooling as well as, for owned content captures, external fixed shell bars. Production has no Next development portal. Error-overlay detection remains mandatory before exclusion. Actual natural production viewport checks retain all product navigation and are independent of these captures.
+
+
+Task12 selected operations-grant field follows approved `admin.css`: `--admin-grant-reason-width:43.75rem` (700px) caps the existing reason field from640px upward; below640px it retains the available form width. The existing multiline reason, version, mandatory explanation, confirmations and command owner remain. The source-derived geometry assertion checks both field and textarea at320/390/800/1440; it first failed at750px and1172px against700px. This is a presentation bound, not a maximum text length change.
+
+
+### Approved administrator context recipes (UI9)
+
+Use measured source context: users/audit/grants labels12px muted400; users/grants controls13px from640up,14px phone. Audit text inputs and ordinary editors/import/reasons stay14px. Tableheaders9px block/10px inline padding,12px/19.2px text and#eeeee5 background; body13px/20.8px with7px block padding. Source proportions apply only from1024;640–1023 uses equal table/native-setting columns. Phone records use5px rowgap (users3px), source10px blockpadding (users9px).
+
+Existing whitelist preview cap800px; native inline parameter editor760px. Qualification facts cap720px, independent two-column pairs with35px column gap,90px key+12px gap ondesktop; below1024 one column,80px key+10px gap. Child order remains DTO-owned name/student_no/major/grade and no wrapper/handler change. Pair gap11px except10px phone. Existing root guards, consent, read audits, immutable snapshot/version fields and real current/effective facts remain.
+
+UI10 accessibility reconciliation: the measured header wash places the original auxiliary ink at approximately4.498 contrast. Use scoped `--admin-table-head-foreground:oklch(52.8% 0.016815 111.183896)` for administrative table and native-setting headers, approximately4.545 by color calculation (about one sRGB step darker). Keep the approved wash, dimensions and ordinary auxiliary ink unchanged. Actual axe and no-update comparison, rather than the calculation alone, supply the acceptance evidence.

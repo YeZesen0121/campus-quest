@@ -59,6 +59,8 @@ import { rarityView, type RarityKey } from "@/features/tasks/display";
 import { RewardTileGallery } from "./RewardTileGallery";
 import { CommentGallery } from "./CommentGallery";
 import { NotificationGallery } from "./NotificationGallery";
+import { UiMigrationGallery } from "./UiMigrationGallery";
+import { GrowthGallery } from "./GrowthGallery";
 
 const RARITIES: readonly RarityKey[] = ["NORMAL", "RARE", "EPIC", "LEGENDARY"];
 
@@ -153,6 +155,8 @@ export default function DevGalleryPage() {
           共享视觉原语 × 变体矩阵 — 仅开发环境可见，用于设计走查与像素基线。
         </p>
       </header>
+
+      <UiMigrationGallery />
 
       <section className="section" aria-label="按钮">
         <h2 className="section-title">按钮</h2>
@@ -259,6 +263,7 @@ export default function DevGalleryPage() {
       <CommentGallery />
 
       <NotificationGallery />
+      <GrowthGallery />
 
       <section className="section" aria-label="表单控件">
         <h2 className="section-title">表单控件</h2>
@@ -342,10 +347,11 @@ export default function DevGalleryPage() {
           and the shot needs no interaction. Radix 1.2 renders its
           Overlay ONLY in modal mode (dist: `context.modal ? … : null`),
           so the scrim that is part of the product look requires modal;
-          the controlled `open` keeps it pinned and deterministic. */}
+          `defaultOpen` preserves the initial pixel sample while Escape
+          lets keyboard/layout checks reach the rest of the real gallery. */}
       <section className="section" aria-label="对话框">
         <h2 className="section-title">对话框（打开状态）</h2>
-        <Dialog open>
+        <Dialog defaultOpen>
           <DialogContent aria-labelledby="gallery-dialog-title">
             <DialogTitle id="gallery-dialog-title">确认操作</DialogTitle>
             <p>对话框正文沿用共享 Dialog 原语排版。</p>

@@ -7,7 +7,7 @@ export default function OwnerQualificationsPage() {
   return <>
     <div className="page-head">
       <h1 className="page-title">负责人资格</h1>
-      <p className="page-subtitle">查看学生已提交的四项资料快照，由管理员人工开通负责人资格。</p>
+      <p className="page-subtitle">查看学生明确提交的资料快照，人工开通负责人资格。</p>
     </div>
     <OwnerQualificationAdmin />
   </>;

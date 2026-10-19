@@ -17,9 +17,7 @@ export default function AdminSystemPage() {
     <>
       <div className="page-head">
         <h1 className="page-title">系统设置</h1>
-        <p className="page-subtitle">
-          平台设置键（含版本号）、通知模板、投递失败查询与具名状态修复
-        </p>
+        <p className="page-subtitle">系统参数、通知模板与异常投递的维护入口。</p>
       </div>
       <SystemAdmin />
     </>

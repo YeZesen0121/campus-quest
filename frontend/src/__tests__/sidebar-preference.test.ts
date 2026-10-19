@@ -17,6 +17,7 @@ import { describe, test } from "node:test";
 import {
   clampRailWidth,
   parseSidebarPreference,
+  RAIL_WIDTH_ADMIN_DEFAULT_PX,
   RAIL_WIDTH_COLLAPSED_PX,
   RAIL_WIDTH_DEFAULT_PX,
   RAIL_WIDTH_MAX_PX,
@@ -29,14 +30,17 @@ import {
 } from "../lib/sidebarPreference";
 
 describe("width clamping (the drag pixel range)", () => {
-  test("the default equals the CSS token default (14.5rem at 16px root)", () => {
-    assert.equal(RAIL_WIDTH_DEFAULT_PX, 232);
+  test("the approved ordinary rail defaults to 200px (12.5rem at 16px root)", () => {
+    assert.equal(RAIL_WIDTH_DEFAULT_PX, 200);
   });
 
   test("the range is sane: min <= default <= max, collapse is below min", () => {
     assert.ok(RAIL_WIDTH_MIN_PX <= RAIL_WIDTH_DEFAULT_PX);
     assert.ok(RAIL_WIDTH_DEFAULT_PX <= RAIL_WIDTH_MAX_PX);
     assert.ok(RAIL_WIDTH_COLLAPSED_PX < RAIL_WIDTH_MIN_PX);
+  });
+  test("the administrator default has its own 208px source token", () => {
+    assert.equal(RAIL_WIDTH_ADMIN_DEFAULT_PX, 208);
   });
 
   test("in-range values pass through unchanged", () => {
@@ -56,6 +60,9 @@ describe("width clamping (the drag pixel range)", () => {
 });
 
 describe("preference parse/serialize roundtrip", () => {
+  test("a saved former-default 232px remains a genuine user preference", () => {
+    assert.deepEqual(parseSidebarPreference('{"collapsed":false,"widthPx":232}'), { collapsed: false, widthPx: 232 });
+  });
   test("a stored preference roundtrips through serialize -> parse", () => {
     const pref = { collapsed: true, widthPx: 280 };
     assert.deepEqual(
@@ -174,12 +181,13 @@ describe("token pins (TS constants vs globals.css contract)", () => {
   });
 
   test("globals.css declares the rail-width tokens the JS mirrors", () => {
-    assert.match(css, /--rail-width: 14\.5rem;/);
+    assert.match(css, /--rail-width: 12\.5rem;/);
+    assert.match(css, /--rail-width-admin: 13rem;/);
     assert.match(css, /--rail-width-collapsed: 4\.5rem;/);
   });
 
   test("the grid column consumes the variable, not a hard-coded width", () => {
-    assert.match(css, /grid-template-columns: var\(--rail-width, 14\.5rem\) minmax\(0, 1fr\)/);
+    assert.match(css, /grid-template-columns: var\(--rail-width, 12\.5rem\) minmax\(0, 1fr\)/);
     assert.doesNotMatch(css, /grid-template-columns: 14\.5rem minmax\(0, 1fr\)/);
   });
 

@@ -5,7 +5,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -17,6 +17,7 @@ from app.core.errors import BusinessError
 from app.modules.audit.context import AuditContext
 from app.modules.audit.service import AuditLogWriter
 from app.modules.identity.events import Actor
+from app.modules.innovation.collaboration_common import require_project_editor
 from app.modules.innovation.models import OwnerQualification, ProjectDraft
 from app.modules.innovation.owner_service import _require_student
 from app.modules.innovation.recruitment_models import (
@@ -71,9 +72,16 @@ async def mutation(db: AsyncSession) -> AsyncIterator[None]:
 
 
 class RecruitmentService:
-    def __init__(self, *, clock: Clock, audit: AuditLogWriter | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        audit: AuditLogWriter | None = None,
+        project_access: Literal["OWNER", "EDITOR"] = "OWNER",
+    ) -> None:
         self._clock = clock
         self._audit = audit or AuditLogWriter()
+        self._project_access = project_access
 
     async def lock_project(
         self,
@@ -83,6 +91,32 @@ class RecruitmentService:
         project_id: UUID,
         require_qualification: bool = False,
     ) -> ProjectDraft:
+        if self._project_access == "EDITOR":
+            editor_project = await require_project_editor(db, actor, project_id)
+            # Accounts are already locked in stable order, serializing both
+            # qualification records with publication and transfer.
+            qualifications = await db.scalars(
+                select(OwnerQualification)
+                .where(
+                    OwnerQualification.user_id.in_(
+                        {actor.user_id, editor_project.owner_user_id}
+                    )
+                )
+                .order_by(OwnerQualification.user_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            approved = {q.user_id for q in qualifications if q.status == "APPROVED"}
+            if require_qualification and not {
+                actor.user_id,
+                editor_project.owner_user_id,
+            }.issubset(approved):
+                raise BusinessError(
+                    ErrorCode.PERMISSION_DENIED,
+                    "发布招募须本人及当前负责人资格均有效",
+                    status_code=403,
+                )
+            return editor_project
         await _require_student(db, actor)
         qualification = await db.scalar(
             select(OwnerQualification)
@@ -451,6 +485,28 @@ class RecruitmentService:
             replayed = receipt is not None
             if receipt is None:
                 status = self.logical_status(row)
+                if action in {"publish", "reopen", "confirm_active"}:
+                    lifecycle = await db.scalar(
+                        select(ProjectDraft.lifecycle).where(
+                            ProjectDraft.id == project_id
+                        )
+                    )
+                    if lifecycle != "ACTIVE":
+                        raise conflict(
+                            "项目已结项，请先明确恢复进行中再开放招募",
+                            kind="PROJECT_COMPLETED",
+                        )
+                if self._project_access == "EDITOR" and action in {
+                    "publish",
+                    "reopen",
+                    "confirm_active",
+                }:
+                    await self.lock_project(
+                        db,
+                        actor=actor,
+                        project_id=project_id,
+                        require_qualification=True,
+                    )
                 if (
                     action in ("publish", "reopen", "confirm_active")
                     and row.moderation_state != "NORMAL"

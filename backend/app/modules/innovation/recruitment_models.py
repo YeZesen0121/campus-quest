@@ -49,6 +49,7 @@ def _text_bounds(column: str) -> tuple[CheckConstraint, ...]:
 class RecruitmentDraft(Base):
     __tablename__ = "ie_recruitment_drafts"
     __table_args__ = (
+        UniqueConstraint("id", "project_id", name="uq_ie_recruitment_project_identity"),
         *_text_bounds("fields"),
         UniqueConstraint(
             "project_id", "creation_request_id", name="uq_ie_recruitment_creation"

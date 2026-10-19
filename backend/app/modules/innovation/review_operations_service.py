@@ -30,6 +30,7 @@ from app.modules.innovation.models import (
     ProjectDraft,
 )
 from app.modules.innovation.operations_service import _USERS
+from app.modules.innovation.review_conflicts import review_conflict_exists
 from app.modules.innovation.review_models import (
     AchievementReviewCase,
     AchievementRevision,
@@ -208,12 +209,9 @@ class ReviewOperationsService:
         if lock_assignee and case.assigned_user_id != scope.assigned_user_id:
             raise _conflict("领取关系已改变，请刷新队列")
         conflict = await db.scalar(
-            select(ReviewConflict.user_id).where(
-                ReviewConflict.project_id == project.id,
-                ReviewConflict.user_id == actor.user_id,
-            )
+            select(review_conflict_exists(project.id, actor.user_id))
         )
-        if conflict is not None and not allow_conflict:
+        if conflict and not allow_conflict:
             raise _forbidden()
         return case, workflow, ReviewProjectScope(project.id, project.owner_user_id)
 
@@ -226,15 +224,7 @@ class ReviewOperationsService:
         it with account/grant changes; project locks serialize conflict changes.
         """
         assignee = _USERS.alias("assigned_review_operator")
-        conflict = (
-            select(ReviewConflict.user_id)
-            .where(
-                ReviewConflict.user_id == assignee.c.id,
-                ReviewConflict.project_id == ProjectDraft.id,
-            )
-            .correlate(assignee, ProjectDraft)
-            .exists()
-        )
+        conflict = review_conflict_exists(ProjectDraft.id, assignee.c.id)
         return (
             select(assignee.c.id)
             .join(OperationsGrant, OperationsGrant.user_id == assignee.c.id)
@@ -314,12 +304,7 @@ class ReviewOperationsService:
                 AchievementReviewCase.assigned_user_id == actor.user_id,
                 ~self._valid_assignee(),
             ),
-            ~select(ReviewConflict.user_id)
-            .where(
-                ReviewConflict.project_id == ProjectDraft.id,
-                ReviewConflict.user_id == actor.user_id,
-            )
-            .exists(),
+            ~review_conflict_exists(ProjectDraft.id, actor.user_id),
         )
         total = await db.scalar(select(func.count()).select_from(query.subquery()))
         rows = (

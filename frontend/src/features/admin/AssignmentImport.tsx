@@ -105,9 +105,9 @@ export function AssignmentImport({ taskId, onImported }: AssignmentImportProps) 
   }
 
   return (
-    <section className="section" aria-label="任务单元导入">
+    <section className="section campus-teacher-import" aria-label="任务单元导入" id="teacher-assignments">
       <div className="section-head">
-        <h3 className="section-title">任务单元导入</h3>
+        <h2 className="section-title">任务单元导入</h2>
         {phase.kind === "preview" || phase.kind === "confirming" ? (
           <Button
             variant="ghost"
@@ -221,7 +221,7 @@ function ImportPreviewTable({
         <>
           <h4 className="report-group-title">存在问题的行（{view.rowErrors.length}）</h4>
           <div className="table-scroll">
-            <table className="staff-table" aria-label="导入校验问题行">
+            <table className="staff-table campus-import-table" aria-label="导入校验问题行">
               <thead>
                 <tr>
                   <th scope="col">位置</th>

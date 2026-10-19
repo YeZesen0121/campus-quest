@@ -16,9 +16,9 @@ export default function TeacherReviewsPage() {
   return (
     <>
       <div className="page-head">
-        <h1 className="page-title">审核队列</h1>
+        <h1 className="page-title">提交审核</h1>
         <p className="page-subtitle">
-          通过机器校验的提交按时间先后等待人工审核
+          先核对文件与校验报告，再作出审核决定。
         </p>
       </div>
       <SubmissionReview />

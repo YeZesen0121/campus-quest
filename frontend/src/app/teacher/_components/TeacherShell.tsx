@@ -16,24 +16,25 @@
  * detail, so no separate nav entries exist for them.
  */
 import Link from "next/link";
+import { AuthFrame } from "@/features/auth/AuthFrame";
+import { AuthPage } from "@/features/auth/AuthPage";
+import { WorkspaceContext } from "@/components/shell/WorkspaceContext";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { SectionError } from "@/components/ui/sectionStates";
 import { StaffMenuSheet } from "@/components/shell/StaffMenuSheet";
-import { WorkspaceSidebar } from "@/components/shell/WorkspaceSidebar";
-import { ReviewIcon, TasksIcon } from "@/components/shell/navIcons";
+import { ApprovedNavIcon, WorkspaceSidebar } from "@/components/shell/WorkspaceSidebar";
 import { useSession } from "@/features/auth/session";
 import { teacherWorkspaceGate } from "@/features/auth/workspace";
-import { Button } from "@/components/ui/button";
 import { INNOVATION_NAV } from "@/features/innovation/InnovationNavigation";
 
 /* Plan 11 Task 3: the shared sidebar geometry (frozen contract);
  * per-task surfaces (import, statistics, community moderation) hang
  * off the task detail, so no separate nav entries exist for them. */
 const NAV_ITEMS = [
-  { href: "/teacher/reviews", label: "审核队列", icon: <ReviewIcon /> },
-  { href: "/teacher/tasks", label: "任务管理", icon: <TasksIcon /> },
+  { href: "/teacher/reviews", label: "审核队列", icon: <ApprovedNavIcon name="teacherReviews" /> },
+  { href: "/teacher/tasks", label: "任务管理", icon: <ApprovedNavIcon name="teacherTasks" /> },
   INNOVATION_NAV,
 ] as const;
 
@@ -48,7 +49,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/teacher/reviews">华师令</Link>
           </div>
         </div>
         <main className="app-main" aria-busy="true">
@@ -61,26 +62,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
   }
 
   if (state.status === "anonymous") {
-    return (
-      <div className="app-shell">
-        <main className="auth-shell">
-          <div className="auth-card">
-            <div className="auth-head">
-              <h1 className="auth-title">员工工作台</h1>
-              <p className="auth-subtitle">任务管理与提交审核需要员工账号登录</p>
-            </div>
-            <Button asChild variant="primary" block>
-              <Link href="/staff/login">前往员工登录</Link>
-            </Button>
-            <p className="auth-alt-action">
-              <Link className="link" href="/login">
-                返回学生入口
-              </Link>
-            </p>
-          </div>
-        </main>
-      </div>
-    );
+    return <AuthFrame><AuthPage title="员工工作台" kicker="校内空间" description="任务管理与提交审核需要员工账号登录" links={<Link href="/login">返回学生入口</Link>}><Link className="btn btn-primary" href="/staff/login">前往员工登录</Link></AuthPage></AuthFrame>;
   }
 
   if (state.status === "error") {
@@ -88,7 +70,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/teacher/reviews">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -108,7 +90,7 @@ export function TeacherShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/teacher/reviews">华师令</Link>
           </div>
         </div>
         <main className="app-main">
@@ -131,13 +113,15 @@ export function TeacherShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <WorkspaceSidebar
-        brand={{ href: "/teacher/reviews", label: "CampusQuest" }}
+        brand={{ href: "/teacher/reviews", label: "华师令" }}
         groups={SIDEBAR_GROUPS}
+        workspaceCaption="教师工作台"
       />
       <div className="app-body">
         <header className="app-topbar">
           <div className="app-topbar-inner">
-            <span className="app-brand">CampusQuest</span>
+            <Link className="app-brand" href="/teacher/reviews">华师令</Link>
+            <WorkspaceContext />
             <nav className="app-nav" aria-label="教师工作台导航">
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -151,13 +135,13 @@ export function TeacherShell({ children }: { children: ReactNode }) {
             </nav>
             <div className="app-topbar-actions">
               <span className="app-user" title={state.me.nickname}>
-                {state.me.nickname}
+                <span className="app-user-name">{state.me.nickname}</span>
                 <span className="staff-role-tag">
                   {state.me.role === "ADMIN" ? "管理员" : "教师"}
                 </span>
               </span>
-              <StaffMenuSheet label="教师工作台菜单" items={NAV_ITEMS} />
-              <Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link>
+              <StaffMenuSheet label="教师工作台菜单" items={NAV_ITEMS} footer={<><p>{state.me.nickname} · {state.me.role === "ADMIN" ? "管理员" : "教师"}</p><Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link></>} />
+              <Link className="btn btn-ghost app-logout" href="/logout" prefetch={false}>退出登录</Link>
             </div>
           </div>
         </header>

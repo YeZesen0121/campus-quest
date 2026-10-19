@@ -20,7 +20,7 @@ import { isApiError } from "@/lib/errors";
 
 import type {
   AdminUserDto,
-  RewardCatalogueDto,
+  AdminRewardItemDto,
   RewardCreateBody,
   RewardUpdateBody,
   WhitelistCountsDto,
@@ -460,9 +460,9 @@ export const EMPTY_REWARD_FORM: RewardFormValues = {
   reason: "",
 };
 
-/** Field set shared by the catalogue row and the admin verdict row (structural). */
+/** Known fields from the authorized management catalogue and admin verdict. */
 export type RewardEditSource = Pick<
-  RewardCatalogueDto,
+  AdminRewardItemDto,
   | "id"
   | "name"
   | "point_cost"
@@ -471,9 +471,10 @@ export type RewardEditSource = Pick<
   | "per_user_term_limit"
   | "available_from"
   | "available_until"
+  | "fulfillment_instructions"
 >;
 
-/** Prefill from a catalogue or verdict row (instructions/review-flag stay create-only). */
+/** Prefill only fields actually returned by the authorized admin read. */
 export function rewardFormFromCatalogue(
   row: RewardEditSource,
   toLocalValue: (ms: number) => string,
@@ -483,6 +484,7 @@ export function rewardFormFromCatalogue(
     name: row.name,
     pointCost: String(row.point_cost),
     description: row.description ?? "",
+    fulfillmentInstructions: row.fulfillment_instructions ?? "",
     stock: row.stock === null ? "" : String(row.stock),
     perUserTermLimit:
       row.per_user_term_limit === null ? "" : String(row.per_user_term_limit),
@@ -593,10 +595,9 @@ export function rewardFormToCreateBody(
  * The DIFF-ONLY update body (the backend's presence semantics: absent =
  * unchanged, explicit null clears a nullable bound). An empty input for
  * a bound the row HELD means "clear it"; for a bound the row never had,
- * empty stays absent. name/point_cost always ride (non-nullable).
- * fulfillment_instructions / requires_manual_review are deliberately
- * NOT manageable on edit: the student-listing read cannot prefill them,
- * and sending a blind value would clobber the stored one.
+ * empty stays absent. name/point_cost ride only when changed and cannot clear.
+ * Instructions are known from the admin read. Review policy remains outside
+ * this edit form and is never sent from its create-only default.
  */
 export function rewardFormToUpdateBody(
   values: RewardFormValues,
@@ -617,6 +618,10 @@ export function rewardFormToUpdateBody(
   const description = values.description.trim();
   if (description !== (row.description ?? "")) {
     body.description = description.length > 0 ? description : null;
+  }
+  const instructions = values.fulfillmentInstructions.trim();
+  if (instructions !== (row.fulfillment_instructions ?? "")) {
+    body.fulfillment_instructions = instructions.length > 0 ? instructions : null;
   }
   if (values.stock.trim().length === 0) {
     if (row.stock !== null) {
