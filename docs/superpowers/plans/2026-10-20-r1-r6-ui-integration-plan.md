@@ -171,12 +171,13 @@ I1 在合流未提交状态完成必要修复后才提交，不先生成已知�
 
 **Interfaces:** Produces `infra/integration/.runtime/ui-disposition.json`：每条来源路径拥有 source SHA256、R6 blob、合流前后 blob、`already-present/port/retain-integrated/superseded` 之一、原因与覆盖证据；发布可审阅的非敏感摘要，原私有清单留本机。
 
-- [ ] 从稳定 UI snapshot、固定 e20bf06 与当前集成树做三方对账，不从正在变化的源文件盲拷。原 C1–C4 22/212/50/14 清单只作来源索引。
-- [ ] 232 相同路径先确认合流后是否仍等价；66 差异逐一判明方向，特别是 8 个产品文件：profile、globals.css、AchievementReviewPanel、AchievementReviewsView、PrivateWorkspace、ProjectDraftsView、PublicProjectsView、RecruitmentEditor。
-- [ ] 保留 R6 的协作入口、关系权限、项目转让、逐份证明、恢复命令和生命周期状态。对 UI15/16 的未读通知、积分不足、任务耗尽等前提补丁先证明当前确有缺口；不把 R6 或上游更强的 cleanup 换回旧实现。
-- [ ] 17 份 UI 验证脚本逐项记录处置，必要隔离/seed 行为迁入 integration runner；无需为保留路径而再建重复运行栈。源 UI 栈、历史回执和 61 PNG 原件继续保留。
-- [ ] 对确有行为变化的共享清理/世界准备先 RED 后 GREEN；验证跨世界拒绝、中途失败可重试、actor 账号存续，以及测试顺序不消耗他例前提。no-skip 豁免逐项绑定真实专项证据，不能复制旧通过数字。
-- [ ] 维护各域矩阵与 selector 契约；运行对应后端 E2E、前端静态、shared fixture 回归后逐路径提交 I2。仅文档历史复制不能标成新验收。
+- [x] 从稳定 UI snapshot、固定 e20bf06 与当前集成树做三方对账，不从正在变化的源文件盲拷。原 C1–C4 22/212/50/14 清单只作来源索引。
+- [x] 232 相同路径先确认合流后是否仍等价；66 差异逐一判明方向，特别是 8 个产品文件：profile、globals.css、AchievementReviewPanel、AchievementReviewsView、PrivateWorkspace、ProjectDraftsView、PublicProjectsView、RecruitmentEditor。
+- [x] 保留 R6 的协作入口、关系权限、项目转让、逐份证明、恢复命令和生命周期状态。对 UI15/16 的未读通知、积分不足、任务耗尽等前提补丁先证明当前确有缺口；不把 R6 或上游更强的 cleanup 换回旧实现。
+- [x] 17 份 UI 验证脚本逐项记录处置，必要隔离/seed 行为迁入 integration runner；无需为保留路径而再建重复运行栈。源 UI 栈、历史回执和 61 PNG 原件继续保留。
+- [x] 对确有行为变化的共享清理/世界准备先 RED 后 GREEN；验证跨世界拒绝、中途失败可重试、actor 账号存续，以及测试顺序不消耗他例前提。
+- [ ] no-skip 豁免逐项绑定真实专项证据，不能复制旧通过数字（按 Task6 在最终 H 执行；本阶段只移除已关闭的前提豁免并验证原 guard，不预填最终专项通过）。
+- [x] 维护各域矩阵与 selector 契约；运行对应后端 E2E、前端静态、shared fixture 回归后逐路径提交 I2。仅文档历史复制不能标成新验收。
 
 **Acceptance:** 298 条全部有处置；没有 R6 行为退回、UI 源索引变化、无理由 skip 或整包覆盖；确需补入的测试前提在新组合通过。
 

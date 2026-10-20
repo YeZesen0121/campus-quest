@@ -11,10 +11,8 @@
  * - CQ_E2E_STUDENT     pre-seeded student credentials
  *                      "student-number:password" (required for the
  *                      authenticated tests);
- * - the mark-read test depends on a side-effect unread row from an
- *                      earlier battery test (the world seeds zero
- *                      notifications — see the noskip exemption
- *                      entry); it self-skips without one.
+ * - CQ_E2E_WORLD_FILE  owned disposable world; mark-read prepares its own
+ *                      fresh delivered IN_APP notification at execution.
  *
  * OWNER-ONLY under test (spec §28 + notifications router): the inbox is
  * the caller's OWN rows and mark-read is owner-only server-side — the
@@ -26,7 +24,7 @@
  */
 import { expect, test } from "./fixtures";
 
-import { ensureStudentLogin } from "./fixtures";
+import { ensureStudentLogin, prepareUnreadNotification } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
@@ -104,17 +102,23 @@ test.describe("inbox render + filter tabs (§28; patterns §4 URL state)", () =>
     await expect(page.getByLabel("通知收件箱")).toBeVisible();
   });
 
-  test("the bell and the avatar chip share one circle language (owner feedback, 2026-10-10)", async ({ page }) => {
-    // The bell used to be a control-height SQUARE with a square hover
-    // block beside the round avatar chip. Both pill slots are 2rem
-    // circles now, and BOTH have a hover treatment (the chip had
-    // none — two adjacent interactive slots must agree).
+  test("the circular bell and approved nickname account link keep their own geometry", async ({ page }) => {
+    // The approved UI13/R6 shell replaced the old avatar chip with the
+    // current nickname link (design-system desktop identity recipe).
+    // Preserve the bell's original circle/hover and the new account target.
     const bell = page
       .getByRole("banner")
       .getByRole("link", { name: /未读通知/ });
-    const chip = page.getByRole("banner").getByRole("link", { name: "我的账户" });
+    const account = page.getByRole("banner").getByRole("link", { name: "我的账户", exact: true });
     await expect(bell).toBeVisible();
-    await expect(chip).toBeVisible();
+    await expect(account).toBeVisible();
+    await expect(account).toHaveAttribute("href", "/profile");
+    await expect(account).toHaveText(/^端到端同学[0-9a-f]{4}$/);
+    await expect(account).toHaveCSS("font-size", "13px");
+    const accountBounds = (await account.boundingBox())!;
+    expect(accountBounds.width).toBeGreaterThanOrEqual(44);
+    expect(accountBounds.height).toBeGreaterThanOrEqual(44);
+    await expect(page.getByRole("banner").locator(".avatar-chip")).toHaveCount(0);
 
     const shape = await page.evaluate(() => {
       const read = (selector: string) => {
@@ -131,27 +135,22 @@ test.describe("inbox render + filter tabs (§28; patterns §4 URL state)", () =>
           bg: style.backgroundColor,
         };
       };
-      return { bell: read(".app-topbar-actions .topbar-bell"), chip: read(".app-topbar-actions .avatar-chip") };
+      return { bell: read(".app-topbar-actions .topbar-bell") };
     });
     expect(shape.bell?.radius).toBe("50%");
     expect(shape.bell?.width).toBe(32);
     expect(shape.bell?.height).toBe(32);
-    expect(shape.chip?.radius).toBe("50%");
-    expect(shape.chip?.width).toBe(32);
-    expect(shape.chip?.height).toBe(32);
 
-    // The hover fills: the bell takes the quiet surface-2, the chip
-    // deepens its primary wash — each CHANGES on hover.
+    // The bell retains its quiet surface hover and circular geometry.
     const bgOf = () =>
       page.evaluate(() => ({
         bell: getComputedStyle(document.querySelector(".app-topbar-actions .topbar-bell")!).backgroundColor,
-        chip: getComputedStyle(document.querySelector(".app-topbar-actions .avatar-chip")!).backgroundColor,
       }));
     const rest = await bgOf();
     await bell.hover();
     await expect.poll(async () => (await bgOf()).bell).not.toBe(rest.bell);
-    await chip.hover();
-    await expect.poll(async () => (await bgOf()).chip).not.toBe(rest.chip);
+    await account.focus();
+    await expect(account).toBeFocused();
   });
 });
 
@@ -165,18 +164,23 @@ test.describe("owner mark-read (the §28 owner-only surface)", () => {
     page,
   }) => {
     await loginAs(page);
+    const prepared = prepareUnreadNotification();
     await page.goto(`${BASE_URL}/notifications`);
 
-    const unreadRow = page.locator(".notif-item[data-read='false']").first();
-    if (!(await unreadRow.isVisible())) {
-      test.skip(
-        true,
-        "needs a seeded UNREAD notification for CQ_E2E_STUDENT (Plan 10's fixture seeds one).",
-      );
-    }
-    const title = (await unreadRow.locator(".notif-title").innerText()).trim();
+    const title = prepared.title;
+    const unreadRow = page.locator(".notif-item[data-read='false']", {
+      has: page.getByText(title, { exact: true }),
+    });
     await expect(unreadRow.getByText("未读", { exact: true })).toBeVisible();
+    const marked = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === `/api/v1/notifications/${prepared.notification_id}/read`);
     await unreadRow.getByRole("button", { name: "标为已读" }).click();
+    const response = await marked;
+    expect(response.status()).toBe(200);
+    const persisted = await response.json() as { id: string; read_at: string | null };
+    expect(persisted.id).toBe(prepared.notification_id);
+    expect(persisted.read_at).toEqual(expect.any(String));
 
     // Optimistic flip confirmed by the server echo: read state, no 未读
     // badge, no further action (design §10/§12 — weight + badge, not color).
@@ -184,6 +188,8 @@ test.describe("owner mark-read (the §28 owner-only surface)", () => {
     await expect(row).toHaveAttribute("data-read", "true");
     await expect(row.getByText("未读", { exact: true })).toHaveCount(0);
     await expect(row.getByRole("button", { name: "标为已读" })).toHaveCount(0);
+    await page.reload();
+    await expect(row).toHaveAttribute("data-read", "true");
 
     // A read row no longer matches the unread filter.
     await page.getByRole("link", { name: "未读", exact: true }).click();

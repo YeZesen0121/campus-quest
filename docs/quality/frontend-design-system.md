@@ -724,7 +724,11 @@ and remaining limitations live in `ui-migration-verification.md`.
   uses966px. Insets follow the actual sample CSS:42px normally,28px at
   1024–1250,25px below1024,17px below640 and14px below360. Preserve the existing
   adjustable app rail and its gates. The approved default is200px (administrator208px); saved user widths, including232px, remain authoritative. Collapse/drag/keyboard/root-font scaling remain intact.
-- Discovery cards use two columns from640px and one below. Titles are normal
+- Discovery cards use two columns from640px and one below. The approved
+  `innovation-round-1/student.css` explicitly sets `align-items:start`:
+  cards retain their content height, align at the row top and do not overlap
+  the next row. This sample recipe supersedes the older equal-height rule.
+  Titles are normal
   sans19/18/17px across the sample breakpoints, with a quiet rarity glyph and
   text, separate metadata and rating lines. RARE/EPIC use approved border and
   surface tokens; NORMAL stays neutral and the four non-color shapes remain.

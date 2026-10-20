@@ -1,5 +1,7 @@
 # R5 mentor approved UI migration
 
+> R1–R6 集成：以下 UI 历史数字保留其源工作线和阶段，不能视作当前整合版通过。298 路径处置见 ../ui-integration-disposition.md；当前回执见 ../r1-r6-ui-integration-verification.md，最终 H 门禁与远端 CI 分别记账。
+
 Task12 正在重新收口：以下旧批次通过记录是该批次历史证据，不代表当前整站验收；最终证据以 Task12 新日志为准。
 
 Predictions follow the approved R5 design and the Task9 read-only preflight

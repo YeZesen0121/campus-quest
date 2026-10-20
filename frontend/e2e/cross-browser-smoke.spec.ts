@@ -24,6 +24,37 @@ const BASE = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 
 test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* env) to run this suite.");
 
+/** Native keyboard login keeps the cross-engine input/hydration contract. */
+async function studentLoginTyped(
+  page: import("@playwright/test").Page,
+  credentials: string,
+): Promise<void> {
+  const [username, password] = credentials.split(":");
+  await page.goto(`${BASE}/login`);
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  const identifier = page.getByLabel("账号", { exact: true });
+  await expect(identifier).toBeEnabled();
+  await identifier.pressSequentially(username, { delay: 2 });
+  await page.getByLabel("密码").pressSequentially(password, { delay: 2 });
+  await expect(identifier).toHaveValue(username);
+  await expect(page.getByLabel("密码")).toHaveValue(password);
+  const accepted = page.waitForResponse(response =>
+    response.request().method() === "POST" &&
+    new URL(response.url()).pathname === "/api/v1/auth/login");
+  const identityRead = page.waitForResponse(response =>
+    response.request().method() === "GET" && response.status() === 200 &&
+    new URL(response.url()).pathname === "/api/v1/me");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  expect((await accepted).status()).toBe(200);
+  expect(await (await identityRead).json()).toMatchObject({ username, role: "STUDENT" });
+  await page.waitForURL(url => !url.pathname.startsWith("/login"));
+  // I1's optimistic shell also renders the sidebar toggle and links. Only
+  // the resolved identity, real account link and home content prove readiness.
+  await expect(page.getByRole("button", { name: /收起侧边栏|展开侧边栏/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("banner").getByRole("link", { name: "我的账户", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "首页", level: 1, exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
 test.describe("cross-browser smoke (firefox + webkit subset)", () => {
   test("R1 innovation navigation and real logout fence browser back", async ({ page }) => {
     await studentLoginTyped(page, process.env.CQ_E2E_STUDENT ?? "");
@@ -81,10 +112,31 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
     await page.getByLabel("密码").pressSequentially(staff[1] ?? "", { delay: 2 });
     await expect(page.getByLabel("账号", { exact: true })).toHaveValue(staff[0]);
     await expect(page.getByLabel("密码")).toHaveValue(staff[1] ?? "");
+    // Observe the accepted login's own read; a second navigation can
+    // discard its body. Both empty and populated queues are valid states.
+    const queueRequested = page.waitForRequest(request =>
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === "/api/v1/teacher/submissions/review-queue" &&
+      new URL(request.frame().url()).pathname === "/teacher/reviews");
     await completeStaffPasswordLogin(page, totpSecret);
-    await page.goto(`${BASE}/teacher/reviews`);
-    await expect(page.locator(".review-item, .section").first()).toBeVisible({
-      timeout: 20_000,
+    await expect(page).toHaveURL(/\/teacher\/reviews$/);
+    const response = await (await queueRequested).response();
+    if (response === null) throw new Error("staff queue request did not complete");
+    expect(response.status()).toBe(200);
+    const queue = await response.json() as { items: unknown[] };
+    expect(Array.isArray(queue.items)).toBe(true);
+    const workspace = page.getByRole("region", { name: "任务审核工作区", exact: true });
+    await expect(page.getByRole("heading", { name: "提交审核", level: 1, exact: true })).toBeVisible();
+    await expect(workspace).toBeVisible({ timeout: 20_000 });
+    if (queue.items.length === 0) {
+      await expect(workspace.getByText("审核队列为空", { exact: true })).toBeVisible({ timeout: 20_000 });
+    } else {
+      await expect(workspace.locator(".review-item")).toHaveCount(queue.items.length, { timeout: 20_000 });
+      await expect(workspace.locator(".review-item").first()).toBeVisible({ timeout: 20_000 });
+    }
+    await test.info().attach("staff-review-state", {
+      body: JSON.stringify({ itemsCount: queue.items.length }),
+      contentType: "application/json",
     });
     await page.close();
   });

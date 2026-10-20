@@ -21,7 +21,7 @@
  * platform/keyword the student ever sees is the one the server allocated
  * to their own claim, and it appears only AFTER the claim succeeds.
  */
-import { ensureStudentLogin, expect, test } from "./fixtures";
+import { API_URL, ensureStudentLogin, expect, loginThroughUi, mintToken, parseSeededAccount, prepareEmptyTask, test } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
@@ -122,22 +122,31 @@ test.describe("student task claim", () => {
       continuation.click(),
     ]);
     const ownAssignment = page.getByRole('region', { name: '分配给你的任务单元', exact: true });
-    await expect(ownAssignment).toContainText(allocation.platform);
+    // Upstream decorates the server's code with the enabled dictionary name.
+    // An early raw-code fallback is not the settled presentation contract.
+    const dictionaryResponse = await page.request.get(`${API_URL}/platforms`, {
+      headers: { Authorization: `Bearer ${mintToken(process.env.CQ_E2E_STUDENT_ID!)}` },
+    });
+    expect(dictionaryResponse.status()).toBe(200);
+    const dictionary = await dictionaryResponse.json() as { code: string; display_name: string }[];
+    const name = dictionary.find(item => item.code === allocation.platform)?.display_name ?? allocation.platform;
+    await expect(ownAssignment).toContainText(name);
     await expect(ownAssignment).toContainText(allocation.keyword);
   });
 
   test("a depleted task's detail says so up front — the CTA is disabled, not pressable-then-rejected (owner defect 2026-10-10)", async ({ page }) => {
-    // The standard world's deterministic depleted card (task_r, its
-    // one assignment claimed by the redeemer — the square badge test
-    // above pins the same task) doubles as the depleted DETAIL deep
-    // link, so this pin runs in every battery — no extra env stage.
-    const depletedCard = page
-      .locator(".task-card", { hasText: "已被领完" })
-      .first();
-    await page.goto(`${BASE_URL}/tasks`);
-    await expect(depletedCard).toBeVisible();
-    await depletedCard.locator(".task-card-title a").click();
-    await page.waitForURL(/\/tasks\/[0-9a-f-]{36}$/);
+    // Keep the upstream disabled-CTA contract. The requester's quota and
+    // this task's availability are independent of all prior claim flows.
+    const prepared = prepareEmptyTask();
+    await loginThroughUi(page, parseSeededAccount(prepared.credentials, "prepared task requester"));
+    const detailRequested = page.waitForRequest(request =>
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === `/api/v1/tasks/${prepared.task_id}`);
+    await page.goto(`${BASE_URL}${prepared.task_path}`);
+    const response = await (await detailRequested).response();
+    if (response === null) throw new Error("depleted task read did not complete");
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({ assignments_available: 0, my_claim: null });
 
     // The page must never offer a pressable 领取任务 that the next
     // press would reject: the server's availability number drives the
@@ -149,6 +158,7 @@ test.describe("student task claim", () => {
     await expect(page.getByRole("button", { name: "领取任务" })).toHaveCount(0);
     await expect(page.getByText("随机分配一个任务单元")).toHaveCount(0);
     await expect(page.getByText("该任务的所有名额都已被领取")).toBeVisible();
+    await expect(page.locator(".claim-panel")).toHaveCount(0);
     // The typed 409 copy stays the CONCURRENT-RACE fallback only
     // (last slot leaving after render); its mapping is unit-covered
     // (claim-errors.test.ts), not reachable from a disabled CTA.
@@ -271,10 +281,11 @@ test.describe("task card affordances (defect #5)", () => {
     // meta rows). The badge keeps full contrast.
     await expect(depleted).toHaveAttribute("data-depleted", "true");
     await expect(depleted).toHaveCSS("border-style", "dashed");
-    const { bg, metaOpacity } = await depleted.evaluate((el) => ({
-      bg: getComputedStyle(el).backgroundColor,
-      metaOpacity: getComputedStyle(el.querySelector(".task-card-meta")).opacity,
-    }));
+    const { bg, metaOpacity } = await depleted.evaluate((el) => {
+      const meta = el.querySelector(".task-card-meta");
+      if (meta === null) throw new Error("depleted card metadata is missing");
+      return { bg: getComputedStyle(el).backgroundColor, metaOpacity: getComputedStyle(meta).opacity };
+    });
     // The grayed step toward surface-2 is present, and the copy keeps
     // full opacity (the a11y contract of the treatment).
     expect(bg).not.toBe("rgba(0, 0, 0, 0)");
@@ -352,27 +363,45 @@ test.describe("task card affordances (defect #5)", () => {
     expect(previousDelay + 220).toBeLessThanOrEqual(320);
   });
 
-  test("cards in the same grid row share one height (batch ③)", async ({ page }) => {
-    // Owner ruling: rows are uniform — the card fills its stretched
-    // li (heights were content-ragged: 1-line vs 2-line titles, badge
-    // presence). Group by row via bounding-rect top and compare.
-    const rows = await page.evaluate(() => {
-      const byRow = new Map<number, number[]>();
-      for (const card of document.querySelectorAll<HTMLElement>(".task-card")) {
-        const rect = card.getBoundingClientRect();
-        const top = Math.round(rect.top);
-        const heights = byRow.get(top) ?? [];
-        heights.push(Math.round(rect.height));
-        byRow.set(top, heights);
-      }
-      return [...byRow.values()];
+  test("task cards keep approved start alignment without overlapping the next row", async ({ page }) => {
+    // Approved innovation-round-1/student.css uses align-items:start.
+    // Natural content heights supersede the older equal-height recipe.
+    // Measure final positions, not the staggered entrance's intermediate top.
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(document.getAnimations()
+        .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations))
+        .map(animation => animation.finished.catch(() => undefined)));
     });
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-    for (const row of rows) {
-      const tallest = Math.max(...row);
-      for (const height of row) {
-        expect(Math.abs(height - tallest)).toBeLessThanOrEqual(1);
+    const layout = await page.evaluate(() => {
+      const grid = document.querySelector(".task-grid");
+      if (grid === null) throw new Error("task grid is missing");
+      const style = getComputedStyle(grid);
+      const byRow = new Map<number, number[]>();
+      const cards = [];
+      for (const card of grid.querySelectorAll<HTMLElement>(".task-card")) {
+        const rect = card.getBoundingClientRect();
+        const item = card.parentElement;
+        if (item === null) throw new Error("task card list item is missing");
+        const parent = item.getBoundingClientRect();
+        cards.push({ top: rect.top, itemTop: parent.top, width: rect.width, itemWidth: parent.width });
+        const top = Math.round(rect.top);
+        const bottoms = byRow.get(top) ?? [];
+        bottoms.push(rect.bottom);
+        byRow.set(top, bottoms);
       }
+      return { align: style.alignItems, gap: Number.parseFloat(style.rowGap), cards,
+        rows: [...byRow].sort(([left], [right]) => left - right) };
+    });
+    expect(layout.align).toBe("start");
+    expect(layout.cards.length).toBeGreaterThanOrEqual(1);
+    for (const card of layout.cards) {
+      expect(Math.abs(card.top - card.itemTop)).toBeLessThanOrEqual(1);
+      expect(Math.abs(card.width - card.itemWidth)).toBeLessThanOrEqual(1);
+    }
+    for (let index = 1; index < layout.rows.length; index += 1) {
+      const previousBottom = Math.max(...layout.rows[index - 1][1]);
+      expect(layout.rows[index][0]).toBeGreaterThanOrEqual(previousBottom + layout.gap - 1);
     }
   });
 });

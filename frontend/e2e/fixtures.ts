@@ -458,6 +458,27 @@ export { expect };
 // worker code no browser can reach (the orchestrated stack runs no
 // Celery worker by design, E1's two-server ruling).
 
+function requiredBrowserWorldFile(): string {
+  const file = process.env.CQ_E2E_WORLD_FILE;
+  if (file === undefined) throw new Error("missing disposable browser world file");
+  return file;
+}
+
+/** Fresh completed IN_APP delivery, independent of earlier unread consumers. */
+export function prepareUnreadNotification(): { notification_id: string; title: string } {
+  return runWorldAction("prepare-unread", requiredBrowserWorldFile());
+}
+
+/** New zero-balance actor and the owned reward it cannot afford. */
+export function preparePoorStudent(): { user_id: string; credentials: string; reward_name: string; point_cost: number } {
+  return runWorldAction("prepare-poor-student", requiredBrowserWorldFile());
+}
+
+/** Fully occupied task plus a requester with an independent claim quota. */
+export function prepareEmptyTask(): { task_id: string; task_path: string; holder_id: string; requester_id: string; credentials: string } {
+  return runWorldAction("prepare-empty-task", requiredBrowserWorldFile());
+}
+
 /** Run the real validation worker entry for one submission. */
 export function runValidationJob(submissionId: string): {
   validation_status: string;

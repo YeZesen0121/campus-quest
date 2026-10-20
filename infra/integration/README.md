@@ -35,6 +35,13 @@ Run `test-host-auth-flags.ps1` outside the wrapper to verify explicit
 The dedicated fence/probe run uses these flags with the two auth specs; clear
 them before the unfiltered standard battery. Its exemptions require separate
 actual evidence for all three dedicated cases.
+`test-ui-noskip.mjs` runs the original guard against disposable synthetic
+reports: the two removed unread/zero-balance prerequisites must be rejected,
+and the four R6 visual exemptions must remain registered. This selfproof does
+not replace actual dedicated-world/visual executions on the final head.
+`test-playwright-env.ts` copies this owned stack's real public CA to a temporary
+override path, preserving the fail-closed missing-CA rule while checking that
+the server and seeded world use the same storage environment.
 The exit-7 probe requires its full argv documented in probe-exit.mjs.
 
 Initial e20bf06 environment acceptance is recorded in the integration

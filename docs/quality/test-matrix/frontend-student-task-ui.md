@@ -1,5 +1,7 @@
 # Student task UI reference migration
 
+> R1–R6 集成：以下 UI 历史数字保留其源工作线和阶段，不能视作当前整合版通过。298 路径处置见 ../ui-integration-disposition.md；当前回执见 ../r1-r6-ui-integration-verification.md，最终 H 门禁与远端 CI 分别记账。
+
 ## UI13 final sample refinement
 
 | ID | Requirement | Expected | Tests | Status |
@@ -24,6 +26,8 @@ is `infra/ui/.runtime/t4/accepted.json`; earlier receipts retain their own sourc
 | ST6 | Community privacy and input | Explicit anonymous preview, deleted parent context, counters, reactions, rating eligibility and keyboard behavior survive recomposition | `frontend/e2e/community.spec.ts` | 已覆盖，当前14项真实社区流程通过，四断点填充画廊已实看 |
 | ST7 | Review and role boundaries | Claim payload ownership, teacher decisions and reward/deadline authority stay on the server | `frontend/e2e/teacher.spec.ts` | 已覆盖，当前教师3项及连续领取旅程的真实决策通过 |
 | ST8 | Responsive fidelity | Actual approved/product comparison at matching fonts andDPR;320/390/800/1440 usable, mobile primary actions unobscured; approved visual changes reviewed before PNG promotion | `frontend/e2e/visual-regression.spec.ts`、`frontend/e2e/student-task-reference-layout.spec.ts` | 已覆盖，最终16项无更新比较通过、61PNG不变；生产20组对照与12自然视口均实看、无溢出且动作无遮挡 |
+
+| ST11 | Exhausted task with independent requester | Another student holds the only unit; fresh zero-claim requester sees assignments_available=0 and disabled 名额已满, no allocated panel; retain concurrent-race error mapping | `frontend/e2e/task-claim.spec.ts`、`tests/e2e/test_browser_world_edge_cases.py`、`frontend/src/__tests__/claim-errors.test.ts` | 已覆盖：Task4真实PG满配额隔离、实际DTO/禁用CTA与三次独立申请人通过；保留上游规则，不恢复旧可点击409按钮；最终H仍须Task6 |
 
 ## 缺口明细
 

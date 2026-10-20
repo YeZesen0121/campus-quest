@@ -1,5 +1,7 @@
 # 共享视觉基础规约对账
 
+> R1–R6 集成：以下 UI 历史数字保留其源工作线和阶段，不能视作当前整合版通过。298 路径处置见 ../ui-integration-disposition.md；当前回执见 ../r1-r6-ui-integration-verification.md，最终 H 门禁与远端 CI 分别记账。
+
 Task12 正在重新收口：以下旧批次通过记录是该批次历史证据，不代表当前整站验收；最终证据以 Task12 新日志为准。
 
 依据：`2026-10-16-whole-site-ui-migration.md` T1/T2及第1/3节。预期已在批准计划和Task3 brief中先于测试记录；本表对账实际证据。仅呈现层，不改身份、API或业务状态。
@@ -28,6 +30,8 @@ Task12 正在重新收口：以下旧批次通过记录是该批次历史证据�
 | UI20 | 跨标签退出后测试就绪 | 完整新文档加载后才填写换号表单；字段持续存在，真实POST200和主页面身份/私密清理断言保留 | `frontend/e2e/innovation-mentors.spec.ts` | 已覆盖，真实脚本延迟RED证明初始化前填写会丢学号，正确等待完整导航后GREEN；新完整导师8通过，原主文档身份/隐私断言保留，产品初始化行为未改 |
 | UI21 | Task12 慢脚本真实表单就绪 | 学生、导师与员工 SSR 登录框在客户端事件就绪前禁用输入与提交；受控 6500ms 脚本延迟后邮箱/账号、密码及员工二次验证值保留；原登录接口、会话和身份分流不变 | `frontend/e2e/auth-reference-layout.spec.ts` | 已覆盖：学生/导师与员工实际输入丢失 RED；final-closure-green 三类表单及原员工慢导航/一次拒绝重算验证通过，完整最终门禁待执行 |
 | UI22 | Task12 actual approved tag/action paint | Ordinary workflow variants share neutral11/400/3/2x6/no-border paint; represented danger triggers stay quiet on hover with44px targets; explicit blue contexts and unread/self/skill/privateTalent exceptions use their actual source recipes | `frontend/e2e/ui-migration-layout.spec.ts`; `frontend/e2e/growth-reference-layout.spec.ts`; `frontend/e2e/innovation-private-reference-layout.spec.ts`; `frontend/e2e/innovation-public-reference-layout.spec.ts`; `frontend/e2e/innovation-review.spec.ts`; `frontend/e2e/innovation-mentors.spec.ts` | 已覆盖（回归已编写并复现 RED）；修复后 fresh focused GREEN 进行中，整站最终门禁尚未完成 |
+
+| UI23 | Cross-browser staff queue readiness | Real unified password login plus TOTP only if challenged; accepted landing's own GET200; named workspace with response-matched empty state or exact rows; no second navigation or timeout/retry relaxation | `frontend/e2e/cross-browser-smoke.spec.ts` | 流程行：Task4两引擎8项通过、零skip/flaky，实际均itemsCount=1；空态分支及最终H完整电池待Task6，不借用UI16旧结果 |
 
 ## 缺口明细
 

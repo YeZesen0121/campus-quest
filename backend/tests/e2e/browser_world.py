@@ -19,6 +19,9 @@ Subcommands (JSON on stdout; non-zero exit with a message on stderr):
     mint <user_id>           a fresh access token (the 15-min TTL makes
                              seed-time tokens unreliable for long runs)
     clean <world_file>       teardown: S3 objects, rows, boards, broker
+    prepare-unread <world_file>       one fresh delivered IN_APP notification
+    prepare-poor-student <world_file> one owned zero-balance actor
+    prepare-empty-task <world_file>   one owned fully occupied task
 
 Env: the integration defaults (db_guard) apply, so the plain
 ``uv run python tests/e2e/browser_world.py ...`` from backend/ targets
@@ -699,6 +702,7 @@ async def _clean(world_path: str) -> dict[str, Any]:
             user_ids.append(uuid.UUID(world["author"]["id"]))
         if "mentor" in world:
             user_ids.append(uuid.UUID(world["mentor"]["id"]))
+        user_ids.extend(uuid.UUID(value) for value in world.get("edge_user_ids", []))
         for recorded_id in world.get("cleanup_user_ids", []):
             user_id = uuid.UUID(recorded_id)
             if user_id not in user_ids:
@@ -985,6 +989,10 @@ async def _main(argv: list[str]) -> Any:
     action = argv[0]
     if action == "seed":
         return await _seed()
+    if action in {"prepare-unread", "prepare-poor-student", "prepare-empty-task"}:
+        from tests.e2e.browser_edge_world import prepare_edge_case
+
+        return await prepare_edge_case(action, argv[1])
     if action == "validate":
         from app.workers.jobs.validate_submission import run_submission_validation
 

@@ -18,10 +18,8 @@
  *                            seeded reward card (name derives from the
  *                            run marker) and mint the Admin bearer the
  *                            approve/fulfill calls ride;
- * - CQ_E2E_POOR_STUDENT      seeded student with LESS spendable points
- *                            than the cheapest open reward (optional;
- *                            drives the INSUFFICIENT_POINTS conflict
- *                            test);
+ * - CQ_E2E_WORLD_FILE        owned disposable world; the low-balance case
+ *                            prepares a new zero-balance student itself;
  * - CQ_E2E_PRIVATE_STRINGS   comma-separated seeded identity values
  *                            (student numbers, phones, emails of OTHER
  *                            seeded users that appear on the boards)
@@ -36,7 +34,7 @@
  */
 import { expect, test } from "./fixtures";
 
-import { ensureStudentLogin, mintToken } from "./fixtures";
+import { ensureStudentLogin, loginThroughUi, mintToken, parseSeededAccount, preparePoorStudent } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
@@ -45,7 +43,6 @@ const STUDENT = process.env.CQ_E2E_STUDENT; // "username:password" (factories' D
 const RUN = process.env.CQ_E2E_RUN;
 const REWARD_ITEM_ID = process.env.CQ_E2E_REWARD_ITEM_ID;
 const ADMIN_ID = process.env.CQ_E2E_ADMIN_ID;
-const POOR_STUDENT = process.env.CQ_E2E_POOR_STUDENT;
 const PRIVATE_STRINGS = (process.env.CQ_E2E_PRIVATE_STRINGS ?? "")
   .split(",")
   .map((value) => value.trim())
@@ -65,7 +62,7 @@ test.skip(
 /**
  * Open a student session. The SHARED seeded student resumes via cookie
  * (the suite's first run goes through the real form —
- * ensureStudentLogin); any other account (the optional poor student)
+ * ensureStudentLogin); any other account (the prepared zero-balance student)
  * takes its own one-shot form login with its own rate budget.
  */
 async function loginAs(
@@ -76,13 +73,7 @@ async function loginAs(
     await ensureStudentLogin(page);
     return;
   }
-  const [username, password] = credentials.split(":");
-  await page.goto(`${BASE_URL}/login`);
-  await page.getByRole("button", { name: "密码登录" }).click();
-  await page.getByLabel("学号").fill(username);
-  await page.getByLabel("密码").fill(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).not.toHaveURL(/\/login/);
+  await loginThroughUi(page, parseSeededAccount(credentials, "prepared reward actor"));
 }
 
 test.describe("student rewards redemption", () => {
@@ -155,12 +146,20 @@ test.describe("student rewards redemption", () => {
   test("insufficient spendable disables the tile CTA with the quiet distance", async ({
     page,
   }) => {
-    test.skip(
-      POOR_STUDENT === undefined,
-      "needs CQ_E2E_POOR_STUDENT (spendable below the cheapest reward)",
-    );
-    await loginAs(page, POOR_STUDENT!);
+    const prepared = preparePoorStudent();
+    await loginAs(page, prepared.credentials);
+    // Bind to this document's wallet read, excluding an earlier home request.
+    const walletRequested = page.waitForRequest(request =>
+      request.method() === "GET" &&
+      new URL(request.url()).pathname === "/api/v1/points/me" &&
+      new URL(request.frame().url()).pathname === "/rewards");
     await page.goto(`${BASE_URL}/rewards`);
+    const walletResponse = await (await walletRequested).response();
+    if (walletResponse === null) throw new Error("reward wallet request did not complete");
+    expect(walletResponse.status()).toBe(200);
+    const wallet = await walletResponse.json() as { available_points: number; spendable_points: number };
+    expect(wallet.available_points).toBe(0);
+    expect(wallet.spendable_points).toBe(0);
 
     // Plan-13 T1 (owner P2 ruling): the tile CTA carries the state — the
     // wallet's OWN server-verbatim spendable figure disables 兑换 and the
@@ -172,14 +171,12 @@ test.describe("student rewards redemption", () => {
     // enabled while the wallet is unknown).
     const card = page
       .locator(".reward-card", {
-        has: page.getByRole("button", { name: "兑换", exact: true }),
-      })
-      .first();
+        has: page.getByRole("heading", { name: prepared.reward_name, exact: true }),
+      });
     await expect(
       card.getByRole("button", { name: "兑换", exact: true }),
     ).toBeDisabled();
-    await expect(card.locator(".reward-cta-note")).toContainText("还差");
-    await expect(card.locator(".reward-cta-note")).toContainText("积分");
+    await expect(card.locator(".reward-cta-note")).toHaveText(`还差 ${prepared.point_cost} 积分`);
   });
 });
 

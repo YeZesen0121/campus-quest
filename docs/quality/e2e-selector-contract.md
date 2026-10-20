@@ -443,6 +443,17 @@ Teacher review keeps the 校验报告 region while naming its visible heading �
 - 跨标签页与冷启动继续走真实表单、200登录响应和实际导航，复用已有 `loginThroughUi`。保留旧身份清除、迟响应围栏和单刷新不变量，不增加重试或调整全局超时。
 - UI14 独立诊断联跑8项通过；运行环境和未覆盖范围见交付评审，不据此声称当前全量电池通过。
 
+### Integration UI16 preparation contracts
+
+- `prepare-unread`, `prepare-poor-student`, and `prepare-empty-task` require `CQ_E2E=1` and the owned disposable `CQ_E2E_WORLD_FILE`; missing prerequisites fail instead of skipping. All created actors/tasks enter the retained R6 cleanup graph.
+- Notifications retain `.notif-item` and use the new unique title; verify the actual POST200, returned ID/read_at and persisted read state after reload.
+- Rewards use the owned reward heading and the rewards document's wallet GET200; zero available/spendable points produce the exact shortfall and disabled CTA. Keep the upstream divergent-balance presentation.
+- Exhausted task detail uses a separate zero-claim requester and occupied task. The upstream availability-driven `名额已满` CTA remains disabled, with no assignment panel. The older UI snapshot's pressable exhausted CTA is superseded; `NO_ASSIGNMENT_AVAILABLE` remains the concurrent-race fallback.
+- Cross-browser staff review uses region `任务审核工作区`, h1 `提交审核`, and `审核队列为空`; the accepted unified login's own queue GET200 determines the empty state or exact `.review-item` count. A generic `.section` is not readiness.
+- Cross-browser student login waits for the actual `/me` identity, the resolved `我的账户` link and the `首页` h1. The upstream optimistic loading shell also contains sidebar links and its toggle; those alone cannot establish authenticated readiness.
+- The approved task sample uses start-aligned, natural-height cards. After fonts and finite entrance animations settle, cards fill their own list-item width, share its top and keep the next row clear. The older equal-height recipe is superseded by the approved `innovation-round-1/student.css` source.
+- No new product selectors, masks, pixel tolerance, retries or timeout changes are introduced. See `ui-integration-disposition.md` for the 298-path source review; final-H evidence is recorded separately.
+
 ### R6 协作、交接及生命周期（行为与结构契约）
 
 以下只约束 R6 新增/衔接入口，不把 opaque 引用当可见身份文本。API setup 中的编号不进入公开文案；受控下载不暴露存储地址。

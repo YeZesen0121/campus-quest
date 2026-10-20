@@ -1,5 +1,7 @@
 # Teacher and achievement-review approved UI migration
 
+> R1–R6 集成：以下 UI 历史数字保留其源工作线和阶段，不能视作当前整合版通过。298 路径处置见 ../ui-integration-disposition.md；当前回执见 ../r1-r6-ui-integration-verification.md，最终 H 门禁与远端 CI 分别记账。
+
 ## UI13 final sample refinement
 
 | ID | Requirement | Evidence | Status |
