@@ -20,9 +20,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.identity.enums import Role, UserStatus
 from app.modules.identity.models import User
@@ -41,9 +42,9 @@ class RegisterStudent:
     """
 
     student_number: str
-    nickname: str
     phone_token: str
-    password: str
+    nickname: str | None = None
+    password: str | None = None
 
 
 # --- Transport request models (raw caller input, validated by services)
@@ -65,24 +66,85 @@ class RegisterRequest(BaseModel):
     """Register one whitelisted student (spec §5.1-5.4)."""
 
     student_number: str
-    nickname: str
     phone_token: str
-    password: str
+    nickname: str | None = None
+    password: str | None = None
 
 
 class LoginRequest(BaseModel):
-    """Password login: account identifier + password; route fixes the role."""
+    """The /auth/login body — the unified identifier form only
+    (2026-10-19 spec §3.2; PR-3 retired the legacy {username} shape):
+    {identifier, password, remember_device?} with the identifier a
+    phone / email / student number."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str
+    password: str
+    remember_device: bool = False
+
+
+class MentorLoginRequest(BaseModel):
+    """Dedicated R5 mentor credentials; not the unified staff/student channel."""
 
     username: str
     password: str
 
 
-class StaffLoginRequest(BaseModel):
-    """Staff login: verified email + password + TOTP/recovery code (§5.8)."""
+class UnifiedChallengeRequest(BaseModel):
+    """Ask for one login code by identifier (spec §3.1) — always 202
+    from the routed service; a student number is a format-layer 422."""
 
-    email: str
-    password: str
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str
+
+
+class UnifiedChallengeVerifyRequest(BaseModel):
+    """Trade the code for the discriminated-union answer (spec §3.1).
+
+    ``identifier``+``code`` is the code leg; BOTH omitted is the
+    remembered-cookie single-factor leg (the empty-body verify)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str | None = None
+    code: str | None = None
+    remember_device: bool = False
+
+    @model_validator(mode="after")
+    def _pair_or_neither(self) -> UnifiedChallengeVerifyRequest:
+        has_id = self.identifier is not None and self.identifier.strip() != ""
+        has_code = self.code is not None and self.code.strip() != ""
+        if has_id != has_code:
+            raise ValueError("identifier and code come as a pair, or neither")
+        return self
+
+
+class UnifiedChallengeTotpRequest(BaseModel):
+    """Finish the ADMIN second factor (spec §3.1). The field is
+    ``totp_code`` — the spec's own name; the legacy family's ``code``
+    spelling retires with PR-3."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str
     totp_code: str
+    remember_device: bool = False
+
+
+class UnifiedAuthOutcome(BaseModel):
+    """The three-state verify/login answer: ``status`` is the only
+    judgment member (the frontend contract); the payloads ride their
+    named optional fields."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["authenticated", "totp_required", "unregistered"]
+    role: Role | None = None
+    tokens: TokenPairResponse | None = None
+    pending_token: str | None = None
+    register_token: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -121,6 +183,20 @@ class PhoneChangeConfirmRequest(BaseModel):
     code: str
 
 
+class PhoneBindRequest(BaseModel):
+    """Staff first-bind (V1.1 login iteration item 1): the phone the
+    ACTIVE staff account is adopting. Students use the change flow."""
+
+    phone: str
+
+
+class PhoneBindConfirmRequest(BaseModel):
+    """Confirm a staff phone bind with the phone's OTP code."""
+
+    challenge_id: UUID
+    code: str
+
+
 class EmailBindRequest(BaseModel):
     """Bind (or re-bind) an email and send its verification token (§5.5)."""
 
@@ -152,6 +228,45 @@ class PasswordForgotRequest(BaseModel):
     username: str
 
 
+class AdminPasswordResetLinkResponse(BaseModel):
+    """The one-time reset link, shown exactly once (Wave 2a §3.2)."""
+
+    reset_token: str
+
+
+class AdminBatchRequest(BaseModel):
+    """The §3.5 batch: one action, up to 100 ids."""
+
+    action: Literal["suspend", "reactivate"]
+    user_ids: list[UUID] = Field(max_length=100)
+
+
+class AdminBatchRowResult(BaseModel):
+    """One row's outcome; ``reason`` is a stable error code string."""
+
+    user_id: str
+    ok: bool
+    reason: str | None = None
+
+
+class AdminBatchResponse(BaseModel):
+    results: list[AdminBatchRowResult]
+
+
+class AdminRoleChangeRequest(BaseModel):
+    """The §3.4 TEACHER<->ADMIN flip request."""
+
+    role: Role
+
+
+class PasswordResetTokenSpendRequest(BaseModel):
+    """Spend the admin-issued reset link: the token IS the
+    authorization (the endpoint is public)."""
+
+    reset_token: str
+    new_password: str
+
+
 class PasswordResetRequest(BaseModel):
     """Confirm a password reset with the OTP code and a new password."""
 
@@ -161,10 +276,28 @@ class PasswordResetRequest(BaseModel):
 
 
 class StaffInvitationAcceptRequest(BaseModel):
-    """Trade the single-use invitation token for a staff account (§5.8)."""
+    """Trade the single-use invitation token for a staff account (§5.8).
+
+    ``password`` is OPTIONAL for TEACHER (V1.1 §2.3: blank = an
+    email-code-only account) and effectively mandatory for ADMIN (the
+    service rejects a blank one after the invitation lookup).
+    """
 
     token: str
-    password: str
+    password: str | None = None
+
+
+class StaffSessionResponse(BaseModel):
+    """A staff session plus the onboarding branch flag (V1.1 §2.3).
+
+    ``totp_required`` tells the client which screen follows: the ADMIN
+    pending-TOTP onboarding (True — the tokens are a real session
+    confined to finishing 2FA setup) or a complete login (False).
+    """
+
+    access_token: str
+    csrf_token: str
+    totp_required: bool
 
 
 class StaffInvitationCreateRequest(BaseModel):
@@ -223,6 +356,24 @@ class UserPublic(BaseModel):
         )
 
 
+class RememberedDevicePublic(BaseModel):
+    """One remembered device of the caller (V1.1 §2.2 self-service).
+
+    Explicitly enumerated fields: the stored token hash is unrepresentable.
+    """
+
+    id: UUID
+    created_at: datetime
+    last_used_at: datetime | None
+    expires_at: datetime
+
+
+class OwnDevicesRevokedResponse(BaseModel):
+    """DELETE /me/devices result: how many credentials were dropped."""
+
+    revoked: int
+
+
 class MePublic(UserPublic):
     """The owner's own account page (spec §40): contacts included.
 
@@ -234,6 +385,10 @@ class MePublic(UserPublic):
     phone_e164: str | None
     email_normalized: str | None
     email_verified_at: datetime | None
+    #: When the account was created (spec §40 owner's own data; the
+    #: teacher info page renders it as the registration date, #17).
+    #: ISO-8601 UTC via the JSON encoder — read-only, owner-only.
+    created_at: datetime
 
     @classmethod
     def from_user(cls, user: User) -> MePublic:
@@ -247,6 +402,7 @@ class MePublic(UserPublic):
             phone_e164=user.phone_e164,
             email_normalized=user.email_normalized,
             email_verified_at=user.email_verified_at,
+            created_at=user.created_at,
         )
 
 
@@ -283,6 +439,17 @@ class TokenPairResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class RegisterResponse(BaseModel):
+    """Registration ends logged in (V1.1 login iteration item 4): the
+    account view beside the freshly minted session — the same body the
+    login path answers, so the client lands directly in the frozen-home
+    browsing mode instead of bouncing through a second login (and the
+    60s SMS cooldown) right after proving the phone."""
+
+    user: UserPublic
+    tokens: TokenPairResponse
+
+
 class TotpSetupResponse(BaseModel):
     """A freshly generated TOTP credential, displayed exactly once (§5.8)."""
 
@@ -300,3 +467,13 @@ class EmailChallengeResponse(BaseModel):
     """Request-side view of one email-verification cycle (token-less)."""
 
     expires_at: datetime
+
+
+class MobileCodeRegisterRequest(BaseModel):
+    """Trade the entry proof (a code-checked, accountless phone's
+    5-minute single-use token) for a PENDING_APPROVAL account."""
+
+    register_token: str
+    student_number: str
+    nickname: str | None = None
+    password: str | None = None

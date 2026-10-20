@@ -20,6 +20,7 @@ import {
 } from "../../lib/accessToken";
 import { invalidateDataCache } from "@/lib/dataCache";
 import { invalidateSessionCache } from "./session";
+import { classifyInviteAccept } from "./staffAuthView";
 import type { components } from "../../lib/api/schema";
 
 type Schemas = components["schemas"];
@@ -51,6 +52,15 @@ export type EmailChallengeDto = Schemas["EmailChallengeResponse"];
 const BASE = "/api/v1/auth";
 const ME = "/api/v1/me";
 
+/**
+ * One-shot /me read for post-login routing (the staff form serves two
+ * roles and must land each on its OWN cockpit — the role is only
+ * knowable from the session's answer, never from the pre-login state).
+ */
+export function readMe(): Promise<MeDto> {
+  return apiRequest<MeDto>(ME);
+}
+
 /** Issue a REGISTER-purpose phone OTP challenge (§5.4, §33.2). */
 export function requestPhoneChallenge(phone: string): Promise<ChallengeView> {
   return apiRequest<ChallengeView>(`${BASE}/phone/challenges`, {
@@ -70,24 +80,42 @@ export function verifyPhoneChallenge(
   );
 }
 
-/** Register one whitelisted student (201 -> `UserPublic`). */
-export function registerStudent(payload: RegisterPayload): Promise<RegisteredUser> {
-  return apiRequest<RegisteredUser>(`${BASE}/register`, {
-    method: "POST",
-    body: payload,
-  });
-}
-
 /**
- * Student login; the backend sets the refresh + CSRF cookies. The body's
- * short-lived access token is remembered by the memory-only manager, so
- * the next `apiRequest` carries it as the bearer (`lib/accessToken.ts`).
+ * The register outcome (owner feedback ④, 2026-10-17; live contract
+ * since #100): the 201 body is the envelope `{user, tokens}` — every
+ * successful registration IS a login (PENDING_APPROVAL included; the
+ * browse-frozen home is the landing), so the wrapper walks the full
+ * explicit-login dance on the envelope's tokens. A 201 WITHOUT the
+ * envelope is a broken contract and throws — no silent token-less
+ * downgrade (the transitional legacy branch retired with #100).
  */
-export async function loginStudent(
-  username: string,
-  password: string,
-): Promise<LoginTokens> {
-  return loginPasswordAccount("login", username, password);
+export async function registerStudent(
+  payload: RegisterPayload,
+): Promise<{ kind: "session"; user: RegisteredUser }> {
+  await beginAuthTransition();
+  let body: unknown;
+  try {
+    body = await apiRequest<unknown>(`${BASE}/register`, {
+      method: "POST",
+      body: payload,
+    });
+  } finally {
+    endAuthTransition();
+    // The register login opens a NEW auth context exactly like an
+    // explicit login (the cross-tab fence's whole point).
+    broadcastContextReset();
+  }
+  const envelope = body as { user?: unknown; tokens?: unknown };
+  if (
+    envelope === null ||
+    typeof envelope !== "object" ||
+    !("user" in envelope) ||
+    !("tokens" in envelope)
+  ) {
+    throw new Error("register: the 201 body is not the {user, tokens} envelope");
+  }
+  adoptFullLogin(envelope.tokens as LoginTokens);
+  return { kind: "session", user: envelope.user as RegisteredUser };
 }
 
 /** Mentor login uses the same account-transition fencing as student login. */
@@ -99,7 +127,7 @@ export async function loginMentor(
 }
 
 async function loginPasswordAccount(
-  path: "login" | "mentor/login",
+  path: "mentor/login",
   username: string,
   password: string,
 ): Promise<LoginTokens> {
@@ -150,14 +178,30 @@ export function confirmPasswordReset(
   });
 }
 
+/**
+ * Spend the admin-issued one-time reset token (Wave 2a §3.2): PUBLIC —
+ * the urlsafe32 token IS the authorization (48h TTL, hash-kept,
+ * GETDEL at spend; a replay answers the uniform invalid). Sets the
+ * new password and revokes every live session server-side — the user
+ * logs in fresh afterwards.
+ */
+export function spendAdminResetToken(
+  resetToken: string,
+  newPassword: string,
+): Promise<void> {
+  return apiRequest<void>(`${BASE}/password/reset-token`, {
+    method: "POST",
+    body: { reset_token: resetToken, new_password: newPassword },
+  });
+}
+
 // --- staff surface (spec §5.8; backend identity/staff_router.py) -----------------
 //
-// Auth model on these four endpoints:
-// - `invitations/accept` and `staff/login` behave like the student login:
-//   the refresh token rides the HttpOnly cookie; the SHORT-LIVED access
-//   token + CSRF mirror sit in the body;
-// - `staff/login` success is a full staff session, so its access token
-//   enters the memory-only manager exactly like the student login's;
+// Auth model on these endpoints (the retired `staff/login` rode the
+// same model until the unified /auth/login absorbed it):
+// - `invitations/accept` behaves like any login: the refresh token
+//   rides the HttpOnly cookie; the SHORT-LIVED access token + CSRF
+//   mirror sit in the body;
 // - the pending staff session's access token is the SANCTIONED body-token
 //   exception (backend `PendingStaffSession`): the server confines it to
 //   `/staff/totp/*`, so it is deliberately NOT promoted into the shared
@@ -173,46 +217,250 @@ export type StaffTotpSetup = Schemas["TotpSetupResponse"];
 /** `TotpConfirmResponse` — plaintext recovery codes, shown exactly once. */
 export type StaffTotpConfirm = Schemas["TotpConfirmResponse"];
 
-/** Trade the single-use invitation token for a pending staff session. */
-export function acceptStaffInvitation(
+/**
+ * Trade the single-use invitation token for a staff account (V1.1
+ * Task 7/9): the response's `totp_required` discriminator picks the
+ * branch — TEACHER (false) answers FULL tokens (adopted here: the
+ * account is ACTIVE and logged in; password was optional); ADMIN
+ * (true, or missing on the pre-V1.1 shape) answers the pending
+ * session whose access token is the sanctioned body-token exception.
+ */
+export type InviteAcceptResult =
+  | { kind: "teacher" }
+  | { kind: "admin"; pendingToken: string };
+
+export async function acceptStaffInvitation(
   token: string,
-  password: string,
-): Promise<LoginTokens> {
-  return apiRequest<LoginTokens>(`${BASE}/staff/invitations/accept`, {
+  password: string | null,
+): Promise<InviteAcceptResult> {
+  const body = await apiRequest<unknown>(`${BASE}/staff/invitations/accept`, {
     method: "POST",
     body: { token, password },
   });
+  if (classifyInviteAccept(body) === "teacher") {
+    adoptFullLogin(body as LoginTokens);
+    return { kind: "teacher" };
+  }
+  return { kind: "admin", pendingToken: (body as LoginTokens).access_token };
 }
 
-/** Staff login: verified email + password + TOTP-or-recovery code. */
-export async function loginStaff(
-  email: string,
-  password: string,
-  totpCode: string,
-): Promise<LoginTokens> {
-  await beginAuthTransition();
-  let tokens: LoginTokens;
-  try {
-    tokens = await apiRequest<LoginTokens>(`${BASE}/staff/login`, {
-      method: "POST",
-      body: { email, password, totp_code: totpCode },
-    });
-  } finally {
-    endAuthTransition();
-    // Cross-tab fence (PR #14 review P0): sibling tabs must drop this
-    // account's stale bearer and bump their epoch before any in-flight
-    // 401 recovery can replay old-account intent under the new login.
-    broadcastContextReset();
-  }
-  // An explicit login opens a NEW auth context (epoch bump) and
-  // synchronously drops any cached ANONYMOUS /me: the login page's
-  // hook may have cached it moments ago, and the freshly mounted
-  // shell must never render "未登录" from that stale fresh-window
-  // entry (targeted re-review P1).
+// --- own remembered devices (V1.1 §2.2; plan Task 11) ---------------------------
+//
+// GET/DELETE /me/devices — self-service management of the 30-day
+// remember-device credentials. The row shape is the generated
+// RememberedDevicePublic (token hashes never leave the server); DELETE
+// answers OwnDevicesRevokedResponse's count.
+
+/** One remembered device row (the generated V1.1 contract). */
+export type MyDeviceDto = Schemas["RememberedDevicePublic"];
+
+/** The caller's remembered devices, newest first (server-ordered). */
+export function listMyDevices(): Promise<MyDeviceDto[]> {
+  return apiRequest<MyDeviceDto[]>(`${ME}/devices`);
+}
+
+/** Revoke ALL of the caller's remembered devices; answers the count. */
+export function revokeMyDevices(): Promise<{ revoked: number }> {
+  return apiRequest<{ revoked: number }>(`${ME}/devices`, { method: "DELETE" });
+}
+
+/**
+ * The shared explicit-login adoption: every login family's tokens
+ * walk this one dance (the memory-only manager + the session/data
+ * cache invalidations).
+ */
+export function adoptFullLogin(tokens: LoginTokens): void {
   recordLogin(tokens.access_token);
   invalidateSessionCache();
   invalidateDataCache();
-  return tokens;
+}
+
+// --- the UNIFIED challenge family (unified-login spec §3, 2026-10-19;
+// contract frozen with the backend's PR-1) ---------------------------
+//
+// ONE identifier (E.164 phone or email) drives every login audience;
+// the backend routes the code stream by identifier shape AND the
+// remember_device semantics by audience (the 2026-10-15 terminal
+// ruling enforced server-side: the client has no pre-verify audience
+// knowledge, so it sends the flag whenever checked and the STUDENT arm
+// is the only code-verify arm that honors it). The verify answer is a
+// THREE-arm status-discriminated union — authenticated (nested tokens,
+// the register ④ envelope's shape precedent), totp_required (ADMIN
+// first factor passed), unregistered (an unknown phone's register leg).
+// The password login rides the SAME union on /auth/login.
+
+/** The verify outcome every unified-login surface branches on. */
+export type ChallengeOutcome =
+  | { kind: "authenticated"; role: string }
+  | { kind: "totp_required"; pendingToken: string }
+  | { kind: "unregistered"; registerToken: string };
+
+/**
+ * Discriminate a challenge-family 200 body by its `status` member —
+ * exactly the three frozen arms, each with its token member typed as a
+ * string; anything else is a broken contract and throws (no silent
+ * fallback onto a legacy bare-TokenPair body).
+ */
+function classifyChallengeEnvelope(body: unknown): ChallengeOutcome {
+  if (typeof body === "object" && body !== null) {
+    const record = body as Record<string, unknown>;
+    if (record.status === "totp_required" && typeof record.pending_token === "string") {
+      return { kind: "totp_required", pendingToken: record.pending_token };
+    }
+    if (record.status === "unregistered" && typeof record.register_token === "string") {
+      return { kind: "unregistered", registerToken: record.register_token };
+    }
+    if (
+      record.status === "authenticated" &&
+      typeof record.role === "string" &&
+      typeof (record.tokens as { access_token?: unknown } | undefined)?.access_token === "string"
+    ) {
+      return { kind: "authenticated", role: record.role };
+    }
+  }
+  throw new Error("challenge verify: unrecognized response body");
+}
+
+/** The authenticated arm's shape (validated by classifyChallengeEnvelope). */
+interface AuthenticatedEnvelope {
+  role: string;
+  tokens: LoginTokens;
+}
+
+function asAuthenticated(body: unknown): AuthenticatedEnvelope {
+  return body as AuthenticatedEnvelope;
+}
+
+/**
+ * Ask for a login code to the email OR phone in `identifier`. 202 with
+ * an empty body for every identifier (anti-enumeration); a
+ * student-number-shaped identifier is refused at the format layer.
+ */
+export function requestUnifiedChallenge(identifier: string): Promise<void> {
+  return apiRequest<void>(`${BASE}/challenge/request`, {
+    method: "POST",
+    body: { identifier },
+  });
+}
+
+/**
+ * Trade the code for a session — or the ADMIN second leg, or an
+ * unknown phone's register leg. Tokens adopt the shared dance ONLY on
+ * the authenticated arm (the register leg owns its own login).
+ */
+export async function verifyUnifiedChallenge(
+  identifier: string,
+  code: string,
+  rememberDevice: boolean,
+): Promise<ChallengeOutcome> {
+  const body = await apiRequest<unknown>(`${BASE}/challenge/verify`, {
+    method: "POST",
+    body: rememberDevice
+      ? { identifier, code, remember_device: true }
+      : { identifier, code },
+  });
+  const outcome = classifyChallengeEnvelope(body);
+  if (outcome.kind === "authenticated") {
+    adoptFullLogin(asAuthenticated(body).tokens);
+  }
+  return outcome;
+}
+
+/**
+ * Complete the ADMIN second leg. The member is `totp_code` (the spec's
+ * name — NOT the retired mobile-code family's `code`), and this leg is
+ * where the remember checkbox's meaning lives (the only leg it may
+ * ever exempt is the SECOND factor).
+ */
+export async function unifiedChallengeTotp(
+  pendingToken: string,
+  totpCode: string,
+  rememberDevice: boolean,
+): Promise<ChallengeOutcome> {
+  const body = await apiRequest<unknown>(`${BASE}/challenge/totp`, {
+    method: "POST",
+    body: rememberDevice
+      ? { pending_token: pendingToken, totp_code: totpCode, remember_device: true }
+      : { pending_token: pendingToken, totp_code: totpCode },
+  });
+  const outcome = classifyChallengeEnvelope(body);
+  if (outcome.kind === "authenticated") {
+    adoptFullLogin(asAuthenticated(body).tokens);
+  }
+  return outcome;
+}
+
+/**
+ * The remembered-device LAYER-0 probe (spec §3.1's read path, frozen
+ * with reviewer amendment 5e3636d): GET /auth/challenge/remembered
+ * answers 200 {phone_masked} when the HttpOnly cq_staff_device cookie
+ * names a live remembered device (the backend's mask — the client
+ * never sees the full number), 204 otherwise. Every non-answer
+ * resolves null quietly: the probe only decides whether the page
+ * renders its one-click banner.
+ */
+export async function fetchRememberedHint(): Promise<string | null> {
+  try {
+    const body = await apiRequest<{ phone_masked?: string } | null>(
+      `${BASE}/challenge/remembered`,
+    );
+    return body?.phone_masked ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The banner's CLICK leg: the page holds only the probe's MASK, so the
+ * cookie alone locates the user and the verify body is EMPTY. The
+ * answer rides the SAME three-arm union — a remembered ADMIN still
+ * answers totp_required (the cookie never exempts the ADMIN second
+ * factor, the frozen §3.1 semantics), and the banner hands that leg
+ * to the page's TOTP layer.
+ */
+export async function fastLoginCookieOnly(): Promise<ChallengeOutcome> {
+  const body = await apiRequest<unknown>(`${BASE}/challenge/verify`, {
+    method: "POST",
+    body: {},
+  });
+  const outcome = classifyChallengeEnvelope(body);
+  if (outcome.kind === "authenticated") {
+    adoptFullLogin(asAuthenticated(body).tokens);
+  }
+  return outcome;
+}
+
+/**
+ * The password login on /auth/login with the identifier extension:
+ * identifier ∈ {phone, email, student number}; the answer rides the
+ * SAME three-arm union (an ADMIN password answers totp_required — the
+ * second leg completes on challenge/totp, replacing the retired
+ * synchronous email+password+totp_code staff form). Walks the password
+ * family's auth-transition fencing.
+ */
+export async function loginWithPassword(
+  identifier: string,
+  password: string,
+  rememberDevice: boolean,
+): Promise<ChallengeOutcome> {
+  await beginAuthTransition();
+  let body: unknown;
+  try {
+    body = await apiRequest<unknown>(`${BASE}/login`, {
+      method: "POST",
+      body: rememberDevice
+        ? { identifier, password, remember_device: true }
+        : { identifier, password },
+    });
+  } finally {
+    endAuthTransition();
+    broadcastContextReset();
+  }
+  const outcome = classifyChallengeEnvelope(body);
+  if (outcome.kind === "authenticated") {
+    adoptFullLogin(asAuthenticated(body).tokens);
+  }
+  return outcome;
 }
 
 /**
@@ -300,6 +548,38 @@ export function confirmPhoneChange(
   code: string,
 ): Promise<MeDto> {
   return apiRequest<MeDto>(`${ME}/phone/change/confirm`, {
+    method: "POST",
+    body: { challenge_id: challengeId, code },
+  });
+}
+
+// --- staff phone binding (login-iteration item ①; /me/phone/bind) --------
+//
+// STAFF-only surface (TEACHER/ADMIN; students keep the password-
+// re-authenticated /me/phone/change family — their phone is the
+// register-time identity). First bind and re-bind walk the SAME two
+// steps: challenge the phone, confirm with its SMS code; no password
+// re-auth (the staff session itself is the authority — the email
+// binding's precedent). A phone owned by any other account answers
+// 409 PHONE_ALREADY_BOUND (the shared copy family).
+
+/**
+ * Bind (or re-bind) the staff account's phone: POST /me/phone/bind
+ * {phone} challenges the number (202 + challenge view).
+ */
+export function requestPhoneBind(phone: string): Promise<ChallengeView> {
+  return apiRequest<ChallengeView>(`${ME}/phone/bind`, {
+    method: "POST",
+    body: { phone },
+  });
+}
+
+/**
+ * Confirm the binding with the SMS code (POST /me/phone/bind/confirm);
+ * returns the updated account view (phone_e164 set).
+ */
+export function confirmPhoneBind(challengeId: string, code: string): Promise<MeDto> {
+  return apiRequest<MeDto>(`${ME}/phone/bind/confirm`, {
     method: "POST",
     body: { challenge_id: challengeId, code },
   });

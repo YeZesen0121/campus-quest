@@ -20,7 +20,10 @@
 
 Sources: `frontend/e2e/*.spec.ts` (auth, community, notifications,
 rewards-ranking, staff-auth, staff-totp-race, submission, task-claim,
-teacher, admin, visual-capture).
+teacher, admin, visual-capture) — the original Task 1b inventory. Specs
+added since are not re-listed here; each lands its own entries per the
+AGENTS.md test-artifacts manifest, and the A/B tables are the
+authoritative record.
 
 ## A. Behavior / accessibility contracts
 
@@ -28,10 +31,15 @@ teacher, admin, visual-capture).
 
 | Label | Surface |
 |---|---|
-| 学号 / 密码 | student login (every spec's entry) |
-| 邮箱 / 密码 / 动态验证码 | staff login |
+| 账号 / 验证码 | the unified login's code form (the band rides the PLACEHOLDER: 请输入手机号或邮箱 — the 2026-10-20 refinement) |
+| 账号 / 密码 | the unified login's password expansion (placeholder 请输入手机号、邮箱、学号 — three-state incl 学号) |
+| 动态验证码 | the unified login's TOTP leg (layer 2a, testid `unified-login-totp-leg`) |
 | 设置密码 / 确认密码 / 设置密码并继续 | register, staff invite activation |
 | 昵称 / 手机号 | register, profile binding |
+| 受邀人邮箱 / 角色 / 创建邀请 / 复制邀请链接 | admin staff invitations (`/admin/invitations`; the one-time issuance surface) |
+| 正在前往工作台… / 前往员工登录 | the staff-on-student-route redirect placeholder + its /me-failure exit (staff-root-redirect.spec pins the frame sequence; copy is the locator) |
+| 页面不存在 / 返回首页 | the custom 404 (not-found.spec + the not-found SHOTS face) |
+| 平台代码（创建后不可改） / 显示名 / 排序值 / 新建平台 / 创建平台 / 编辑 / 保存修改 | admin platform registry (`/admin/platforms`; platform-registry.spec pins the CRUD chain and the client-refusal zero-POST) |
 | 任务评论 / 发布评论 / 发布回复 / 回复 | task-detail comment thread |
 | 通知收件箱 / 标为已读 | notifications |
 | 积分余额 (`getByLabel` + `[aria-label='积分余额']`) | student shell points readout |
@@ -45,8 +53,31 @@ teacher, admin, visual-capture).
 Buttons: 登录 · 注册 · 领取任务 · 开始上传 · 上传重试相关 · 兑换 · 确认兑换 ·
 发布评论 · 发布回复 · 回复 · 赞 · 表情 🔥 · 举报 · 提交举报 · 标为已读 ·
 完成 · 取消 · 创建草稿 · 保存修改 · 预览导入 · 重新上传文件 · 通过并发放奖励 ·
-通过并扣减积分 · 退回修改 · 确认停用 · 确认绑定 · 确认揭示身份 · 获取验证码 ·
-设置密码并继续
+通过并扣减积分 · 退回修改 · 确认停用 · 确认绑定 · 确认揭示身份 ·
+一键继续 (the unified login's conditional fast-login banner — layer 0,
+owner feedback ③ 2026-10-17: the remembered-device probe's one-click leg,
+now on /auth/challenge/remembered + the empty-body verify) ·
+获取验证码 (the unified login's FIRST send — the code row with its
+重新发送 cooldown appears only after it, layer 2's condition) ·
+使用密码登录 / 使用验证码登录 (the unified login's weak link — the
+password expansion's disclosure control, aria-expanded) ·
+完成登录 (the unified login's TOTP leg, layer 2a) ·
+发送验证码 / 绑定手机号 / 更换手机号 (the staff phone-binding flow,
+PhoneBindSection) ·
+代重置密码 / 踢出全部会话 / 提升为管理员 / 降级为教师 / 批量停用 / 批量恢复 /
+确认执行 / 撤销 / 确认撤销 / 重发 (Wave 2a's admin power-pack: the user-detail
+actions, the batch verbs, and the invitation lifecycle panel)
+
+Checkboxes: 30 天内免登录 (the code form, the 2026-10-20 owner copy) · 记住此设备 30 天 — the password/totp seats
+
+Buttons (batch 2): 切换到 <mask> / 从本机移除 <mask> (the recent-logins
+cards' pick and device-local removal verbs — the aria-labels carry the
+G11 mask, never the full address) (the
+code form's copy is audience-neutral; the password expansion's notes the
+totp audience; the TOTP leg is where the meaning LIVES — the 2026-10-15
+terminal ruling: the flag is sent whenever checked and the backend
+routes it by audience, STUDENT verify honoring it, staff arms ignoring
+it, the ADMIN totp leg issuing the cookie).
 
 Links: 未读 · 热门 · 最新 · 全部 · 总榜 · 今日榜 · 本月榜 · 去登录 ·
 前往员工登录 · 返回教师工作台 · 返回任务管理
@@ -79,11 +110,16 @@ Error/validation copy: 退回说明不能为空 · 判无效原因不能为空 �
 keyword 组合） · 第 2 行
 
 Status/confirmation copy: 已提交，等待老师审核 · 重试完成提交 · 任务已完成，
-积分已发放。 · 注册成功，请使用学号登录。 · 恢复代码只显示这一次 · 已复制 ·
-动态口令绑定完成，员工账号已激活。 · 已成功导入 1 个任务单元 · 已发布 · 草稿 ·
-已批准 · 待发放 · 已发放 · 已停用 · 启用 · 正常 · 累计获得 · 可花费/当前可花费/
-消耗积分 · 匿名用户 · 暂无通知 · 暂无附近排名 · 判无效将取消该学生当前锁定的
-奖励档位与积分
+积分已发放。 · 注册成功，请使用学号登录。 (RETIRED with ④ going live — #100
+made the register envelope the login, nothing routes to /login after
+registration; removed in the post-merge cleanup) · 继续以 … 登录 (the
+fast-login banner's masked-phone offer, owner feedback ③) · 该设备尚未记住
+或已过期，请使用下方短信验证码登录。 (the banner's stale-click honest
+fallback) · 手机号已绑定。 (the staff phone-binding success note, item ①) ·
+恢复代码只显示这一次 · 已复制 · 动态口令绑定完成，员工账号已激活。 ·
+已成功导入 1 个任务单元 · 已发布 · 草稿 · 已批准 · 待发放 · 已发放 · 已停用 ·
+启用 · 正常 · 累计获得 · 可花费/当前可花费/消耗积分 · 匿名用户 · 暂无通知 ·
+暂无附近排名 · 判无效会取消锁定的奖励与积分，学生需重新提交。审计记录不可删除。
 
 Access-denied copy (RBAC proofs): 教师工作台仅对教师与管理员开放 ·
 管理后台仅对管理员开放，当前账号是教师账号 · 任务不存在，或您不是该任务的
@@ -115,9 +151,9 @@ owner-approved product decision — never "to fit the new DOM".
 | `.board-rows` · `.board-row` · `.board-rank` · `.board-me-tag` · `.board-honor` | rankings | me-tag asserts around-me anchoring; board-honor is the honor chip (renamed from `.honor-chip` in plan-13 with no spec uses) |
 | `.reward-card` · `.balance-quiet` · `.reward-cta-note` | rewards list | balance-quiet is the wallet's 累计获得 value (re-anchored from a parent-hop locator in plan-13); reward-cta-note is the spend-state note under the CTA |
 | `.notif-item` · `.notif-item[data-read='false']` · `.notif-title` | notifications | data-read asserts unread state |
-| `.review-item` · `.review-pair` · `.review-tier` | teacher review queue | pair/tier assert VALIDATED tier pairing |
+| `.review-item` · `.review-pair` · `.review-tier` | teacher review queue; admin redemption queue | pair/tier assert VALIDATED tier pairing; the admin queue row is located by the run-derived item name (端到端奖励卡 + RUN[:6]) — NEVER by queue position (.first() would pick a residue world's oldest request) |
 | `.import-preview` · `.moderation-key` · `.mono` | teacher import / moderation | |
-| `dialog.dialog` | generic dialog scoping | equal-strength replacement: `getByRole("dialog")` |
+| `dialog.dialog` | generic dialog scoping | retired at C3; the `getByRole("dialog")` replacement landed |
 | `#submission-file` · `#assignment-import-file` | file inputs | keep as file-upload ids or replace with `getByLabel` of equal strength |
 | `#task-schema` · `#task-schema-version` · `input[name='assignment_id']` | task form fields | |
 | `[data-assignments-list]` · `[data-user-id]` | teacher assignments list, admin user rows | |
@@ -133,6 +169,13 @@ owner-approved product decision — never "to fit the new DOM".
 | region `负责人资格申请详情` · status `申请开通状态` · status `管理员资格操作结果` | ADMIN application snapshot | four submitted snapshot fields are available only through an ADMIN-authorized, audited detail read; never infer this access from operations_enabled |
 | dialog `开通负责人资格` · title id `owner-qualification-confirm-title` | ADMIN qualification confirmation | use getByRole("dialog", { name: "开通负责人资格" }); keep title wiring, focus trap, Escape and explicit 确认开通/取消 actions |
 | region `成果草稿列表` · region `成果草稿编辑器` · region `最新已保存成果` · region `私有成果预览` | private project achievements | exact labels 成果名称/作品与阶段成果说明/作品链接/立项或获奖说明; no internal IDs in visible copy |
+
+| `.app-shell[data-shell]` | student shell state marker | shell-refresh spec pins the chrome verdict per state (loading/workspace/anonymous/error/gate); the optimistic frame reuses the existing `.app-sidebar`/`.app-nav`/`.app-bottomnav` structural locators |
+| `.task-card[data-depleted='true']` | depleted square card marker | same verdict as the 已被领完 badge (defect #20 / batch ④); the recede treatment assertions (dashed border, dimmed content) key on it |
+| `[data-testid='invitation-link']` | admin one-time invitation link box | admin-invitations.spec pins the link text shape (origin + `/staff/invite/<urlsafe-token>`) and follows it to the accept page; CopyButton beside it is label-anchored (A-table) |
+| `.meta-deadline` · `.reward-window` | zero-weight mask anchors | visual-suite mask hooks (shot-surfaces): the task card's clock-derived deadline line and the reward card's window line; the classes carry no styles by design |
+| `.login-fast-hint` · `.login-fast-stale` | login fast-login banner (owner feedback ③) | the two-state pin's structural zero-element anchor (auth-extension-2: no cookie → count 0); the banner's own text/button assertions are the A-class pair |
+| `[data-testid='mobile-login-totp-leg']` | staff mobile-code login's ADMIN second leg (item ①) | mirrors `email-login-totp-leg`; the leg's presence/absence is the TEACHER-vs-ADMIN branch pin |
 
 Private innovation draft behavior contracts (R1 navigation rename): link `我的项目`; regions `项目草稿列表` / `项目草稿编辑器` / `最新已保存版本`; buttons `新建项目草稿` / `保存草稿` / `返回草稿列表` / `编辑项目：{title}` / `读取最新版本（保留当前输入）` / `载入此版本（替换当前输入）`; saved status `草稿已保存，仅自己可见。`; stale-save copy `你的未保存内容已保留`.
 

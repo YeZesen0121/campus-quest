@@ -10,6 +10,8 @@ instead of the settings-configured Redis URL.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -57,7 +59,6 @@ def test_create_app_mounts_identity_routes_under_api_v1() -> None:
         "/api/v1/auth/phone/challenges/{challenge_id}/verify",
         "/api/v1/auth/register",
         "/api/v1/auth/login",
-        "/api/v1/auth/staff/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/logout",
         "/api/v1/auth/password/forgot",
@@ -106,3 +107,33 @@ def test_lifespan_binds_celery_current_app_to_settings(
         # Repopulate lazily from the restored environment for later tests.
         get_settings.cache_clear()
         get_celery_app.cache_clear()
+
+
+def test_create_app_disables_interactive_docs_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Hardening D-3: /docs, /redoc, and /openapi.json hand an attacker a
+    # complete route map of the deployment, so environment=production
+    # must not mount them; development keeps the conveniences. The docs
+    # routes are added by the FastAPI instance itself (not lazy
+    # included-router nodes), so app.routes sees them directly.
+    _set_required_env(monkeypatch, redis_url="redis://docs-check:6379/0")
+
+    dev_paths = {getattr(route, "path", None) for route in create_app().routes}
+    assert {"/docs", "/redoc", "/openapi.json"} <= dev_paths
+
+    # A real production Settings cannot be constructed yet (production
+    # refuses every committed sentinel AND the logging email provider,
+    # which has no real adapter in V1), so the one field create_app
+    # reads is injected through the get_settings seam the factory uses.
+    import app.main as main_module
+
+    monkeypatch.setattr(
+        main_module,
+        "get_settings",
+        lambda: SimpleNamespace(environment="production", e2e_login_ratelimit=False),
+    )
+    production_paths = {getattr(route, "path", None) for route in create_app().routes}
+    assert "/docs" not in production_paths
+    assert "/redoc" not in production_paths
+    assert "/openapi.json" not in production_paths

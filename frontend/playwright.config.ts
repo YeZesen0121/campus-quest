@@ -4,10 +4,10 @@
  * Ruling (E1 brief): the config itself orchestrates BOTH servers — the
  * backend (uvicorn serving create_app) and the frontend (next dev) —
  * through webServer, so `npx playwright test` is self-contained against
- * the local docker-compose dependency stack. CI wiring lands with E5;
- * the ports follow the spec defaults (frontend 3000, backend 8000) and
- * are derived from the same CQ_E2E_* variables the specs read, so an
- * override moves the client and the servers together.
+ * the local docker-compose dependency stack. The ports follow the spec
+ * defaults (frontend 3000, backend 8000) and are derived from the same
+ * CQ_E2E_* variables the specs read, so an override moves the client
+ * and the servers together.
  *
  * E2 adds the seeded world: globalSetup runs browser_world.py (the
  * backend e2e factories) BEFORE the workers fork and publishes the
@@ -21,13 +21,18 @@
 import { defineConfig } from "@playwright/test";
 import { join } from "node:path";
 
-import { ensureDevCertificate } from "./e2e/global-setup";
+import { ensureDevCertificate, ensureMinioCertificate } from "./e2e/global-setup";
 
 // P3-B: the https cert must exist BEFORE the webServers start — the
 // config module body runs ahead of them, globalSetup does NOT (the
 // first battery died exactly there: uvicorn booted against a cert
 // path that globalSetup had not written yet).
 ensureDevCertificate();
+// Same class, the 2026-09 teardown forensics: AWS_CA_BUNDLE must
+// resolve at webServer boot, and a fresh worktree has no gitignored
+// MinIO cert until something generates one (teardowns died on
+// `Errno 2` SSL-validation mid-clean, leaving whole worlds behind).
+ensureMinioCertificate();
 
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 const API_URL = process.env.CQ_E2E_API_URL ?? "http://localhost:8000/api/v1";
@@ -94,10 +99,10 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",
   // P3-B: cross-browser smoke. Chromium stays the default (full suite,
-  // zero change); firefox/webkit projects run ONLY the smoke spec with
-  // CQ_SMOKE=1 injected — the trade-off (deliberately narrow subset,
-  // no full matrix — CI time vs signal) is recorded in the spec header
-  // and the PR.
+  // zero change); firefox/webkit projects run ONLY the smoke spec
+  // (project selection, no extra env) — the trade-off (deliberately
+  // narrow subset, no full matrix — CI time vs signal) is recorded in
+  // the spec header and the PR.
   projects: [
     {
       name: "chromium",

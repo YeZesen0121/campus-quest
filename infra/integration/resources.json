@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "cq-integration-20261020",
+  "project": "campusquest-integration",
+  "runner": "campusquest-integration-runner",
+  "database": "campusquest_test_integration",
+  "database_user": "test",
+  "bucket": "campusquest-test-integration",
+  "ports": {
+    "postgres": 16440,
+    "redis": 6480,
+    "minio_http": 9135,
+    "minio_tls": 9136,
+    "clamav": 3320,
+    "web": 3311,
+    "api": 8310
+  },
+  "runtime_owner": ".runtime/owner.json",
+  "r6_checkpoint": "e20bf06f95b0dcfec6d24a8a9e4d8abbc0a61285",
+  "source_manifest": "C:/Users/111/Documents/CampusQuestIntegrationSnapshots/20261020T100748Z/source-manifest.json"
+}

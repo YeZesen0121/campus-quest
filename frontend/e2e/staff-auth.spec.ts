@@ -19,8 +19,9 @@
  * This file covers the brief's STEP 1 (invitation -> password -> TOTP setup
  * -> recovery codes once -> done pointing at staff login). Step 2 (2FA
  * enforcement at login: password-without-TOTP must not yield a session;
- * reused recovery code fails) needs a seeded staff fixture contract from
- * Plan 10 and lands with the runner.
+ * reused recovery code fails) is a KNOWN UNCOVERED gap — the seeded
+ * staff contract exists (CQ_E2E_STAFF/_TOTP_SECRET), the scenarios
+ * have no tests yet (owner backlog).
  *
  * The confirm code is computed IN-TEST from the displayed secret
  * (RFC 6238, SHA-1, 30s step, 6 digits — node:crypto, no test dependency),
@@ -101,10 +102,13 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
   /** Mint one single-use invitation through the REAL admin API (the
    * route lives at /api/v1/staff/invitations — the identity admin
    * router's full-path convention). */
-  async function freshInvitationToken(email: string): Promise<string> {
+  async function freshInvitationToken(
+    email: string,
+    role: "TEACHER" | "ADMIN" = "TEACHER",
+  ): Promise<string> {
     const response = await api.post(`${API_URL}/staff/invitations`, {
       headers: { Authorization: `Bearer ${mintToken(ADMIN_ID!)}` },
-      data: { email, role: "TEACHER" },
+      data: { email, role },
     });
     expect(
       response.ok(),
@@ -115,14 +119,16 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     return body.token;
   }
 
-  test("invite -> password -> TOTP confirm -> recovery codes once -> done", async ({ page }, info) => {
+  test("admin invite -> password -> TOTP confirm -> recovery codes once -> done", async ({ page }, info) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
-    const token = await freshInvitationToken(`e2e-staff-${RUN}@school.edu`);
+    // V1.1 §2.3: TOTP onboarding belongs to ADMIN invitations — a
+    // TEACHER invite skips it entirely (the teacher test below).
+    const token = await freshInvitationToken(`e2e-admin-invite-${RUN}@school.edu`, "ADMIN");
     await page.goto(`${BASE_URL}/staff/invite/${encodeURIComponent(token)}`);
 
     // Preserve the real invitation password step as visual evidence before setup.
-    await expect(page.getByLabel("设置密码")).toBeVisible();
+    await expect(page.getByLabel("设置密码（可选）", { exact: true })).toBeVisible();
     for (const width of [390,1440]) {
       await page.setViewportSize({width,height:900});
       await page.evaluate(()=>document.fonts.ready);
@@ -132,7 +138,7 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     // Password step: band mirror + repeat field.
     await page.getByLabel("设置密码").fill("e2e-correct-horse");
     await page.getByLabel("确认密码").fill("e2e-correct-horse");
-    await page.getByRole("button", { name: "设置密码并继续" }).click();
+    await page.getByRole("button", { name: "激活账号" }).click();
 
     // Setup step: NO QR — the secret + otpauth URI render as copyable text.
     const secretLocator = page.getByTestId("totp-secret");
@@ -203,7 +209,7 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
 
     // Confirm-seen exits the one-time window; the codes never come back.
     await page.getByRole("button", { name: "我已妥善保存，完成绑定" }).click();
-    await expect(page.getByText("动态口令绑定完成，员工账号已激活。")).toBeVisible();
+    await expect(page.getByText("动态口令绑定完成，员工账号已激活")).toBeVisible();
     await expect(codesList).toHaveCount(0);
     await expect(secretLocator).toHaveCount(0);
     await expect(page.getByRole('heading', { name: '绑定完成', exact: true })).toBeVisible();
@@ -214,18 +220,172 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
       await page.screenshot({ path: info.outputPath(`totp-complete-${width}.png`), fullPage: true, caret: 'initial' });
     }
 
-    // Done points at the staff login (the pending session is setup-only).
+    // Done points at the unified login (the pending session is setup-only).
     await expect(page.getByRole("link", { name: "前往员工登录" })).toHaveAttribute(
       "href",
-      "/staff/login",
+      "/login",
     );
+  });
+
+  test("remember this device: the password+TOTP login's checkbox buys 30 TOTP-free days (owner feedback ②)", async ({
+    page,
+  }) => {
+    // A dedicated invited ADMIN (password + TOTP confirmed through the
+    // REAL onboarding above — the account is the test's own).
+    const email = `e2e-admin-remember-${RUN}@school.edu`;
+    const token = await freshInvitationToken(email, "ADMIN");
+    await page.goto(`${BASE_URL}/staff/invite/${encodeURIComponent(token)}`);
+    await page.getByLabel("设置密码").fill("e2e-correct-horse");
+    await page.getByLabel("确认密码").fill("e2e-correct-horse");
+    await page.getByRole("button", { name: "激活账号" }).click();
+    const secretLocator = page.getByTestId("totp-secret");
+    await expect(secretLocator).toBeVisible();
+    const secret = (await secretLocator.textContent())?.trim() ?? "";
+    const codeField = page.getByRole("textbox", { name: /动态验证码/ });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const confirmResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/v1/staff/totp/confirm") &&
+          response.request().method() === "POST",
+        { timeout: 15_000 },
+      );
+      await codeField.fill(totpCode(secret));
+      await page.getByRole("button", { name: "确认绑定" }).click();
+      if ((await confirmResponse).ok()) {
+        break;
+      }
+      await page.waitForTimeout(1_000);
+    }
+    await page.getByRole("button", { name: "我已妥善保存，完成绑定" }).click();
+    await expect(page.getByText("动态口令绑定完成，员工账号已激活")).toBeVisible();
+
+    // The remembered FIRST login: password + the checkbox + the TOTP
+    // leg (the unified page's two-leg shape — the password submit
+    // answers totp_required, the leg completes the login).
+    await page.goto(`${BASE_URL}/login`);
+    await page.getByRole("button", { name: "使用密码登录" }).click();
+    await page.getByLabel("账号", { exact: true }).fill(email);
+    await page.getByLabel("密码").fill("e2e-correct-horse");
+    await page.getByRole("checkbox", { name: /记住此设备 30 天/ }).check();
+    await page.getByRole("button", { name: "登录", exact: true }).click();
+    await expect(page.getByTestId("unified-login-totp-leg")).toBeVisible();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await page.getByLabel("动态验证码").fill(totpCode(secret));
+      await page.getByRole("button", { name: "完成登录" }).click();
+      try {
+        await expect(page).toHaveURL(new RegExp(`${BASE_URL}/admin$`), {
+          timeout: 5_000,
+        });
+        break;
+      } catch {
+        /* step rolled over mid-submit */
+      }
+    }
+
+    // Free the device (the staff logout lands back on the unified login).
+    await page.getByRole("button", { name: "退出登录" }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/login`));
+
+    // The ② PIN — the remembered RELOGIN: password alone submits and
+    // the verify answers AUTHENTICATED with no totp leg at all — the
+    // 30-day cookie IS the second factor now (the retired form's
+    // empty-totp_code mechanism folded into the union's arms).
+    await page.getByRole("button", { name: "使用密码登录" }).click();
+    await page.getByLabel("账号", { exact: true }).fill(email);
+    await page.getByLabel("密码").fill("e2e-correct-horse");
+    await page.getByRole("button", { name: "登录", exact: true }).click();
+    await expect(page.getByTestId("unified-login-totp-leg")).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/admin$`));
+  });
+
+  test("teacher invite: optional password, straight into the workspace (V1.1 §2.3)", async ({ page }) => {
+    const token = await freshInvitationToken(`e2e-teacher-invite-${RUN}@school.edu`);
+    await page.goto(`${BASE_URL}/staff/invite/${encodeURIComponent(token)}`);
+
+    // The password is OPTIONAL for teachers — leave both fields EMPTY.
+    await page.getByRole("button", { name: "激活账号" }).click();
+
+    // No TOTP step anywhere: the accept response's totp_required:false
+    // lands the fresh full login directly on the teacher workspace.
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/teacher/`));
+    await expect(page.getByTestId("totp-secret")).toHaveCount(0);
+    await expect(page.getByRole("list", { name: "恢复代码" })).toHaveCount(0);
+
+    // The staff nickname nudge greets the email-local-part nickname
+    // (the auto shape's staff arm — the student arm rides the nudge
+    // spec's registration flow).
+    await expect(page.getByText("把昵称改成好认的名字吧")).toBeVisible();
+  });
+
+  test("admin invite: after the TOTP onboarding, the ADMIN lands on the ADMIN workspace (hot-fix pin)", async ({
+    page,
+  }) => {
+    // The hot-fix regression pin (owner bug 2026-10-16): the invite
+    // accept flow once hardcoded the teacher landing — an ADMIN who
+    // finishes the TOTP onboarding must land on /admin, not the queue.
+    const token = await freshInvitationToken(
+      `e2e-admin-invite-land-${RUN}@school.edu`,
+      "ADMIN",
+    );
+    await page.goto(`${BASE_URL}/staff/invite/${encodeURIComponent(token)}`);
+
+    await page.getByLabel("设置密码").fill("e2e-correct-horse");
+    await page.getByLabel("确认密码").fill("e2e-correct-horse");
+    await page.getByRole("button", { name: "激活账号" }).click();
+
+    // Complete the onboarding (the shared confirm-retry shape) and keep
+    // the onboarding secret — the account's TOTP credential from here
+    // on, reused by the login leg below.
+    let onboardingSecret = "";
+    const codeField = page.getByRole("textbox", { name: /动态验证码/ });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const confirmResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/v1/staff/totp/confirm") &&
+          response.request().method() === "POST",
+        { timeout: 15_000 },
+      );
+      onboardingSecret = (
+        (await page.getByTestId("totp-secret").textContent()) ?? ""
+      ).trim();
+      await codeField.fill(totpCode(onboardingSecret));
+      await page.getByRole("button", { name: "确认绑定" }).click();
+      const response = await confirmResponse;
+      if (response.ok()) {
+        break;
+      }
+      await page.waitForTimeout(1_000);
+    }
+    await page.getByRole("button", { name: "我已妥善保存，完成绑定" }).click();
+    await expect(page.getByText("动态口令绑定完成，员工账号已激活")).toBeVisible();
+
+    // THE landing pin (owner bug 2026-10-16): the fresh ADMIN logs in
+    // through the production code channel on the UNIFIED page and must
+    // land on the ADMIN workspace — the invite-accept and code flows
+    // both once hardcoded the teacher queue.
+    await page.getByRole("link", { name: "前往员工登录" }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/login`));
+    const invitedEmail = `e2e-admin-invite-land-${RUN}@school.edu`;
+    await page.getByLabel("账号", { exact: true }).fill(invitedEmail);
+    await page.getByRole("button", { name: "获取验证码", exact: true }).click();
+    await expect(page.getByRole("button", { name: /重新发送（\d+ 秒）/ })).toBeVisible();
+    const { recoverEmailCode } = await import("./fixtures");
+    const loginCode = recoverEmailCode(invitedEmail);
+    await page.getByLabel("验证码", { exact: true }).fill(loginCode);
+    await page.getByRole("button", { name: "登录", exact: true }).click();
+    await expect(page.getByTestId("unified-login-totp-leg")).toBeVisible();
+    await page.getByLabel("动态验证码").fill(totpCode(onboardingSecret));
+    await page.getByRole("button", { name: "完成登录" }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/admin$`), {
+      timeout: 8_000,
+    });
   });
 
   test("client validation: a too-short password never sends the one-time token", async ({ page }) => {
     await page.goto(`${BASE_URL}/staff/invite/whatever-token`);
     await page.getByLabel("设置密码").fill("short");
     await page.getByLabel("确认密码").fill("short");
-    await page.getByRole("button", { name: "设置密码并继续" }).click();
+    await page.getByRole("button", { name: "激活账号" }).click();
     await expect(page.getByText(/密码长度需为 10-128 个字符/)).toBeVisible();
     // Still on the password step — no request left the browser.
     await expect(page.getByLabel("设置密码")).toBeVisible();
@@ -235,7 +395,7 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     await page.goto(`${BASE_URL}/staff/invite/definitely-not-a-real-token`);
     await page.getByLabel("设置密码").fill("e2e-correct-horse");
     await page.getByLabel("确认密码").fill("e2e-correct-horse");
-    await page.getByRole("button", { name: "设置密码并继续" }).click();
+    await page.getByRole("button", { name: "激活账号" }).click();
     // Uniform for unknown/expired/used — the branch reason never leaks.
     // (.first(): Next's route announcer also carries role=alert.)
     await expect(page.getByRole("alert").first()).toContainText("邀请链接无效或已被使用");

@@ -1,20 +1,21 @@
 /**
- * The targeted re-review P1 regression: a successful login must
- * SYNCHRONOUSLY invalidate the module-level session cache. Before the
- * fix, the login page's `useSession` cached an anonymous /me for the
- * 30s fresh window, `refreshSession()` bumped only the local hook, and
- * the freshly mounted shell rendered "未登录" from the stale entry —
- * and a late-settling anonymous fetch could repopulate the cache after
- * the login landed. The generation fence closes both halves.
+ * Regression pin: a successful login must
+ * SYNCHRONOUSLY invalidate the module-level session cache. Without the
+ * generation fence, the login page's `useSession` keeps an anonymous
+ * /me cached for the 30s fresh window, `refreshSession()` bumps only
+ * the local hook, and the freshly mounted shell renders "未登录" from
+ * the stale entry — and a late-settling anonymous fetch could
+ * repopulate the cache after the login landed. The fence closes both
+ * halves.
  *
  * Same harness style as the other API tests: a URL-routing fetch fake
  * with per-URL response queues; login goes through the REAL
- * `loginStudent` (whose wiring calls invalidateSessionCache).
+ * `loginWithPassword` (whose wiring calls invalidateSessionCache).
  */
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
 
-import { loginStudent } from "../features/auth/api";
+import { loginWithPassword } from "../features/auth/api";
 import {
   getSessionGenerationForTests,
   loadSessionForTests,
@@ -62,7 +63,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("login synchronously invalidates the anonymous session cache (targeted re-review P1)", () => {
+describe("login synchronously invalidates the anonymous session cache", () => {
   test("owner's sequence: fresh anonymous cache -> login -> new mount refetches with the bearer", async () => {
     route({
       [ME]: [
@@ -80,7 +81,7 @@ describe("login synchronously invalidates the anonymous session cache (targeted 
         json({ id: "u1", username: "s", nickname: "同学", role: "STUDENT" }), // post-login /me
       ],
       [LOGIN]: [
-        json({ access_token: "token-1", csrf_token: "ct", token_type: "bearer" }),
+        json({ status: "authenticated", role: "STUDENT", tokens: { access_token: "token-1", csrf_token: "ct", token_type: "bearer" } }),
       ],
     });
 
@@ -93,7 +94,7 @@ describe("login synchronously invalidates the anonymous session cache (targeted 
     assert.equal(cached.result?.kind, "anonymous");
 
     // Login succeeds — the component navigates/unmounts immediately.
-    await loginStudent("student01", "correct-horse");
+    await loginWithPassword("student01", "correct-horse", false);
 
     // The cache a freshly mounted shell would consult is GONE: the
     // stale anonymous entry must not survive the transition.
@@ -127,12 +128,12 @@ describe("login synchronously invalidates the anonymous session cache (targeted 
         json({ id: "u1", username: "s", nickname: "同学", role: "STUDENT" }),
       ],
       [LOGIN]: [
-        json({ access_token: "token-1", csrf_token: "ct", token_type: "bearer" }),
+        json({ status: "authenticated", role: "STUDENT", tokens: { access_token: "token-1", csrf_token: "ct", token_type: "bearer" } }),
       ],
     });
 
     const pending = loadSessionForTests();
-    await loginStudent("student01", "correct-horse"); // lands while /me is in flight
+    await loginWithPassword("student01", "correct-horse", false); // lands while /me is in flight
 
     // The anonymous result settles AFTER the invalidation. Note the
     // interplay with the epoch guard: the old request was sent under
@@ -161,13 +162,13 @@ describe("login synchronously invalidates the anonymous session cache (targeted 
         () => newMe.promise, // generation 1's /me (post-login), pending
       ],
       [LOGIN]: [
-        json({ access_token: "token-1", csrf_token: "ct", token_type: "bearer" }),
+        json({ status: "authenticated", role: "STUDENT", tokens: { access_token: "token-1", csrf_token: "ct", token_type: "bearer" } }),
       ],
     });
 
     // The login page's /me starts and STAYS pending.
     const oldLoad = loadSessionForTests();
-    await loginStudent("student01", "correct-horse"); // generation -> 1
+    await loginWithPassword("student01", "correct-horse", false); // generation -> 1
 
     // BEFORE the old /me resolves, the new shell mounts and loads: it
     // must NOT dedupe onto the old promise — a SECOND /me fires, with
@@ -208,16 +209,17 @@ describe("login synchronously invalidates the anonymous session cache (targeted 
   });
 });
 
-describe("a sibling reset bumps the session-cache generation exactly ONCE (round-5 review P2)", () => {
+describe("a sibling reset bumps the session-cache generation exactly ONCE", () => {
   test("N mounted consumers fence without stranding each other's /me", () => {
     resetSessionCacheForTests();
     resetAccessTokenManagerForTests();
     const before = getSessionGenerationForTests();
     // Two mounted useSession consumers subscribe (their per-instance
-    // callbacks are the visible-state fences). Before the round-5 fix
-    // each instance ALSO invalidated, so the second bump fenced the
-    // first consumer's just-started /me — every consumer but the last
-    // stayed stuck on the loading gate until staleness or a refocus.
+    // callbacks are the visible-state fences). If each instance ALSO
+    // invalidated, the second bump would fence the first consumer's
+    // just-started /me — every consumer but the last would stay stuck
+    // on the loading gate until staleness or a refocus. The
+    // module-level single invalidation is what this test asserts.
     const unsubA = onCrossTabAuthReset(() => {});
     const unsubB = onCrossTabAuthReset(() => {});
     try {

@@ -17,79 +17,12 @@
  * Assert the complete entered value before submitting. Each TOTP attempt
  * replaces the previous value and only a real auth rejection can retry.
  */
-import { createHmac } from "node:crypto";
-
-import { expect, test } from "./fixtures";
+import { completeStaffPasswordLogin, expect, test } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 
 test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* env) to run this suite.");
-
-/** The teacher.spec TOTP generator, mirrored verbatim (importing the
- * spec module would drag its registry along — the P3-A lesson). */
-function totpCode(secret: string, atMs: number = Date.now()): string {
-  const counter = Math.floor(atMs / 30_000);
-  const block = Buffer.alloc(8);
-  block.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", base32Decode(secret)).update(block).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const binary =
-    ((digest[offset] & 0x7f) << 24) |
-    (digest[offset + 1] << 16) |
-    (digest[offset + 2] << 8) |
-    digest[offset + 3];
-  return String(binary % 1_000_000).padStart(6, "0");
-}
-
-function base32Decode(secret: string): Buffer {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = 0;
-  let value = 0;
-  const out: number[] = [];
-  for (const char of secret.toUpperCase().replace(/=+$/, "")) {
-    const index = alphabet.indexOf(char);
-    if (index < 0) {
-      throw new Error(`invalid base32 character: ${char}`);
-    }
-    value = (value << 5) | index;
-    bits += 5;
-    if (bits >= 8) {
-      out.push((value >>> (bits - 8)) & 0xff);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(out);
-}
-
-/** Student login typed through the keyboard path (see the webkit
- * note). The post-login SESSION ANCHOR polls /me until it answers
- * authenticated — the negated /login URL alone can flip before the
- * memory-only bearer is recorded, so the next navigation lands
- * anonymous (the webkit snapshot evidence: /tasks showed the login
- * CTA shell). Same resume-signal discipline as ensureStudentLogin. */
-async function studentLoginTyped(
-  page: import("@playwright/test").Page,
-  credentials: string,
-): Promise<void> {
-  const [username, password] = credentials.split(":");
-  await page.goto(`${BASE}/login`);
-  await expect(page.getByLabel("学号")).toBeEnabled();
-  await page.getByLabel("学号").pressSequentially(username, { delay: 2 });
-  await page.getByLabel("密码").pressSequentially(password, { delay: 2 });
-  await expect(page.getByLabel("学号")).toHaveValue(username);
-  await expect(page.getByLabel("密码")).toHaveValue(password);
-  await page.getByRole("button", { name: "登录", exact: true }).click();
-  await expect(page).not.toHaveURL(/\/login/);
-  // Session anchor: the app shell must render the AUTHED layout (the
-  // sidebar's collapse toggle only exists behind the session gate).
-  // A bare /me fetch cannot see the memory-only bearer from the page's
-  // own module state in webkit, so the DOM landmark is the honest
-  // authenticated signal — same shape as the fence specs' chip checks.
-  await expect(page.locator(".rail-toggle, .app-sidebar").first()).toBeVisible({
-    timeout: 15_000,
-  });
-}
 
 test.describe("cross-browser smoke (firefox + webkit subset)", () => {
   test("R1 innovation navigation and real logout fence browser back", async ({ page }) => {
@@ -142,30 +75,13 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
       "needs CQ_E2E_STAFF + CQ_E2E_STAFF_TOTP_SECRET (the seeded staff contract)",
     );
     const page = await browser.newPage();
-    await page.goto(`${BASE}/staff/login`);
-    await expect(page.getByLabel("邮箱")).toBeEnabled();
-    await page.getByLabel("邮箱").pressSequentially(staff[0], { delay: 2 });
+    await page.goto(`${BASE}/login`);
+    await page.getByRole("button", { name: "使用密码登录" }).click();
+    await page.getByLabel("账号", { exact: true }).pressSequentially(staff[0], { delay: 2 });
     await page.getByLabel("密码").pressSequentially(staff[1] ?? "", { delay: 2 });
-    await expect(page.getByLabel("邮箱")).toHaveValue(staff[0]);
+    await expect(page.getByLabel("账号", { exact: true })).toHaveValue(staff[0]);
     await expect(page.getByLabel("密码")).toHaveValue(staff[1] ?? "");
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const code = totpCode(totpSecret);
-      await page.getByLabel("动态验证码").fill("");
-      await page.getByLabel("动态验证码").pressSequentially(code, { delay: 2 });
-      await expect(page.getByLabel("动态验证码")).toHaveValue(code);
-      const submitted = page.waitForResponse(response =>
-        new URL(response.url()).pathname === "/api/v1/auth/staff/login" && response.request().method() === "POST");
-      await page.getByRole("button", { name: "登录", exact: true }).click();
-      const response = await submitted;
-      if (response.ok()) {
-        await expect(page).not.toHaveURL(/\/staff\/login/);
-        break;
-      }
-      const body = await response.json() as { error?: { code?: string } };
-      expect(response.status(), "only a genuine auth rejection can recompute TOTP").toBe(401);
-      expect(body.error?.code).toBe("AUTHENTICATION_REQUIRED");
-    }
-    await expect(page).not.toHaveURL(/\/staff\/login/);
+    await completeStaffPasswordLogin(page, totpSecret);
     await page.goto(`${BASE}/teacher/reviews`);
     await expect(page.locator(".review-item, .section").first()).toBeVisible({
       timeout: 20_000,

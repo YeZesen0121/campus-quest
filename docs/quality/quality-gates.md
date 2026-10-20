@@ -125,6 +125,14 @@ Check dependency direction:
 
 router -> service/use case -> repository/query/port -> adapter/database
 
+Machine-checked since 2026-10-16 by `make arch-lint` (import-linter
+contracts in `backend/pyproject.toml`; per-module layering plus the
+package-level rules; known drift carries explicit rental waivers in the
+same config). The human checks below still apply to everything the
+contracts cannot see (transaction boundaries, service granularity,
+schema exposure); `docs/architecture/as-built.md` reports the drift
+without waivers.
+
 Reject if:
 
 - router directly performs a multi-table business transaction;
@@ -250,7 +258,7 @@ An Agent's final implementation report should include:
 
 ## 15. Release gate
 
-V1 release is governed by the dedicated E2E hardening plan and eventual command:
+Release verification runs the full local gate that exists today (architecture contract gate, test-database bootstrap, backend unit/integration/worker/e2e, migration verification, frontend typecheck/lint/arch boundaries/CSS guard/unit/build, Playwright e2e, pixel visual regression, and the coverage ratchet; the Makefile documents the order):
 
 ~~~bash
 make release-gate
@@ -258,7 +266,15 @@ make release-gate
 
 A fresh zero-failure run is required after the final release-gate fix.
 
-Until that command exists, use the strongest currently implemented subset rather than pretending the future gate has run.
+Before pushing, run the fast local gate:
+
+~~~bash
+make pre-push
+~~~
+
+It covers CI's highest-frequency failure points without a docker stack (~30s–2min): coverage-floor direction (floors only move up), backend lint/format/typecheck, architecture lint (import-linter + dependency-cruiser), spec-test matrix coherence, the G3 placeholder guard, OpenAPI snapshot and frontend TS-type freshness, frontend typecheck/lint/CSS guard, and the frontend coverage ratchet. The `.githooks/pre-push` hook runs it automatically (`git push --no-verify` skips a single push). Backend coverage ratchet, integration, e2e, and pixel/axe need the compose stack and stay in `make pre-push-full` / `make release-gate` / CI.
+
+Branch protection on main enforces the three required CI jobs ("Backend (Python 3.12)", "Frontend (Node 22)", "Pixel visual regression (Playwright)") green on the exact head, strict up-to-date with main, and enforce_admins — local logs are not a substitute for CI. A fresh `make release-gate` run remains the owner's product-level acceptance evidence on merged main after a batch of merges lands; it is not a stand-in for CI.
 
 ## 16. Engineering Golden Rules（PR #2 起，长期 merge gate）
 

@@ -17,6 +17,8 @@ description: CampusQuest 测试流程契约：改动类型→门禁矩阵、测�
 
 门禁命令纪律：裸跑 + 显式成功标记；数字出自当轮日志（agent-tooling §13）。
 
+`make pre-push` 是 push 前的本地快速门禁（`.githooks/pre-push` 自动执行，约 30s–2min，无需 stack）：覆盖率地板方向（ratchet-direction，只升不降）、矩阵的静态列（ruff format/check + mypy、typecheck + lint + check:css）、arch（import-linter + dependency-cruiser）、spec-测试矩阵一致性（check_test_matrix.py）、G3 占位符 guard、契约新鲜度（OpenAPI 快照 + 前端 TS 类型）与前端 coverage ratchet；不覆盖后端 coverage ratchet、integration、e2e、像素/axe（需 compose stack，归 `make pre-push-full`/`make release-gate`/CI）。跳过单次推送用 `git push --no-verify`。
+
 ## 测试工件清单（G19，特性 PR 同 ship）
 
 见 AGENTS.md "Test artifacts manifest" 节。速查：新行为→矩阵行；会合法 skip 的测试→no-skip 豁免；稳定新界面→像素基线；spec 依赖的新选择器→契约 B 表；覆盖变化→棘轮地板走 `--update`；API 面变化→OpenAPI 快照+生成类型。
@@ -25,7 +27,7 @@ description: CampusQuest 测试流程契约：改动类型→门禁矩阵、测�
 
 模板：`docs/quality/test-matrix/points-ledger.md`。纪律：**预期列先于测试检索从 spec 原文推导落笔**；找不到测试=缺口（列出，不补）；测试行为≠预期=不匹配（上报，不擅改——bug 或 spec 缺口由 review 裁定）；裁决类取舍在行内注记。每域一文件；checker：`backend/scripts/check_test_matrix.py`。
 
-## 本地栈借用协议（3000/8100 + 测试库）
+## 本地栈借用协议（3000/8000 + 测试库）
 
 e2e 电池与像素回归必须用 3000（MinIO CORS 白名单唯一端口，3002 已实证不通）。流程：向 campus reviewer 会话通告"借 3000"→ 其停常驻栈（owner 的 3000 环境）→ 跑电池 → 通告"还" → 其重启栈。**占用 campusquest_test@15432 的任何测试跑——包括不经端口的后端直跑（pytest/覆盖率采集/flake 挖掘）——都视同借栈，同样通告-等待-使用**（2026-10-08 起生效：直跑测试与电池并发用库会互相污染证据）。
 
@@ -38,6 +40,10 @@ e2e 电池与像素回归必须用 3000（MinIO CORS 白名单唯一端口，300
 
 ## 覆盖率棘轮
 
-前后端各有地板文件（frontend/coverage-ratchet.json、backend/coverage-ratchet.json）。降覆盖→同 PR 走 `--update`/`coverage:update` 给理由；地板以 CI 实测为准（权威环境），跨环境噪声由 epsilon 吸收（实测漂移 0.1pp → epsilon 0.15）。
+前后端各有地板文件（frontend/coverage-ratchet.json、backend/coverage-ratchet.json）。降覆盖→同 PR 走 `--update`/`coverage:update` 给理由；地板以 CI 实测为准（权威环境），跨环境噪声由 epsilon 吸收（实测漂移 0.1pp → epsilon 0.15）。coverage-ratchet 已进入 `make release-gate` 依赖链（2026-10-10 owner 批准）。
 
 覆盖漂移/flake 排查工具箱（PR #36 先例）：单模块漂移而其余分毫不差 = 单测分支覆盖 flake，非系统噪声。定位法——同一套件 N 轮独立 `COVERAGE_FILE` 运行 + coverage json 差分，找出偶走偶不走的分支；修法——确定性单测钉住该契约的全形态（不靠竞态运气拿覆盖），源码不动。
+
+**async 行归类缺陷（B 项专项，2026-10-17 定案）**：SQLAlchemy AsyncSession 走 greenlet 桥接同步 core；`[tool.coverage.run]` 未声明 `concurrency = ["greenlet", "thread"]` 时，tracer 的 arc 记账在 greenlet 切换处跨 frame——await 行的 arc 落到 SQLAlchemy 内部行号（越界 arc），报告层静默丢弃后物理执行过的行被记 missing（#88/#91/#95 等四发作）。修复=配置声明（已落 pyproject）；`coverage_ratchet.py` 的越界 arc 护栏（`_undeclared_concurrency_signatures`）在数据带此指纹时拒绝比对并直接红。新增并发库（gevent/eventlet/multiprocessing）时同理必须声明，护栏会兜底报错。
+
+**发码/挑战类 service 的跨连接持久性断言（#85+#101 二犯制度，2026-10-17）**：request 类方法（短信/邮箱码、OTP 挑战）的 202 前必须落 commit（挑战行跨连接可见）；**savepoint harness 的集成测试看不见该缺陷**（同事务内未提交行可读=假绿），只有 e2e 真形态能抓——晚一层。新写此类 service 测试**必带一条生产式会话断言**：`AsyncSession(db_engine)` 独立会话跑 request→另开新会话 SELECT 挑战行存在（先例：`test_staff_mobile_code_login_api.py::test_request_leaves_the_challenge_durable_across_sessions`；注意真提交行的 cleanup 责任在测试自己）。

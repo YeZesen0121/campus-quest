@@ -80,9 +80,10 @@ permission; (5) Submission -> APPROVED; (6) Claim -> COMPLETED +
 row carrying the confirmed tier/points; (8) the frozen
 ``PointsRewardPort.grant_assignment_reward`` — called inside the
 transaction with a stable ``assignment_reward:<claim_id>`` idempotency
-key; the UNIQUE(claim) ledger semantics are Plan 05's concrete
-adapter; (9) Assignment -> COMPLETED (permanently unallocatable);
-(10) the SUBMISSION_APPROVED audit event.
+key; the ledger's UNIQUE(source_type, source_id, ledger_type)
+idempotency lives in the concrete adapter (PointsRewardPortAdapter,
+``points/ledger_service.py``); (9) Assignment -> COMPLETED
+(permanently unallocatable); (10) the SUBMISSION_APPROVED audit event.
 
 AFTER the ten-step transaction commits, the approve path runs the
 post-commit honor trigger (spec §18; plan 05 final review I3): the
@@ -277,8 +278,8 @@ class PointsRewardPort(Protocol):
     ``locked_points`` is the reward lock's ``locked_reward_points``
     (the fraction-adjusted amount, already floored per §31.1);
     ``idempotency_key`` is stable per claim, so a replayed or racing
-    approve cannot double-grant (UNIQUE(claim) semantics live in Plan
-    05's adapter).
+    approve cannot double-grant (the ledger's
+    UNIQUE(source_type, source_id, ledger_type) idempotency).
     """
 
     async def grant_assignment_reward(
@@ -1075,7 +1076,14 @@ class ReviewService:
         owner_id = await db.scalar(
             select(Task.owner_teacher_id).where(Task.id == task_id)
         )
-        if owner_id is None or owner_id == actor.user_id or is_admin(actor.role):
+        # Deny on a missing owner row (hardening B-F2): the claim ->
+        # task -> owner FK chain makes None unreachable in a consistent
+        # database, but the defensive default is fail closed — an absent
+        # owner must never widen review authority to "everyone".
+        if owner_id is None:
+            await db.rollback()
+            raise ReviewerPermissionDeniedError(task_id, actor.user_id)
+        if owner_id == actor.user_id or is_admin(actor.role):
             # The FK guarantees the task exists; owner/Admin hold every
             # capability (the add_collaborator owner exemption, §4.3).
             return

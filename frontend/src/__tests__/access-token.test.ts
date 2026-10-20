@@ -16,14 +16,14 @@
  * localStorage/sessionStorage; the pending staff invitation token is
  * deliberately NOT promoted into the shared manager.
  *
- * Cross-tab wave coordination (rounds 1-6): Web Locks serialization,
- * BroadcastChannel mint adoption, the context-reset fence, the round-5
+ * Cross-tab wave coordination: Web Locks serialization,
+ * BroadcastChannel mint adoption, the context-reset fence, the
  * PROBE/ANSWER liveness — a marker's wave is resolved by an active
  * request/response (a live holder with a USABLE bearer re-posts the
  * mint; the bounded window is a FAILURE DETECTOR, so a suspended holder
  * may be superseded and self-heals) — never by a marker-age guess or a
  * per-tab generation counter, and never re-advertising an expired
- * credential (the round-6 boundary).
+ * credential (the expiry boundary).
  *
  * Harness decision (the stream's documented stance): stub globalThis
  * fetch with a URL-routing fake — no mocking library.
@@ -46,8 +46,7 @@ import { isApiError } from "../lib/errors";
 import { observeServerDateHeader, resetServerClockForTests } from "../lib/serverClock";
 import {
   acceptStaffInvitation,
-  loginStaff,
-  loginStudent,
+  loginWithPassword,
   logout,
 } from "../features/auth/api";
 
@@ -84,6 +83,11 @@ function envelope401(): () => Response {
 
 function tokenPair(access: string): unknown {
   return { access_token: access, csrf_token: "ct", token_type: "bearer" };
+}
+
+/** The unified login family's authenticated envelope (spec §3.1). */
+function authEnvelope(access: string, role = "STUDENT"): unknown {
+  return { status: "authenticated", role, tokens: tokenPair(access) };
 }
 
 /** Storage-write recorder: the pin that nothing ever persists the token. */
@@ -134,10 +138,10 @@ afterEach(() => {
 describe("regression 1: login stores the token; the next request carries it", () => {
   test("student login -> Bearer on the following protected request", async () => {
     route({
-      "/api/v1/auth/login": [json(tokenPair("at-student"))],
+      "/api/v1/auth/login": [json(authEnvelope("at-student"))],
       "/api/v1/points/me": [json({ available_points: 1, earned_points: 1, spendable_points: 1, point_debt: 0 })],
     });
-    await loginStudent("20240001", "correct-horse");
+    await loginWithPassword("20240001", "correct-horse", false);
     assert.equal(getAccessToken(), "at-student");
 
     await apiRequest("/api/v1/points/me");
@@ -148,10 +152,10 @@ describe("regression 1: login stores the token; the next request carries it", ()
 
   test("staff login -> Bearer too (the staff session is a full session)", async () => {
     route({
-      "/api/v1/auth/staff/login": [json(tokenPair("at-staff"))],
+      "/api/v1/auth/login": [json(authEnvelope("at-staff", "TEACHER"))],
       "/api/v1/me": [json({ id: "u1" })],
     });
-    await loginStaff("teacher@school.edu", "correct-horse", "234567");
+    await loginWithPassword("teacher@school.edu", "correct-horse", false);
     await apiRequest("/api/v1/me");
     assert.equal(calls[1]?.headers.get("Authorization"), "Bearer at-staff");
   });
@@ -229,7 +233,7 @@ describe("regression 2: cold-start bootstrap -> refresh -> new Bearer -> /me suc
     route({
       "/api/v1/auth/login": [envelope401()],
     });
-    await loginStudent("20240001", "wrong").then(
+    await loginWithPassword("20240001", "wrong", false).then(
       () => assert.fail("expected rejection"),
       () => {},
     );
@@ -293,11 +297,11 @@ describe("regression 3: concurrent bootstraps rotate exactly once (single-flight
 describe("regression 4: logout forgets the memory token", () => {
   test("logout POSTs the revoke and clears the token", async () => {
     route({
-      "/api/v1/auth/login": [json(tokenPair("at-session"))],
+      "/api/v1/auth/login": [json(authEnvelope("at-session"))],
       "/api/v1/auth/logout": [() => new Response(null, { status: 204 })],
       "/api/v1/me": [json({ id: "u1" })],
     });
-    await loginStudent("20240001", "correct-horse");
+    await loginWithPassword("20240001", "correct-horse", false);
     await logout();
 
     assert.equal(calls[1]?.url, "/api/v1/auth/logout");
@@ -311,12 +315,12 @@ describe("regression 4: logout forgets the memory token", () => {
 
   test("a failed revoke still clears the token (the client never keeps it)", async () => {
     route({
-      "/api/v1/auth/login": [json(tokenPair("at-session"))],
+      "/api/v1/auth/login": [json(authEnvelope("at-session"))],
       "/api/v1/auth/logout": [
         json({ error: { code: "INTERNAL_ERROR", message: "服务暂不可用", details: null, request_id: null } }, 500),
       ],
     });
-    await loginStudent("20240001", "correct-horse");
+    await loginWithPassword("20240001", "correct-horse", false);
     await logout().then(
       () => assert.fail("expected rejection"),
       () => {},
@@ -570,9 +574,9 @@ describe("cross-tab context-reset fence + deterministic handoff (review round)",
 
 });
 
-// --- memory-only handoff + no-shadowing + fail-safe (re-review round 2) ---
+// --- memory-only handoff + no-shadowing + fail-safe ---
 
-describe("memory-only handoff (re-review round 2)", () => {
+describe("memory-only handoff", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -658,7 +662,7 @@ describe("memory-only handoff (re-review round 2)", () => {
   });
 });
 
-// --- marker semantics across a wave (round 3, wave-keyed in round 5) ---
+// --- marker semantics across a wave ---
 
 describe("marker semantics across a wave", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
@@ -765,9 +769,9 @@ describe("marker semantics across a wave", () => {
   });
 });
 
-// --- round 5: probe/answer liveness + opaque wave ownership ---
+// --- probe/answer liveness + opaque wave ownership ---
 
-describe("round-5 protocol (probe/answer liveness)", () => {
+describe("probe/answer liveness protocol", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -818,8 +822,8 @@ describe("round-5 protocol (probe/answer liveness)", () => {
   test("a 5s-old marker is resolved by the SAME probe (no age heuristic anywhere)", async () => {
     resetAccessTokenManagerForTests();
     installLocks((_n, _o, cb) => cb());
-    // The old round-4 scenario — a waiter throttled seconds past the
-    // wave — is no longer classified by age at all: the probe decides.
+    // A waiter throttled seconds past the wave is not classified by
+    // age at all: the probe decides.
     // The probe must actually be POSTED for this wave, and with no
     // holder answering (the wave ended) the waiter rotates.
     (globalThis as { localStorage?: Storage }).localStorage = {
@@ -845,7 +849,7 @@ describe("round-5 protocol (probe/answer liveness)", () => {
     ear.close();
   });
 
-  test("round-5 review P1: a holder whose mint is >10s old still ANSWERS (re-stamped) — no second POST kills the live wave", async () => {
+  test("a holder whose mint is >10s old still ANSWERS (re-stamped) — no second POST kills the live wave", async () => {
     resetAccessTokenManagerForTests();
     installLocks((_n, _o, cb) => cb());
     // Tab A minted W1 eleven seconds ago and is still USING it (access
@@ -876,7 +880,7 @@ describe("round-5 protocol (probe/answer liveness)", () => {
     assert.equal(getAccessToken(), "still-live");
   });
 
-  test("round-5 review P2: a TTL-fresh mint from a SUPERSEDED wave is not adopted (marker wave check)", async () => {
+  test("a TTL-fresh mint from a SUPERSEDED wave is not adopted (marker wave check)", async () => {
     resetAccessTokenManagerForTests();
     installLocks((_n, _o, cb) => cb());
     // A sibling already rotated out W-old (its marker names W-new for
@@ -905,7 +909,7 @@ describe("round-5 protocol (probe/answer liveness)", () => {
     resetAccessTokenManagerForTests();
     installLocks((_n, _o, cb) => cb());
     // Two tabs once published "generation 1" each (tab-local counters
-    // collide). Round-5 identity is an opaque uuid, and liveness is
+    // collide). Wave identity is an opaque uuid, and liveness is
     // active: this waiter PROBES the wave; the live holder's answer
     // re-posts the mint and the waiter ADOPTS — the sibling's wave is
     // never rotated away.
@@ -1023,8 +1027,8 @@ describe("round-5 protocol (probe/answer liveness)", () => {
   test("SAME-tab reload over its OWN dead marker (BC present): probe unanswered -> rotate", async () => {
     resetAccessTokenManagerForTests();
     installLocks((_n, _o, cb) => cb());
-    // The round-4 reload regression in round-5 shape: the tab's previous
-    // heap published this marker and died with the reload; no holder
+    // The reload regression: the tab's previous heap published this
+    // marker and died with the reload; no holder
     // answers the probe; the tab rotates as the new leader.
     (globalThis as { localStorage?: Storage }).localStorage = {
       getItem: () => JSON.stringify({ waveId: "w-own-dead", contextId: null, at: Date.now() - 1_000 }),
@@ -1059,9 +1063,9 @@ describe("round-5 protocol (probe/answer liveness)", () => {
   });
 });
 
-// --- round 5: no-BroadcastChannel fail-safe (probe impossible) ---
+// --- no-BroadcastChannel fail-safe (probe impossible) ---
 
-describe("round-5 no-channel fail-safe", () => {
+describe("no-channel fail-safe", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -1150,9 +1154,9 @@ describe("round-5 no-channel fail-safe", () => {
   });
 });
 
-// --- round 6: credential-expiry boundary on the probe/answer handoff ---
+// --- credential-expiry boundary on the probe/answer handoff ---
 
-describe("round-6 credential boundary", () => {
+describe("credential-expiry boundary", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -1233,7 +1237,7 @@ describe("round-6 credential boundary", () => {
     // The same tab's 401 recovery: it probes its own wave; its own
     // long-lived listener receives the probe but must not answer with
     // the expired self. The timeout lets the tab rotate as the new
-    // leader — the self-adopt loop of round-6 review P0 is broken.
+    // leader — the expired-self adopt loop is broken.
     const expiredAt = Date.now() - 3_600_000;
     receiveAdoptionForTests({ waveId: "w-self", token: "own-expired", contextId: null, sentAt: expiredAt, expiresAt: expiredAt });
     (globalThis as { localStorage?: Storage }).localStorage = {
@@ -1363,9 +1367,9 @@ describe("round-6 credential boundary", () => {
   });
 });
 
-// --- round 7: resolver lifecycle + server-time expiry ---
+// --- resolver lifecycle + server-time expiry ---
 
-describe("round-7 resolver lifecycle + server-time expiry", () => {
+describe("resolver lifecycle + server-time expiry", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -1458,9 +1462,9 @@ describe("round-7 resolver lifecycle + server-time expiry", () => {
   });
 });
 
-// --- round 8: observed-mint vs held-credential state split ---
+// --- observed-mint vs held-credential state split ---
 
-describe("round-8 holder state (observed vs held)", () => {
+describe("holder state (observed vs held)", () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
   function installLocks(
@@ -1599,7 +1603,7 @@ describe("round-8 holder state (observed vs held)", () => {
   });
 
   // (The waiter-side outcome of this fix — zero POSTs, live wave adopted
-  // after unrelated traffic — is pinned by the round-7 resolver test; the
+  // after unrelated traffic — is pinned by the resolver-lifecycle test; the
   // holder/waiter split it depends on only exists across two real tabs,
   // which the opt-in wave-invariant e2e exercises as one-rotation-per-
   // wave, though it does not inject delayed superseded traffic.)

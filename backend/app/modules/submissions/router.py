@@ -77,10 +77,9 @@ Composition root
   threaded from the request middleware into the job's correlation id.
 - **Object storage** (spec §10/§33.3) arrives through the
   ``ObjectStorage`` port. The provider is the settings-driven factory
-  seam: the object-storage provider adapter does not exist yet, so no
-  environment has a default binding — deployments and tests inject an
-  implementation through this provider (tests bind the in-memory fake).
-  Failing loudly beats silently talking to nothing.
+  seam: the production binding is the real ``S3ObjectStorage`` built
+  from Settings (hardening P0-1); tests override the provider with the
+  in-memory fake, so no test contacts a real endpoint.
 - **The points port** (spec §14 step 8) is the points-module ledger
   adapter, constructed per request over the request's session: the
   grant joins the approve transaction and the caller's commit decides
@@ -131,8 +130,8 @@ from app.integrations.rate_limit import (
 from app.modules.audit.context import AuditContext
 from app.modules.identity.dependencies import (
     get_business_clock,
-    require_active_student_actor,
     require_active_student_or_staff_management_actor,
+    require_approved_student_actor,
     require_staff_management_actor,
 )
 from app.modules.identity.events import (
@@ -338,7 +337,8 @@ def get_query_service() -> SubmissionQueryService:
 
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
-StudentActor = Annotated[Actor, Depends(require_active_student_actor)]
+
+StudentActor = Annotated[Actor, Depends(require_approved_student_actor)]
 # The download route is the one submissions path two populations share:
 # owning Students (plain §5.7 state gate) and reviewing staff (the
 # §33.4 management gate, confirmed TOTP) — the dual-population identity

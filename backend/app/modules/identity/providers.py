@@ -9,8 +9,9 @@ tests override a dependency, never service internals (§21).
 - The Redis client is process-cached; services are assembled per request
   from injected clock, settings, codec, and sender dependencies. The
   SMS/EMAIL senders are resolved from `Settings.sms_provider` /
-  `Settings.email_provider` (V1's only value is the logging adapter);
-  production refuses the logging provider at Settings construction
+  `Settings.email_provider` (SMS: logging or aliyun_dypns; EMAIL: the
+  logging adapter only); production refuses the logging provider at
+  Settings construction
   (config.py's production guard — fail closed), so this wiring can never
   hand a no-send adapter to a production request. The logging adapters
   record masked deliveries (never ``variables`` — the OTP code and email
@@ -42,13 +43,17 @@ from app.modules.identity.dependencies import (
     get_access_token_codec,
     get_business_clock,
 )
+from app.modules.identity.email_login_service import EmailLoginService
 from app.modules.identity.email_verification import EmailVerificationService
 from app.modules.identity.events import DomainEventPublisher, LoggingEventPublisher
+from app.modules.identity.login_failure_guard import LoginFailureGuard
+from app.modules.identity.mobile_login_service import MobileLoginService
 from app.modules.identity.otp import OtpChallengeService, OtpPolicy
 from app.modules.identity.profile_service import ProfileService
 from app.modules.identity.service import IdentityService
 from app.modules.identity.session_service import SessionService
 from app.modules.identity.staff_service import StaffService
+from app.modules.identity.unified_login_service import UnifiedLoginService
 
 
 @lru_cache
@@ -95,9 +100,43 @@ def get_email_sender(
 ) -> EmailSender:
     """Resolve the email adapter from `settings.email_provider`.
 
-    The fail-closed chain mirrors `get_sms_sender`.
+    The fail-closed chain mirrors `get_sms_sender` — including the
+    settings hand-off: without it the factory would refuse a real smtp
+    selection at composition in EVERY environment (the #69 wiring
+    lesson; providers must pass the deployment settings through).
     """
-    return build_email_sender(settings.email_provider)
+    return build_email_sender(settings.email_provider, settings)
+
+
+def get_login_failure_guard(
+    redis: RedisDep,
+) -> LoginFailureGuard:
+    """The per-account lockout counter on the module's shared Redis."""
+    return LoginFailureGuard(redis=redis)
+
+
+def get_email_login_service(
+    sender: Annotated[EmailSender, Depends(get_email_sender)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    redis: RedisDep,
+    sessions: Annotated[SessionService, Depends(get_session_service)],
+    guard: Annotated[LoginFailureGuard, Depends(get_login_failure_guard)],
+) -> EmailLoginService:
+    return EmailLoginService(
+        sender=sender,
+        redis=redis,
+        clock=clock,
+        sessions=sessions,
+        fernet=Fernet(settings.totp_encryption_key),
+        guard=guard,
+        hmac_secret=settings.otp_hmac_secret,
+        resend_cooldown_seconds=(
+            1
+            if settings.e2e_login_ratelimit
+            else settings.email_code_resend_cooldown_seconds
+        ),
+    )
 
 
 def get_event_publisher() -> DomainEventPublisher:
@@ -124,6 +163,7 @@ def get_session_service(
     clock: Annotated[Clock, Depends(get_business_clock)],
     codec: Annotated[AccessTokenCodec, Depends(get_access_token_codec)],
     settings: Annotated[Settings, Depends(get_settings)],
+    guard: Annotated[LoginFailureGuard, Depends(get_login_failure_guard)],
 ) -> SessionService:
     return SessionService(
         clock=clock,
@@ -136,6 +176,8 @@ def get_session_service(
         replay_crypt=Fernet(settings.refresh_replay_encryption_key.encode())
         if settings.refresh_grace_seconds > 0
         else None,
+        # V1.1 §6: the per-account lockout rides the student login path.
+        guard=guard,
     )
 
 
@@ -179,6 +221,7 @@ def get_staff_service(
     sessions: Annotated[SessionService, Depends(get_session_service)],
     settings: Annotated[Settings, Depends(get_settings)],
     events: Annotated[DomainEventPublisher, Depends(get_event_publisher)],
+    guard: Annotated[LoginFailureGuard, Depends(get_login_failure_guard)],
 ) -> StaffService:
     # The notification recorder is the MERGE_CARRIES item 2 production
     # wiring for the identity-security producer: NotificationPort joins
@@ -202,6 +245,10 @@ def get_staff_service(
         # lifecycle actions (Plan 08 T2) — identical to the constructor
         # default, spelled out so the dependency is visible here.
         audit=AuditLogWriter(),
+        # V1.1 §6: the staff password+TOTP path shares the lockout
+        # counter (guard=None in the constructor would silently disable
+        # it — the #69 wiring lesson).
+        guard=guard,
     )
 
 
@@ -241,3 +288,43 @@ OtpServiceDep = Annotated[OtpChallengeService, Depends(get_otp_service)]
 SessionsDep = Annotated[SessionService, Depends(get_session_service)]
 LimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
 StorageDep = Annotated[ObjectStorage, Depends(get_object_storage)]
+
+
+def get_unified_login_service(
+    clock: Annotated[Clock, Depends(get_business_clock)],
+    email_login: Annotated[EmailLoginService, Depends(get_email_login_service)],
+    mobile_login: Annotated[MobileLoginService, Depends(get_mobile_login_service)],
+    staff: Annotated[StaffService, Depends(get_staff_service)],
+    sessions: Annotated[SessionService, Depends(get_session_service)],
+) -> UnifiedLoginService:
+    """The spec §3 facade (PR-1): composition only — every arm rides
+    the already-wired challenge services, one shared clock."""
+    return UnifiedLoginService(
+        clock=clock,
+        email_login=email_login,
+        mobile_login=mobile_login,
+        staff=staff,
+        sessions=sessions,
+    )
+
+
+def get_mobile_login_service(
+    sms_sender: Annotated[SmsSender, Depends(get_sms_sender)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    redis: RedisDep,
+    sessions: Annotated[SessionService, Depends(get_session_service)],
+    guard: Annotated[LoginFailureGuard, Depends(get_login_failure_guard)],
+) -> MobileLoginService:
+    return MobileLoginService(
+        sms_sender=sms_sender,
+        redis=redis,
+        clock=clock,
+        sessions=sessions,
+        guard=guard,
+        hmac_secret=settings.otp_hmac_secret,
+        # The staff channel's ADMIN totp leg decrypts the credential
+        # (V1.1 login iteration item 1) — the same key the staff service
+        # and the email login use.
+        fernet=Fernet(settings.totp_encryption_key),
+    )

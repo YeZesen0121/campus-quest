@@ -8,7 +8,9 @@
  *      or the 60s default);
  *   2. submit -> POST /auth/phone/challenges/{id}/verify (the SMS code
  *      becomes the single-use `phone_token`, the challenge is spent);
- *   3. POST /auth/register with that token -> redirect to /login.
+ *   3. POST /auth/register with that token -> the {user, tokens} envelope
+ *      IS the login (owner feedback ④, live since #100): straight to the
+ *      student home, no login-page round trip.
  *
  * Proof lifecycle (identity/otp.py + service.py ordering, mirrored here):
  * - a wrong code does NOT consume the challenge — retry keeps the OTP;
@@ -21,6 +23,8 @@
  */
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+
+import { useSession } from "@/features/auth/session";
 
 import { isApiError } from "@/lib/errors";
 
@@ -60,7 +64,7 @@ type RegisterFields = Extract<
   "student_number" | "nickname" | "phone" | "code" | "password"
 >;
 
-const OTP_RESET_NOTE = "验证码已失效，请重新获取后再提交。";
+const OTP_RESET_NOTE = "验证码已失效，请重新获取";
 
 /** The live OTP material: an open challenge, plus its minted proof if any. */
 interface OtpState {
@@ -72,6 +76,7 @@ import { Button } from "@/components/ui/button";
 
 export function RegisterForm() {
   const router = useRouter();
+  const { refresh: refreshSession } = useSession();
   const [values, setValues] = useState({
     student_number: "",
     nickname: "",
@@ -155,7 +160,10 @@ export function RegisterForm() {
       nickname: validateNickname(values.nickname) ?? undefined,
       phone: validatePhone(values.phone) ?? undefined,
       code: otp === null ? "请先获取验证码" : (validateOtpCode(values.code) ?? undefined),
-      password: validatePassword(values.password) ?? undefined,
+      password:
+        values.password.length === 0
+          ? undefined
+          : validatePassword(values.password) ?? undefined,
     };
     setFieldErrors(errors);
     setSummary(null);
@@ -180,13 +188,18 @@ export function RegisterForm() {
         // VALIDATION_ERROR (the backend has not consumed it yet).
         setOtp({ challengeId: currentOtp.challengeId, phoneToken });
       }
+      // ④ (live since #100): the envelope IS the login — straight onto
+      // the student home (no login-page round trip into the 60s SMS
+      // cooldown).
       await registerStudent({
         student_number: values.student_number,
         nickname: values.nickname,
         phone_token: phoneToken,
-        password: values.password,
+        password: values.password.length === 0 ? null : values.password,
       });
-      router.replace("/login?registered=1");
+      refreshSession();
+      router.replace("/");
+      router.refresh();
     } catch (error) {
       if (!isApiError(error)) {
         setSummary({ summary: NETWORK_ERROR_TEXT, fieldErrors: {}, requestId: null });
@@ -220,11 +233,11 @@ export function RegisterForm() {
 
   return (
     <form className="form" onSubmit={onSubmit} noValidate>
-      <p className="auth-brief">仅支持老师导入的白名单学号。</p>
       <FormErrorSummary view={summary} />
       <AuthField
         name="student_number"
         label="学号"
+        hint="注册后账号需管理员审核，审核期间可浏览。"
         error={fieldErrors.student_number}
         inputProps={{
           value: values.student_number,
@@ -244,7 +257,7 @@ export function RegisterForm() {
         label="昵称"
         counter={`${nicknameCount}/${NICKNAME_MAX_GRAPHEME_CLUSTERS}`}
         counterOver={nicknameCount > NICKNAME_MAX_GRAPHEME_CLUSTERS}
-        hint="最多 16 个显示字符，emoji 按 1 个计数。"
+        hint="展示给其他同学的名称；按显示字符计数，表情算 1 个"
         error={fieldErrors.nickname}
         inputProps={{
           value: values.nickname,
@@ -323,8 +336,8 @@ export function RegisterForm() {
       />
       <AuthField
         name="password"
-        label="密码"
-        hint="10-128 个字符，无其他限制。"
+        label="密码（可选）"
+        hint="10-128 个字符。留空则仅用手机验证码登录，之后可在设置中自行设置密码。"
         error={fieldErrors.password}
         inputProps={{
           value: values.password,

@@ -34,10 +34,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import BusinessError
+from app.modules.audit.models import AuditLog
 from app.modules.identity.enums import Role
 from app.modules.identity.events import Actor
 from app.modules.tasks.importer import (
-    SUPPORTED_IMPORT_PLATFORMS,
     AssignmentImportPreview,
     AssignmentImportResult,
     AssignmentImportService,
@@ -108,6 +108,10 @@ class FakeSession:
 
     def fail_flush_with(self, error: Exception) -> None:
         self.flush_error = error
+
+    def add(self, obj: Any) -> None:
+        # The audit writer's flush-only append rides the same fake.
+        self.added.append(obj)
 
     def add_all(self, objects: list[Any]) -> None:
         self.added.extend(objects)
@@ -199,10 +203,15 @@ def _service(
     }
     values.update(caps)
     redis_fake = redis or InMemoryRedis()
+
+    async def _closed_platform_codes(db: object) -> set[str]:
+        return {"xiaohongshu", "douyin", "zhihu"}
+
     return (
         AssignmentImportService(
             redis=redis_fake,  # type: ignore[arg-type]
             clock=clock or _FrozenClockProxy(),
+            platform_codes=_closed_platform_codes,
             **values,  # type: ignore[arg-type]
         ),
         redis_fake,
@@ -227,6 +236,24 @@ def _csv(
     writer.writerow(header)
     writer.writerows(rows)
     return buffer.getvalue().encode("utf-8")
+
+
+def _xlsx(
+    *rows: tuple[str, str], header: tuple[str, str] = ("platform", "keyword")
+) -> bytes:
+    """A real single-sheet workbook (openpyxl-written) — the exact bytes
+    a teacher's Excel saves, against the real reader path."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.append(list(header))
+    for row in rows:
+        sheet.append(list(row))
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
 
 
 async def _preview(
@@ -283,7 +310,20 @@ async def test_valid_rows_canonicalized_and_token_minted() -> None:
 
 
 async def test_platform_set_matches_spec_codes() -> None:
-    assert {"xiaohongshu", "douyin", "zhihu"} == SUPPORTED_IMPORT_PLATFORMS
+    """The registry era: the shipped seeds ARE the spec platform set —
+    imports are registry-driven (V1.1 spec 2026-10-16), so the pinned
+    constant is the seed list the migration bulk-inserts."""
+    from app.modules.tasks.platform_registry import SEED_PLATFORMS
+
+    assert {
+        "xiaohongshu",
+        "douyin",
+        "zhihu",
+        "boss-zhipin",
+        "zhaopin",
+        "58city",
+        "lietou",
+    } == {row["code"] for row in SEED_PLATFORMS}
 
 
 # --- preview: row-level errors (row number + stable code) --------------------------
@@ -420,6 +460,106 @@ async def test_unterminated_quote_is_file_level_malformed() -> None:
 
     assert _error_codes(preview) == [(None, ImportErrorCode.MALFORMED_CSV)]
     assert preview.preview_token is None
+
+
+# --- preview: XLSX reader (QA #19) --------------------------------------------------
+
+
+async def test_xlsx_valid_rows_share_the_csv_pipeline() -> None:
+    """A real workbook flows the SAME canonicalization/dedup/preview
+    path: the reader is a sibling in front of the shared classifier,
+    not a parallel implementation."""
+    service, _ = _service()
+    task = _task()
+    db = FakeSession(tasks=[task])
+
+    preview = await _preview(
+        service,
+        db,
+        task,
+        _xlsx(
+            ("XiaoHongShu", "  考研 经验帖  "),
+            ("DOUYIN", "Python 入门"),
+        ),
+    )
+
+    assert preview.total_rows == 2
+    assert [(row.platform, row.keyword) for row in preview.valid] == [
+        ("xiaohongshu", "考研 经验帖"),
+        ("douyin", "Python 入门"),
+    ]
+    assert preview.errors == ()
+    assert preview.preview_token is not None
+
+
+async def test_xlsx_row_errors_carry_row_numbers() -> None:
+    """Row-level failures inside xlsx keep the stable codes and the
+    1-based data-row numbers a teacher sees in the spreadsheet."""
+    service, _ = _service()
+    task = _task()
+    db = FakeSession(tasks=[task])
+
+    preview = await _preview(
+        service,
+        db,
+        task,
+        _xlsx(("zhihu", "  "), ("", "考研")),
+    )
+
+    assert _error_codes(preview) == [
+        (1, ImportErrorCode.EMPTY_KEYWORD),
+        (2, ImportErrorCode.EMPTY_PLATFORM),
+    ]
+
+
+async def test_xlsx_wrong_header_is_file_level_rejection() -> None:
+    service, _ = _service()
+    task = _task()
+    db = FakeSession(tasks=[task])
+
+    preview = await _preview(
+        service, db, task, _xlsx(("zhihu", "考研"), header=("平台", "关键词"))
+    )
+
+    assert _error_codes(preview) == [(None, ImportErrorCode.MALFORMED_XLSX)]
+    assert preview.preview_token is None
+
+
+async def test_xlsx_not_a_workbook_is_file_level_rejection() -> None:
+    """ZIP-magic bytes that are not a workbook land as one
+    MALFORMED_XLSX outcome — openpyxl exceptions never escape."""
+    service, _ = _service()
+    task = _task()
+    db = FakeSession(tasks=[task])
+
+    # A minimal valid zip that is not an xlsx (no [Content_Types].xml).
+    import zipfile
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("hello.txt", "not a workbook")
+    preview = await _preview(service, db, task, buffer.getvalue())
+
+    assert _error_codes(preview) == [(None, ImportErrorCode.MALFORMED_XLSX)]
+    assert preview.preview_token is None
+
+
+async def test_xlsx_duplicate_within_file_marks_later_row() -> None:
+    """The shared seen-set dedups across the xlsx stream exactly as it
+    does for csv (the classifier is one code path)."""
+    service, _ = _service()
+    task = _task()
+    db = FakeSession(tasks=[task])
+
+    preview = await _preview(
+        service,
+        db,
+        task,
+        _xlsx(("zhihu", "考研"), ("ZHIHU", "考研")),
+    )
+
+    assert [(row.platform, row.keyword) for row in preview.valid] == [("zhihu", "考研")]
+    assert _error_codes(preview) == [(2, ImportErrorCode.DUPLICATE_IN_FILE)]
 
 
 async def test_oversize_platform_value_truncated_in_error() -> None:
@@ -634,12 +774,16 @@ async def test_confirm_imports_previewed_rows_in_one_commit() -> None:
         ("zhihu", "留学"),
     ]
     # Rows land with the canonical platform, the trimmed keyword, AVAILABLE
-    # status, exactly one commit — and the token is consumed.
-    assert len(db.added) == 2
-    for assignment in db.added:
-        assert isinstance(assignment, Assignment)
+    # status, exactly one commit — the §30 audit row rides the SAME
+    # commit — and the token is consumed.
+    assignments = [row for row in db.added if isinstance(row, Assignment)]
+    audit_rows = [row for row in db.added if isinstance(row, AuditLog)]
+    assert len(assignments) == 2
+    for assignment in assignments:
         assert assignment.task_id == task.id
         assert assignment.availability_status == "AVAILABLE"
+    assert [row.action for row in audit_rows] == ["TASK_ASSIGNMENTS_IMPORTED"]
+    assert audit_rows[0].details == {"inserted": 2}
     assert db.commits == 1
     assert redis.strings == {}
 

@@ -12,10 +12,12 @@ without redefining the frozen member set (same precedent as identity
 re-exports).
 
 `FileType` and `RetentionPolicy` are the submission module's own closed
-universes: the CSV/XLSX/SQLITE file types (spec §10/§12 — the same
-member set the tasks module's `allowed_file_types` CHECK guards) and the
-retention policies (spec §13 — the same values the Task column's CHECK
-guards). They live here, not in the tasks module, because the submission
+universes: the five upload file types across the two §10.1 families —
+{CSV, XLSX, SQLITE} structured and {DOCX, PDF} documents (spec §10/§12
+— the same member set the tasks module's `allowed_file_types` CHECK
+guards) — and the retention policies (spec §13 — the same values the
+Task column's CHECK guards). They live here, not in the tasks module,
+because the submission
 side computes against them (declared-type MIME pinning, retention
 snapshots) while the tasks side persists raw strings; the member sets
 must stay in lockstep with those CHECK constraints.
@@ -38,15 +40,26 @@ __all__ = [
 
 
 class FileType(StrEnum):
-    """The closed upload file-type universe (spec §10/§12).
+    """The closed upload file-type universe (spec §10/§12 + §10.1).
 
     Mirrors the `tasks.allowed_file_types` CHECK member set; a Task may
-    restrict to a subset but never beyond it.
+    restrict to a subset but never beyond it. §10.1's two families:
+    {CSV, XLSX, SQLITE} are structured (schema-validated), {DOCX, PDF}
+    are documents (integrity-only machine check; content judgment rides
+    the teacher review).
     """
 
     CSV = "CSV"
     XLSX = "XLSX"
     SQLITE = "SQLITE"
+    DOCX = "DOCX"
+    PDF = "PDF"
+
+
+#: The §10.1 family split — a Task's allowed set must lie entirely in
+#: exactly one family (mixed is a creation/update 422).
+STRUCTURED_FILE_TYPES = frozenset({FileType.CSV, FileType.XLSX, FileType.SQLITE})
+DOCUMENT_FILE_TYPES = frozenset({FileType.DOCX, FileType.PDF})
 
 
 class RetentionPolicy(StrEnum):

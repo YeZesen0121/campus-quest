@@ -33,30 +33,30 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
   await expect(pageA.getByRole("heading", { name: "首页", level: 1, exact: true })).toBeVisible();
   // Capture A's OWN nickname — world nicknames share a prefix, so the
   // post-fence assertion must target this tab's specific identity.
-  const aNickname = (await pageA.locator(".app-user, .rail-account-name").first().innerText()).trim();
+  const aNickname = (await pageA.getByRole("link", { name: "我的账户", exact: true }).innerText()).trim();
   expect(aNickname.length).toBeGreaterThan(0);
 
   // Tab B (same jar): explicit login as student B -> context reset.
   const pageB = await context.newPage();
   await loginThroughUi(pageB, { username: bName, password: bPass });
+  const bNickname = (await pageB.getByRole("link", { name: "我的账户", exact: true }).innerText()).trim();
+  expect(bNickname).not.toBe(aNickname);
 
-  // Round-3 P0: NO RELOAD. The reset must fence the MOUNTED tab: the
+  // NO RELOAD. The reset must fence the MOUNTED tab: the
   // session cache is invalidated and useSession revalidates in place —
   // A's UI must leave the stale A-authenticated state without a reload,
   // so a stale-A click can never 401-refresh-retry as B.
-  // Round-5: the early-phase assertion is IDENTITY-AWARE. On this stack
+  // The early-phase assertion is IDENTITY-AWARE. On this stack
   // the whole transition (loading gate -> B settled) can complete well
   // inside 300ms, and a fully-rendered dashboard at the sample point is
   // then B's — the SAFE terminal state — while a text-presence
   // classifier cannot tell whose dashboard it is. The invariant under
   // test is that A's identity is gone from the account surface the
-  // moment the reset has landed (fence probe evidence, round 5).
+  // moment the reset has landed (fence probe evidence).
   await pageA.waitForTimeout(300);
-  const earlyChip = await pageA
-    .locator(".rail-account-name, .app-user")
-    .first()
-    .innerText()
-    .catch(() => "");
+  const earlyChip = (await pageA
+    .getByRole("link", { name: "我的账户", exact: true })
+    .allTextContents()).join("");
   expect(earlyChip).not.toContain(aNickname);
   await pageA.waitForTimeout(2500);
   const fencedState = await pageA.evaluate(() => {
@@ -73,12 +73,11 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
   // chip), not the whole page: A's nickname legitimately appears in
   // SHARED public content (the rankings board seeds A as a ranked
   // user) — that is not A's session surviving the fence.
-  const accountText = await pageA
-    .locator(".rail-account-name, .app-user")
-    .first()
-    .innerText()
-    .catch(() => "");
+  const accountText = (await pageA
+    .getByRole("link", { name: "我的账户", exact: true })
+    .allTextContents()).join("");
   expect(accountText).not.toContain(aNickname);
+  if (accountText.length > 0) expect(accountText).toContain(bNickname);
   // And the definitive mutation guard: A's protected mutation request
   // must NOT execute under B. Probe via the read path first — A's /me
   // after the fence must never answer with A's identity.
@@ -100,18 +99,17 @@ test("sibling explicit login fences this tab: bearer dropped, no replay as B", a
   // the page is functional (never a broken/hung state) and that the
   // old A bearer is gone (no A-nickname anywhere).
   expect(["anonymous", "authed"]).toContain(anonymousOrB);
-  const aNick = await pageA
-    .locator(".rail-account-name, .app-user")
-    .first()
-    .innerText()
-    .catch(() => "");
+  const aNick = (await pageA
+    .getByRole("link", { name: "我的账户", exact: true })
+    .allTextContents()).join("");
   // The INVARIANT: A's identity never owns the resumed account surface.
   // (B legitimately owns the shared-cookie session; A may still appear
   // in public content like the rankings board.)
   expect(aNick).not.toContain(aNickname);
+  if (anonymousOrB === "authed") expect(aNick).toContain(bNickname);
 });
 
-test("out-of-order /me: a straggler answering OLD identity after the reset NEVER repaints (round-5 P0)", async ({
+test("out-of-order /me: a straggler answering OLD identity after the reset NEVER repaints", async ({
   browser,
 }) => {
   const context = await browser.newContext();
@@ -164,7 +162,7 @@ test("out-of-order /me: a straggler answering OLD identity after the reset NEVER
   // Wait until the OLD request is in flight (held at the route). Poll
   // the handler's own flag: a request stalled inside an async route
   // handler does not reliably settle page.waitForRequest (fence probe
-  // evidence, round 5).
+  // evidence).
   await expect.poll(() => heldRequested, { timeout: 5_000 }).toBe(true);
 
   // Sibling tab B logs in (explicit transition): the reset fences A, A

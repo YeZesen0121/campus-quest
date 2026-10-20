@@ -1,0 +1,31 @@
+# 任务广场 规约-测试对账矩阵
+
+> 建立日期：2026-10-10 · 域：公开任务列表（`GET /api/v1/tasks`）排序与可见性
+> 方法论：`campusquest-test-process` skill 规约对账节；模板 `docs/quality/test-matrix/points-ledger.md`。
+> **纪律**：预期列先于测试检索从 spec 原文推导落笔；找不到测试=缺口（列出，不补）；测试行为≠预期=不匹配（上报，不擅改）。
+> 规约来源：design spec §42（含 2026-10-10 owner 裁定的任务广场排序小注记）/§6.2/§28；本矩阵随排序 PR 建立（此前该域无矩阵文件）。
+> 接线：`backend/scripts/check_test_matrix.py`（手动跑）。
+
+## 对账摘要
+
+| 状态 | 数量 | 明细 |
+|---|---|---|
+| 已覆盖 | 9 | S1-S9（S6 为行为级覆盖，行内注记） |
+| 缺口（轻，列出不补） | 0 | — |
+| 不匹配 | 0 | — |
+| 流程行 | 0 | — |
+
+## 矩阵
+
+| # | 规则引用 | 预期行为（先于测试写下） | 测试位置（file::test） | 状态 |
+|---|---|---|---|---|
+| S1 | §42 排序注记 | 仍有可领 Assignment（AVAILABLE > 0）的任务排在已领完（AVAILABLE = 0，含全部 OCCUPIED/COMPLETED/RETIRED 与无 Assignment）的任务之前，与发布时间无关 | `tests/integration/tasks/test_marketplace_ordering.py::test_claimable_lists_before_depleted_regardless_of_publish_time`（较早发布的可领任务先于较晚发布的已领任务） | 已覆盖 |
+| S2 | §42 排序注记 | 两组内部保持发布时间新→旧 | 同 S1（已领组内 -30min 先于 -1h）+ `tests/integration/tasks/test_marketplace_ordering.py::test_page_boundaries_keep_group_order_across_pages`（交错发布时间的两组目录全序） | 已覆盖 |
+| S3 | §42 排序注记 | 已领完的任务仍在列表中可见，卡片不因领完而隐藏 | 同 S1（已领完三项均在 items 中）+ `tests/integration/tasks/test_marketplace_ordering.py::test_claiming_last_unit_flips_task_behind_depleted_and_abandon_restores`（领完后仍在列表，仅位置后移） | 已覆盖 |
+| S4 | §42 排序注记 + §28 offset 分页 | 分页边界不错序：各页拼接等于全序，含恰跨组边的页边界 | `tests/integration/tasks/test_marketplace_ordering.py::test_page_boundaries_keep_group_order_across_pages`（limit=2 三页拼接=全序；page1 尾=可领组末、page2 头=已领组首） | 已覆盖 |
+| S5 | §42 排序注记 + §8 写路径 | 领取最后一个名额（真实 claim API 写 AVAILABLE→OCCUPIED）后任务移入已领完组；abandon 回流（→AVAILABLE）后回到可领组 | `tests/integration/tasks/test_marketplace_ordering.py::test_claiming_last_unit_flips_task_behind_depleted_and_abandon_restores` | 已覆盖 |
+| S6 | §42 排序注记（排序键=查询时聚合） | 卡片展示的 assignments_available 与其排序组位出自同一语句，页内不会互相矛盾 | 同 S5（翻转后位置与 counts==0 同一响应断言）`tests/integration/tasks/test_marketplace_ordering.py::test_claiming_last_unit_flips_task_behind_depleted_and_abandon_restores`；SQL 形态无逐句断言（**行为级覆盖注记**） | 已覆盖（行为级） |
+| S7 | §6.2 + §42 | 公开列表仅 PUBLISHED；DRAFT 不可见 | `tests/integration/tasks/test_task_api.py::test_task_list_pagination_and_draft_invisibility`（total 不含 DRAFT；DRAFT id 经详情路由 404） | 已覆盖 |
+| S8 | §28 + 路由分页界 | offset 分页：limit 1..50 / offset ≥ 0，total 为全目录而非页 | 同 S7 + `tests/integration/tasks/test_marketplace_ordering.py::test_page_boundaries_keep_group_order_across_pages`（total==5） | 已覆盖 |
+| S9 | §30（owner 2026-10-11 扩列） | 任务生命周期七动作（publish/pause/resume/close/archive/协作者增删/导入确认）在各自服务事务内各写一行 AuditLog：before/after status 快照、协作者权限集、导入 inserted 计数；拒绝的转移不写行（同事务回滚）、重复动作不重复记 | `tests/integration/tasks/test_lifecycle_audit.py::test_lifecycle_verbs_each_append_one_audited_row`（五动作各一行+publish/resume 区分）+ `::test_rejected_transition_leaves_no_audit_row`（事务性）+ `::test_repeated_pause_writes_exactly_one_row`（幂等不重复）+ `::test_collaborator_add_and_remove_are_audited` + `::test_import_confirm_appends_one_row_with_count` + 单元侧 `tests/unit/tasks/test_assignment_importer.py::test_confirm_imports_previewed_rows_in_one_commit`（同 commit 断言） | 已覆盖 |
+| S9 | 平台注册表 spec 2026-10-16 §3/§4（owner 已批；前端半契约先行） | 学生端 claim/assignment 展示渲染注册表 display_name（字典 /platforms 登录后只读+缓存；未知 code=原码回退不空白不猜名）；管理台 /admin/platforms CRUD 全链（code 不可改/无删除/启停翻转/409 重复 code 业务文案）；导入预览 platform 列同步显示名 | 单测：`frontend/src/__tests__/platform-view.test.ts`（显示规则+校验带 8 钉，红先行）；e2e：`frontend/e2e/platform-registry.spec.ts`（CRUD 全链+客户端拒绝零 POST，等后端合并终跑）；像素基线 admin-platforms 面待终跑轮 | 已覆盖 |

@@ -321,7 +321,7 @@ function ModerationDeleteDialog({
         asChild
         aria-labelledby="moderation-delete-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }}
       >
@@ -435,7 +435,7 @@ function ReportQueue({ taskId }: { taskId: string }) {
           retryLabel="重新加载"
         />
       ) : items.length === 0 ? (
-        <EmptyState title="暂无举报" hint="学生提交的举报会出现在这里" />
+        <EmptyState title="暂无举报" hint="收到举报后在这里处理" />
       ) : (
         <>
           <ul className="moderation-list">

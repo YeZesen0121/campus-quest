@@ -4,7 +4,7 @@ import { StaffInviteAccept } from "@/features/auth/StaffInviteAccept";
 
 export const metadata: Metadata = {
   title: "接受员工邀请 · 华师令",
-  description: "设置密码并绑定动态口令（TOTP），完成 CampusQuest 员工账号激活",
+  description: "教师设置密码（可选）即完成激活；管理员设置密码并绑定动态口令（TOTP）",
 };
 
 interface StaffInvitePageProps {
@@ -12,7 +12,7 @@ interface StaffInvitePageProps {
 }
 
 /**
- * Staff invitation acceptance (spec §5.8 steps 1-5).
+ * Staff invitation acceptance (spec §5.8 steps 1-5; V1.1 §2.3).
  *
  * Server shell only: the token route param flows straight into the client
  * island. The token is a single-use secret — it is never logged and never

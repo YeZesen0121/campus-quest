@@ -137,16 +137,23 @@ async def test_mentor_cannot_use_student_or_staff_login(
     db_session: AsyncSession, mentor_client: httpx.AsyncClient
 ) -> None:
     user = await seed(db_session, "MENTOR")
-    for path, body in [
-        ("/api/v1/auth/login", {"username": user.username, "password": _PASSWORD}),
+    for path, body, expected in [
+        (
+            "/api/v1/auth/login",
+            {"identifier": user.username, "password": _PASSWORD},
+            401,
+        ),
+        ("/api/v1/auth/login", {"username": user.username, "password": _PASSWORD}, 422),
         (
             "/api/v1/auth/staff/login",
             {"email": user.username, "password": _PASSWORD, "totp_code": "000000"},
+            404,
         ),
     ]:
         response = await mentor_client.post(path, json=body)
-        assert response.status_code == 401, response.text
-        assert response.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
+        assert response.status_code == expected, response.text
+        if expected == 401:
+            assert response.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
     assert (
         await db_session.scalar(
             select(func.count())

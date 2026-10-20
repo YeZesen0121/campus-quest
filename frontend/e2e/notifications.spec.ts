@@ -1,27 +1,20 @@
 /**
  * CampusQuest notifications e2e — Plan 09 Task 7 (inbox + bell).
  *
- * STATUS: SPEC ONLY — NOT WIRED TO A RUNNER YET.
- *
- * Same guard pattern as `e2e/auth.spec.ts` / `e2e/community.spec.ts`:
- * Playwright itself is installed by Plan 10 (no `@playwright/test`
- * dependency and no `test:e2e` script yet). Until then this file stays
- * invisible to the gates (tsconfig includes only `src/**`, eslint
- * globalIgnores lists `e2e/**`, `next build` never leaves `src/app`).
- * Once Plan 10 installs Playwright, remove the eslint ignore, add the
- * `test:e2e` script, and run with `CQ_E2E=1`.
+ * Gate discipline: every test is skipped unless CQ_E2E=1, so importing
+ * the file never depends on a live backend during ordinary development.
+ * ESLint covers e2e/**; tsc does not (tsconfig's include stops at src).
  *
  * Environment contract (defaults work against local dev servers):
  * - CQ_E2E=1           enable the suite (required);
  * - CQ_E2E_BASE_URL    frontend origin (default https://localhost:3000);
- * - CQ_E2E_LOGIN_URL   login page (default $CQ_E2E_BASE_URL/login);
  * - CQ_E2E_STUDENT     pre-seeded student credentials
  *                      "student-number:password" (required for the
  *                      authenticated tests);
- * - the mark-read test additionally needs at least one UNREAD
- *                      notification for that student (Plan 10's fixture
- *                      seeds one, e.g. an approved submission or a
- *                      deadline reminder); it self-skips without it.
+ * - the mark-read test depends on a side-effect unread row from an
+ *                      earlier battery test (the world seeds zero
+ *                      notifications — see the noskip exemption
+ *                      entry); it self-skips without one.
  *
  * OWNER-ONLY under test (spec §28 + notifications router): the inbox is
  * the caller's OWN rows and mark-read is owner-only server-side — the
@@ -37,7 +30,7 @@ import { ensureStudentLogin } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
-const STUDENT = process.env.CQ_E2E_STUDENT; // "20240002:correct-horse"
+const STUDENT = process.env.CQ_E2E_STUDENT; // "username:password" (factories' DEFAULT_PASSWORD)
 
 test.skip(
   !E2E_ENABLED,
@@ -109,6 +102,56 @@ test.describe("inbox render + filter tabs (§28; patterns §4 URL state)", () =>
     await bell.click();
     await expect(page).toHaveURL(/\/notifications/);
     await expect(page.getByLabel("通知收件箱")).toBeVisible();
+  });
+
+  test("the bell and the avatar chip share one circle language (owner feedback, 2026-10-10)", async ({ page }) => {
+    // The bell used to be a control-height SQUARE with a square hover
+    // block beside the round avatar chip. Both pill slots are 2rem
+    // circles now, and BOTH have a hover treatment (the chip had
+    // none — two adjacent interactive slots must agree).
+    const bell = page
+      .getByRole("banner")
+      .getByRole("link", { name: /未读通知/ });
+    const chip = page.getByRole("banner").getByRole("link", { name: "我的账户" });
+    await expect(bell).toBeVisible();
+    await expect(chip).toBeVisible();
+
+    const shape = await page.evaluate(() => {
+      const read = (selector: string) => {
+        const el = document.querySelector(selector);
+        if (el === null) {
+          return null;
+        }
+        const style = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+          radius: style.borderRadius,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          bg: style.backgroundColor,
+        };
+      };
+      return { bell: read(".app-topbar-actions .topbar-bell"), chip: read(".app-topbar-actions .avatar-chip") };
+    });
+    expect(shape.bell?.radius).toBe("50%");
+    expect(shape.bell?.width).toBe(32);
+    expect(shape.bell?.height).toBe(32);
+    expect(shape.chip?.radius).toBe("50%");
+    expect(shape.chip?.width).toBe(32);
+    expect(shape.chip?.height).toBe(32);
+
+    // The hover fills: the bell takes the quiet surface-2, the chip
+    // deepens its primary wash — each CHANGES on hover.
+    const bgOf = () =>
+      page.evaluate(() => ({
+        bell: getComputedStyle(document.querySelector(".app-topbar-actions .topbar-bell")!).backgroundColor,
+        chip: getComputedStyle(document.querySelector(".app-topbar-actions .avatar-chip")!).backgroundColor,
+      }));
+    const rest = await bgOf();
+    await bell.hover();
+    await expect.poll(async () => (await bgOf()).bell).not.toBe(rest.bell);
+    await chip.hover();
+    await expect.poll(async () => (await bgOf()).chip).not.toBe(rest.chip);
   });
 });
 

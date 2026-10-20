@@ -3,16 +3,16 @@
  * Create-task dialog (spec §6; patterns §6 forms): the DRAFT-creation
  * form on the plan-14 Dialog primitive (components/ui/dialog) — Radix
  * supplies role=dialog/focus-trap/Escape (modality via hideOthers +
- * RemoveScroll; Radix 1.2 emits no aria-modal); the visual shell is
- * the `.cq-dialog*` replication of the legacy `.dialog` values. The
- * fields are the publish-validation set (binding constraint) rendered
- * by the shared `TaskFormFields` (the edit dialog reuses them under the
- * V1 edit rule).
+ * RemoveScroll; Radix 1.2 emits no aria-modal); the visual shell
+ * carries the `.cq-dialog*` values (inherited from the retired native
+ * `.dialog` contract, C3). The fields are the publish-validation set
+ * (binding constraint) rendered by the shared `TaskFormFields` (the
+ * edit dialog reuses them under the V1 edit rule).
  *
- * The form IS the content element (`DialogContent asChild`): the legacy
- * grid/gap lived on `form.dialog-body`, and the primitive's grid lives
- * on `.cq-dialog-content` — a bare nested form would collapse into one
- * grid item and lose the child gaps.
+ * The form IS the content element (`DialogContent asChild`): the
+ * form's own grid/gap must stay intact — a bare nested form would
+ * collapse into one grid item of `.cq-dialog-content`'s grid and lose
+ * the child gaps.
  *
  * Client mirrors are CONVENIENCE ONLY (`validateTaskForm`): a bad band
  * never leaves the browser; every business verdict (unsupported values,
@@ -34,6 +34,7 @@ import { FormErrorSummary } from "@/features/auth/FormErrorSummary";
 
 import { createTeacherTask, type TeacherTaskDto } from "./teacherApi";
 import {
+  defaultSchemaFor,
   describeTaskMutationError,
   EMPTY_TASK_FORM,
   taskFormToBody,
@@ -51,19 +52,27 @@ export interface CreateTaskDialogProps {
 }
 
 export function CreateTaskDialog({ open, onClose, onCreated }: CreateTaskDialogProps) {
-  // Mounting the inner dialog per open starts every field fresh — the
-  // legacy reset-on-open effect's job, without an effect.
+  // Mounting the inner dialog per open starts every field fresh —
+  // reset-on-open without an effect.
   return open ? (
     <CreateTaskDialogInner onClose={onClose} onCreated={onCreated} />
   ) : null;
 }
 import { Button } from "@/components/ui/button";
+import { COPY_GENERIC_FAIL } from "@/lib/errors";
 
 function CreateTaskDialogInner({
   onClose,
   onCreated,
 }: Omit<CreateTaskDialogProps, "open">) {
-  const [values, setValues] = useState<TaskFormValues>(EMPTY_TASK_FORM);
+  const [values, setValues] = useState<TaskFormValues>(() => ({
+    ...EMPTY_TASK_FORM,
+    // Defect #22: the schema starts from the per-type default template
+    // (the field rides collapsed in the 高级 section) — the default
+    // teacher never authors JSON by hand.
+    submissionSchema: defaultSchemaFor(EMPTY_TASK_FORM.fileTypes),
+    submissionSchemaVersion: "1",
+  }));
   const [fieldErrors, setFieldErrors] = useState<TaskFormErrors>({});
   const [summary, setSummary] = useState<ReturnType<typeof describeTaskMutationError> | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -96,7 +105,7 @@ function CreateTaskDialogInner({
       const task = await createTeacherTask(result.body);
       onCreated(task);
     } catch (cause) {
-      setSummary(describeTaskMutationError(cause, "创建失败，请稍后重试"));
+      setSummary(describeTaskMutationError(cause, COPY_GENERIC_FAIL));
     } finally {
       setSubmitting(false);
     }

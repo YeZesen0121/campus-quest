@@ -278,7 +278,6 @@ Canonical codes (exact strings; the frontend must branch on `code`, never parse 
 | `AUTHENTICATION_REQUIRED` | §29 |
 | `PERMISSION_DENIED` | §29 |
 | `ACCOUNT_NOT_ACTIVE` | §29, §8.4 |
-| `STUDENT_NOT_WHITELISTED` | §29 |
 | `PHONE_ALREADY_BOUND` | §29 |
 | `USERNAME_ALREADY_EXISTS` | §5.2, §31.1 |
 | `TASK_NOT_CLAIMABLE` | §29, §8.4 |
@@ -315,6 +314,12 @@ Canonical codes (exact strings; the frontend must branch on `code`, never parse 
 | `PROJECT_DRAFT_VERSION_CONFLICT` | 私有项目草稿：预期版本已过期（HTTP 409） |
 | `PROJECT_DRAFT_REQUEST_CONFLICT` | 私有项目草稿：创建幂等键与首次规范化内容不一致（HTTP 409） |
 | `OWNER_PROFILE_VERSION_CONFLICT` | 本人负责人资料：首次保存已有行或预期版本过期（HTTP 409）；不代表资格状态 |
+| `EMAIL_CODE_INVALID` | V1.1 §2.1 |
+| `ACCOUNT_LOCKED` | V1.1 §6 |
+| `EMAIL_DELIVERY_FAILED` | V1.1 §2.1 |
+| `MOBILE_CODE_INVALID` | V1.1 2026-10-16 §3 |
+| `APPROVAL_PENDING` | V1.1 2026-10-16 §2 |
+| `CHALLENGE_CODE_INVALID` | 统一登录 2026-10-19 §3.4 |
 
 Claim-failure codes return 4xx, never 500 (spec §8.4). New codes require updating this table first.
 
@@ -346,6 +351,51 @@ never shared, never reinterpreted):
 | `otp.ResendCooldownError` | `OTP_RESEND_COOLDOWN` | 429 |
 | `otp.OtpRateLimitError` | `RATE_LIMITED` | 429 |
 | `rate_limit.RateLimitExceededError` | `RATE_LIMITED` | 429 |
+
+### Unified login challenge family (2026-10-19 spec §3)
+
+**PR-3 retirement (2026-10-19 §3.3)**: the legacy route families —
+`/auth/staff/login`, `/auth/staff/email-code/*`,
+`/auth/staff/mobile-code/*`, `/auth/mobile-code/{request,verify,
+remembered}` — are GONE (the services beneath stay as the unified
+family's engines). Their typed codes (`EMAIL_CODE_INVALID`,
+`MOBILE_CODE_INVALID`) stay REGISTERED above as history (the enum is
+frozen membership; no live route raises them); the unified arms raise
+`CHALLENGE_CODE_INVALID`. `/auth/mobile-code/register` and
+`/auth/register` stay (the entry door's contract).
+
+The unified endpoints (`/auth/challenge/{request,verify,totp}`,
+`/auth/challenge/remembered`, the `/auth/login` identifier form) are a
+route FACADE over the existing challenge services — storage, cooldown,
+lockout, HMAC, GETDEL, and device-credential craft are untouched, and
+the legacy per-leg codes above stay until the retirement PR (PR-3).
+Two deliberate breaks INSIDE the new family only:
+
+- **One code for the code-was-wrong family**: on the unified verify
+  arms, wrong / expired / attempts-exhausted codes all answer
+  `CHALLENGE_CODE_INVALID` (400) — the branch reason stays in server
+  logs, the anti-enumeration surface stays uniform (§5.1). Cooldown
+  and lockout keep `RATE_LIMITED` / `ACCOUNT_LOCKED` as everywhere.
+- **`totp_code`, not `code`**: spec §3.1 names the totp leg's field
+  `totp_code`; the legacy family's `code` spelling retires with PR-3.
+- **The totp leg rate-limits on the transport peer**: the unified
+  `/auth/challenge/totp` counts against an ip-keyed bucket of the
+  login family (the legacy totp legs rode only the pending
+  credential's single-use/TTL/attempt-cap semantics — the unified
+  endpoint is a new aggregated surface, and a 6-digit second factor
+  under online brute force is the login limiter's core job). The
+  per-credential caps stay exactly as they are underneath.
+
+The verify response is a discriminated union — judgment rides the
+`status` member alone: `authenticated` (with `role` and `tokens` — the
+`TokenPairResponse` shape, nested as in `RegisterResponse`),
+`totp_required` (with `pending_token`), `unregistered` (with
+`register_token`). `remember_device` mints the 30-day device
+credential on whichever leg COMPLETES a login (the owner's revision of
+ruling (c), 2026-10-20: the STUDENT verify arm, the TEACHER code arms
+— email and mobile — and the ADMIN totp arm; a cookie never exempts a
+factor on the code legs, an ADMIN still owes totp there) — the
+frontend sends it unconditionally and holds no audience knowledge.
 
 ### System / framework codes
 
@@ -422,7 +472,7 @@ class SmsSender(Protocol):
 
 `idempotency_key` (optional) lets a provider collapse repeated sends onto one message: notification delivery always passes `"{event_key}:{channel}:{user_id}"` (spec §25.3) so an `UnknownOutcomeError` retry — whose first attempt may have succeeded — cannot double-send; single-shot callers (identity OTP) omit it.
 
-The optional `str` return (PR #2 hardening step 5) is the provider receipt: adapters that surface one land it on the delivery row's `provider_message_id`; the development-only logging adapters return a `"logging:"`-prefixed id so a recorded SENT from a simulated send is distinguishable at a glance. Provider selection is typed settings (`sms_provider`/`email_provider`, `Literal["logging"]` in V1); the production sentinel validator refuses a logging provider under `environment="production"` — unconfigured real providers fail startup, never fake success (G4/G5).
+The optional `str` return (PR #2 hardening step 5) is the provider receipt: adapters that surface one land it on the delivery row's `provider_message_id`; the development-only logging adapters return a `"logging:"`-prefixed id so a recorded SENT from a simulated send is distinguishable at a glance. Provider selection is typed settings (`sms_provider`: `Literal["logging", "aliyun_dypns"]` since PR #22 — real adapter in `backend/app/integrations/sms_aliyun.py`; `email_provider`: still `Literal["logging"]` only); the production sentinel validator refuses a logging provider under `environment="production"` — unconfigured real providers fail startup, never fake success (G4/G5).
 
 Fake: `FakeSmsSender` records `SentSms(to, template, variables, idempotency_key=None)` for exact-delivery assertions.
 

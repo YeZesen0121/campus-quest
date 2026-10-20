@@ -1,9 +1,10 @@
 # backend/app/modules/submissions/validators/detect.py
-"""Content-based submission type detection (spec §10 类型 sniffing, §12;
-plan 04 task 7 step 2).
+"""Content-based submission type detection (spec §10/§10.1 sniffing,
+§12; plan 04 task 7 step 2).
 
-``detect_file_type(path)`` answers which of the three uploadable types
-(CSV / XLSX / SQLITE) a file's CONTENT actually is, or ``None`` when the
+``detect_file_type(path)`` answers which of the five uploadable types
+(CSV / XLSX / SQLITE / DOCX / PDF — §10.1 added the document family)
+a file's CONTENT actually is, or ``None`` when the
 content matches none of them. It never reads the filename, the client's
 declaration, or any extension: a fake ``.csv`` that is really a binary,
 or a fake ``.sqlite`` that is really an XLSX, is answered by content
@@ -30,7 +31,8 @@ An empty file is CSV-plausible: detection judges structure, and the
 EMPTY_FILE verdict belongs to the format validator that follows.
 
 Resource shape: one bounded prefix read (``_SNIFF_BYTES``) for rules 1
-and 3; rule 2 additionally opens the archive through ``zipfile`` to
+and 3, one bounded TAIL read (``_PDF_TAIL_BYTES``) for the PDF
+trailer; rule 2 additionally opens the archive through ``zipfile`` to
 list member names. THIS MODULE IS BUILT TO RUN INSIDE THE SANDBOXED
 VALIDATOR CHILD (spec §33.3 解析器隔离): a hostile archive that turns the
 member listing into a memory bomb dies against the child's RLIMIT_AS,
@@ -51,7 +53,7 @@ from __future__ import annotations
 
 import codecs
 import zipfile
-from os import PathLike
+from os import SEEK_END, PathLike
 from typing import BinaryIO
 
 from app.modules.submissions.enums import FileType
@@ -63,8 +65,19 @@ __all__ = ["detect_file_type"]
 #: could sit beyond it.
 _SNIFF_BYTES = 8192
 
+#: How much of the file the PDF trailer search reads from the END:
+#: ISO 32000 §7.5.5 places ``%%EOF`` within the last 1024 bytes, and
+#: §10.1's head+tail rule rides that contract. The old implementation
+#: searched the prefix instead, so every real PDF larger than the
+#: sniff window was misjudged corrupt while early-fake-trailer garbage
+#: passed (C-F1) — the tail read fixes both directions.
+_PDF_TAIL_BYTES = 1024
+
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _ZIP_LOCAL_MAGIC = b"PK\x03\x04"
+#: spec §10.1: PDF's head magic; the %%EOF tail check completes the
+#: identification inside the bounded tail read.
+_PDF_MAGIC = b"%PDF-"
 _OOXML_MANIFEST = "[Content_Types].xml"
 
 Source = str | PathLike[str]
@@ -86,24 +99,46 @@ def detect_file_type(path: Source) -> FileType | None:
         if head.startswith(_ZIP_LOCAL_MAGIC):
             handle.seek(0)
             return _detect_zip(handle)
+        if head.startswith(_PDF_MAGIC):
+            return _detect_pdf(handle)
         return _detect_text(head)
 
 
 def _detect_zip(handle: BinaryIO) -> FileType | None:
-    """ZIP-magic file: XLSX iff the OOXML manifest member is present.
+    """ZIP-magic file: XLSX or DOCX by the OOXML members (spec §10.1).
+
+    Both carry ``[Content_Types].xml``; the family separator is the
+    ``word/`` part prefix (a DOCX always has ``word/document.xml``) —
+    exactly the §10.1 disambiguation rule. Anything else ZIP-shaped is
+    not in the universe.
 
     Runs under the child's resource limits by contract (see module
     docstring); a hostile central directory is the sandbox's problem.
     """
     try:
         with zipfile.ZipFile(handle) as archive:
-            if _OOXML_MANIFEST in archive.namelist():
-                return FileType.XLSX
+            names = archive.namelist()
+            if _OOXML_MANIFEST not in names:
+                return None
+            if any(name.startswith("word/") for name in names):
+                return FileType.DOCX
+            return FileType.XLSX
     except zipfile.BadZipFile:
         # Truncated/mismatched magic: the content is not a usable
         # archive of any recognized type.
         return None
     return None
+
+
+def _detect_pdf(handle: BinaryIO) -> FileType | None:
+    """``%PDF-`` file: PDF iff the ``%%EOF`` trailer sits within the
+    bounded tail (spec §10.1's head+tail rule; ISO 32000 §7.5.5 places
+    the trailer within the last 1024 bytes, so the tail window is
+    where a real one lives and an early fake one does not)."""
+    size = handle.seek(0, SEEK_END)
+    handle.seek(max(0, size - _PDF_TAIL_BYTES))
+    tail = handle.read(_PDF_TAIL_BYTES)
+    return FileType.PDF if b"%%EOF" in tail else None
 
 
 def _detect_text(head: bytes) -> FileType | None:

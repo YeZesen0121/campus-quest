@@ -294,10 +294,10 @@ function TotpDone() {
     <div className="totp-step auth-security-result">
       <h2 className="section-title">绑定完成</h2>
       <div className="alert alert-success" role="status">
-        <p>动态口令绑定完成，员工账号已激活。</p>
+        <p>动态口令绑定完成，员工账号已激活</p>
       </div>
       <Button asChild>
-        <Link href="/staff/login">
+        <Link href="/login">
           前往员工登录
         </Link>
       </Button>

@@ -112,10 +112,12 @@ Other transport decisions
   with ``extra="forbid"``: an ``assignment_id`` in the body is a 422
   before any service call (the test pins it); random allocation stays a
   server decision under lock (spec §8.3).
-- **Import preview is a raw-body upload.** The CSV travels as the
-  request body (``Content-Type: text/csv``) instead of multipart — the
-  importer wants bytes, the byte cap fast-fails before any parsing, and
-  no form-multipart dependency is pulled in for one file field.
+- **Import preview is a raw-body upload.** The file (CSV or XLSX, spec
+  §7.1) travels as the request body instead of multipart — the importer
+  wants bytes and sniffs the format itself (``import_parsing`` routes
+  on the ZIP local-header magic, so the wire ``Content-Type`` is never
+  consulted), the byte cap fast-fails before any parsing, and no
+  form-multipart dependency is pulled in for one file field.
 - **Rate limiting (spec §33.1)** on claim + abandon, normalized to the
   authenticated user id through the shared ``RateLimiter`` port and
   ``RATE_LIMIT_RULES`` (``tasks:claim``, ``claims:abandon``); an
@@ -147,7 +149,7 @@ from functools import lru_cache
 from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, FastAPI, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request as StarletteRequest
@@ -155,7 +157,7 @@ from starlette.requests import Request as StarletteRequest
 from app.core.clock import Clock
 from app.core.config import Settings, get_settings
 from app.core.error_codes import ErrorCode
-from app.core.errors import error_envelope
+from app.core.errors import BusinessError, error_envelope
 from app.core.observability import REQUEST_ID_HEADER
 from app.db.session import get_db_session
 from app.integrations.rate_limit import (
@@ -164,11 +166,13 @@ from app.integrations.rate_limit import (
     RateLimitExceededError,
     RedisFixedWindowLimiter,
 )
+from app.modules.audit.context import AuditContext
 from app.modules.community.adapters import CommunityRatingSummaryAdapter
 from app.modules.identity.dependencies import (
     get_business_clock,
     require_active_actor,
-    require_active_student_actor,
+    require_admin_actor,
+    require_approved_student_actor,
     require_staff_management_actor,
 )
 from app.modules.identity.directory import SqlAlchemyUserDirectory
@@ -179,11 +183,12 @@ from app.modules.identity.events import (
 )
 from app.modules.notifications.port import NotificationPort
 from app.modules.system.service import ABANDON_DAILY_LIMIT, SystemSettingService
+from app.modules.tasks import platform_registry
 from app.modules.tasks.abandon_service import AbandonService, SystemDailyAbandonLimit
 from app.modules.tasks.claim_service import ClaimService
 from app.modules.tasks.collaborator_service import TaskCollaboratorService
 from app.modules.tasks.commands import CreateTask, UpdateTask
-from app.modules.tasks.importer import AssignmentImportService
+from app.modules.tasks.importer import AssignmentImportService, read_import_body
 from app.modules.tasks.models import Task
 from app.modules.tasks.query_service import (
     RatingSummaryPort,
@@ -201,6 +206,10 @@ from app.modules.tasks.transport_schemas import (
     ImportPreviewResponse,
     MyClaimResponse,
     MyClaimsResponse,
+    PlatformAdminPublic,
+    PlatformCreateRequest,
+    PlatformPatchRequest,
+    PlatformPublic,
     TaskCardResponse,
     TaskCreateRequest,
     TaskDetailResponse,
@@ -359,7 +368,8 @@ def get_task_query_service() -> TaskQueryService:
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 ActiveActor = Annotated[Actor, Depends(require_active_actor)]
-StudentActor = Annotated[Actor, Depends(require_active_student_actor)]
+
+StudentActor = Annotated[Actor, Depends(require_approved_student_actor)]
 StaffActor = Annotated[Actor, Depends(require_staff_management_actor)]
 LimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
 RatingPortDep = Annotated[RatingSummaryPort, Depends(get_rating_summary_port)]
@@ -393,6 +403,99 @@ async def _enforce_rate_limit(
 router = APIRouter()
 
 
+@router.get("/platforms", response_model=list[PlatformPublic])
+async def list_platforms(
+    actor: Annotated[Actor, Depends(require_active_actor)],
+    db: DbSession,
+) -> list[PlatformPublic]:
+    """The platform dictionary (V1.1 spec 2026-10-16 §3): every ACTIVE
+    role may read it; enabled entries only, ordered for the student
+    picker. This is the surface the claim button and task cards render
+    display_name from."""
+    rows = await platform_registry.list_enabled(db)
+    return [
+        PlatformPublic(
+            code=row.code, display_name=row.display_name, sort_order=row.sort_order
+        )
+        for row in rows
+    ]
+
+
+@router.get("/admin/platforms", response_model=list[PlatformAdminPublic])
+async def list_admin_platforms(
+    actor: Annotated[Actor, Depends(require_admin_actor)],
+    db: DbSession,
+) -> list[PlatformAdminPublic]:
+    """The console list: every row including disabled ones."""
+    rows = await platform_registry.list_all(db)
+    return [
+        PlatformAdminPublic(
+            code=row.code,
+            display_name=row.display_name,
+            sort_order=row.sort_order,
+            enabled=row.enabled,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/admin/platforms", response_model=PlatformAdminPublic, status_code=201)
+async def create_platform(
+    body: PlatformCreateRequest,
+    request: Request,
+    actor: Annotated[Actor, Depends(require_admin_actor)],
+    db: DbSession,
+) -> PlatformAdminPublic:
+    """Register a platform (spec §3): code+display_name+sort_order; the
+    code is immutable after this. PLATFORM_CREATED rides the same
+    transaction."""
+    platform = await platform_registry.create_platform(
+        db,
+        actor=actor,
+        code=body.code,
+        display_name=body.display_name,
+        sort_order=body.sort_order,
+        audit_context=AuditContext.from_request(request),
+    )
+    return PlatformAdminPublic(
+        code=platform.code,
+        display_name=platform.display_name,
+        sort_order=platform.sort_order,
+        enabled=platform.enabled,
+        created_at=platform.created_at,
+    )
+
+
+@router.patch("/admin/platforms/{code}", response_model=PlatformAdminPublic)
+async def patch_platform(
+    code: str,
+    body: PlatformPatchRequest,
+    request: Request,
+    actor: Annotated[Actor, Depends(require_admin_actor)],
+    db: DbSession,
+) -> PlatformAdminPublic:
+    """Patch display_name/sort_order/enabled (spec §3); the code in the
+    path names the row and is never writable. PLATFORM_UPDATED carries
+    the before/after snapshot."""
+    platform = await platform_registry.update_platform(
+        db,
+        actor=actor,
+        code=code,
+        display_name=body.display_name,
+        sort_order=body.sort_order,
+        enabled=body.enabled,
+        audit_context=AuditContext.from_request(request),
+    )
+    return PlatformAdminPublic(
+        code=platform.code,
+        display_name=platform.display_name,
+        sort_order=platform.sort_order,
+        enabled=platform.enabled,
+        created_at=platform.created_at,
+    )
+
+
 @router.get("/tasks", response_model=TaskListResponse)
 async def list_tasks(
     actor: ActiveActor,
@@ -412,6 +515,39 @@ async def list_tasks(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/tasks/{task_id}/submission-template")
+async def download_submission_template(
+    task_id: uuid.UUID,
+    actor: ActiveActor,
+    db: DbSession,
+) -> Response:
+    """The CSV submission template (V1.1 spec §5): header-only, BOM
+    first, columns in the schema's declared order (required then
+    optional) — a student's filled-in file passes the validator's header
+    check on the first try. CSV-family tasks only; any other family
+    (document tasks carry no schema by §10.1) answers the typed 404.
+    Browsing-grade: every ACTIVE role may download it."""
+    from fastapi.responses import Response as _Response
+
+    task = await db.get(Task, task_id)
+    if task is None or "CSV" not in (task.allowed_file_types or []):
+        raise BusinessError(
+            ErrorCode.NOT_FOUND, "该任务不提供 CSV 模板", status_code=404
+        )
+    raw_schema = task.submission_schema or {}
+    columns = list(raw_schema.get("required_columns") or [])
+    columns += list(raw_schema.get("optional_columns") or [])
+    header = ",".join(str(column["name"]) for column in columns)
+    # utf-8-sig writes the BOM Excel needs to decode CJK headers; the
+    # trailing \r\n is the RFC 4180 record terminator.
+    body = ("\ufeff" + header + "\r\n").encode("utf-8")
+    return _Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="template.csv"'},
     )
 
 
@@ -668,13 +804,22 @@ async def preview_assignment_import(
     actor: StaffActor,
     db: DbSession,
     imports: ImportServiceDep,
+    limiter: LimiterDep,
+    settings: AppSettings,
 ) -> ImportPreviewResponse:
-    """Parse and pre-check a CSV upload (spec §7.1 steps 1-4).
+    """Parse and pre-check an import upload (spec §7.1 steps 1-4).
 
-    The file is the raw request body (``text/csv``); the importer's byte
-    cap rejects oversize payloads before any parsing work.
+    The file (CSV or XLSX) is the raw request body; the format is
+    decided by content sniffing — never by the wire ``Content-Type``.
+    Security round F2: the body is read streaming-bounded (reject the
+    moment the running total crosses the import byte cap — no
+    unbounded buffering before any check) and the route is rate
+    limited like claim/abandon.
     """
-    data = await request.body()
+    await _enforce_rate_limit(limiter, "tasks:import-preview", str(actor.user_id))
+    data = await read_import_body(
+        request.stream(), settings.assignment_import_max_file_bytes
+    )
     preview = await imports.preview_assignments(db, actor, task_id, data)
     return ImportPreviewResponse.from_domain(preview)
 

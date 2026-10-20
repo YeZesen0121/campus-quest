@@ -47,6 +47,7 @@ import {
   redemptionStatusView,
 } from "./adminView";
 import { Button } from "@/components/ui/button";
+import { COPY_GENERIC_FAIL } from "@/lib/errors";
 
 const PAGE_LIMIT = 20;
 
@@ -366,7 +367,7 @@ function ApproveDialog({
   }
 
   const errorView =
-    error !== null ? describeAdminMutationError(error, "操作失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <Dialog
@@ -380,15 +381,15 @@ function ApproveDialog({
       <DialogContent
         aria-labelledby="redemption-approve-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }} className="campus-admin-dialog" {...dialogFocus}
       >
         <DialogTitle id="redemption-approve-title">通过兑换申请</DialogTitle>
         <p className="report-target">
-          确认后「{row.item_name}」（{row.points} 积分，申请人{" "}
-          {row.requester_nickname ?? "—"}）将扣减积分并进入待发放状态；
-          之后需要在详情中标记发放完成。
+          「{row.item_name}」（{row.points} 积分，申请人{" "}
+          {row.requester_nickname ?? "—"}）将扣减积分进入待发放；
+          之后需在详情中标记发放完成。
         </p>
         {errorView !== null ? (
           <div className="alert alert-error" role="alert">
@@ -455,7 +456,7 @@ function RejectDialog({
   }
 
   const errorView =
-    error !== null ? describeAdminMutationError(error, "操作失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <Dialog
@@ -470,7 +471,7 @@ function RejectDialog({
         asChild
         aria-labelledby="redemption-reject-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }} className="campus-admin-dialog" {...dialogFocus}
       >
@@ -558,7 +559,7 @@ function FulfillDialog({
   }
 
   const errorView =
-    error !== null ? describeAdminMutationError(error, "操作失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <Dialog
@@ -573,7 +574,7 @@ function FulfillDialog({
         asChild
         aria-labelledby="redemption-fulfill-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }} className="campus-admin-dialog" {...dialogFocus}
       >

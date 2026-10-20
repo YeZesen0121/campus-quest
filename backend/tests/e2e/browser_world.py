@@ -64,6 +64,8 @@ from tests.e2e.factories import (  # noqa: E402
     DEFAULT_PASSWORD,
     clean_world,
     guard_reward_cleanup,
+    mint_now,
+    reset_mint_clock,
     seed_admin_confirmed_totp,
     seed_claim,
     seed_points_balance,
@@ -101,6 +103,18 @@ _GOOD_CSV = (
 #: failure the machine gate reports with findings — drives the legacy
 #: failed-validation spec's report/retry assertions.
 _BAD_CSV = b"platform,date\nxiaohongshu,2026-09-21\n"
+
+#: The fixed-labels flag also pins the MINT clock (factories.mint_now):
+#: under CQ_E2E_FIXED_LABELS=1 every timestamp the world stamps at seed
+#: time — published_at, claim deadlines, review-queue stamps, created_at
+#: — rides the FUTURE 2030 anchor instead of the wall clock, so date
+#: text and deadline snapshots are byte-stable between a baseline
+#: capture and a re-shoot (the walkthrough measured the label freeze
+#: alone still drifting student-rewards ~173k / dashboard ~48k px).
+#: Token minting (``mint``) and every login stay on the real clock —
+#: pyjwt validates exp against wall time; the world is pinned, never
+#: the app. The one exception, ranking_effective_at, is documented at
+#: seed_points_balance.
 
 #: The §12.4 report shape the validation worker persists for
 #: `_GOOD_CSV` (the 13-key `report_to_json` contract the review-queue
@@ -167,6 +181,7 @@ def _answerable_staff_row(username: str, nickname: str, role: Any) -> tuple[Any,
         phone_e164=None,
         role=role,
         status=SeedStatus.ACTIVE,
+        created_at=mint_now(),
     )
     return user, generate_totp_secret()
 
@@ -200,6 +215,10 @@ async def _seed() -> dict[str, Any]:
     from app.modules.tasks.models import Task
     from app.workers.jobs.project_ranking_update import run_ranking_projection
 
+    # Fixed mode's stamps must reproduce byte-identically per seed: the
+    # production path is a fresh process per world, and the reset keeps
+    # in-process double seeds (the pytest label/mint tests) identical.
+    reset_mint_clock()
     run = uuid.uuid4().hex[:12]
     # The label marker fed to every VISIBLE string (see FIXED_LABEL_RUN):
     # the unique run id by default, the frozen marker under
@@ -247,6 +266,17 @@ async def _seed() -> dict[str, Any]:
         )
         task_d = await seed_task_with_assignments(
             factory, teacher_id=teacher.user_id, run=f"{label_run}d", assignment_count=2
+        )
+        # §10.1: the document-family showcase task (spec PR #50/#54) —
+        # DOCX/PDF gate, no schema. Exported for the frontend's
+        # document-upload e2e (the last docx/pdf coverage piece).
+        task_doc = await seed_task_with_assignments(
+            factory,
+            teacher_id=teacher.user_id,
+            run=f"{label_run}f",
+            assignment_count=2,
+            allowed=("DOCX", "PDF"),
+            schema=None,
         )
         claim_a = await seed_claim(factory, task=task_a, student_id=student.user_id)
         claim_b = await seed_claim(factory, task=task_b, student_id=student.user_id)
@@ -336,7 +366,7 @@ async def _seed() -> dict[str, Any]:
                         secret_encrypted=encrypt_totp_secret(
                             Fernet(get_settings().totp_encryption_key), secret
                         ),
-                        confirmed_at=dt.datetime.now(dt.UTC),
+                        confirmed_at=mint_now(),
                     )
                 )
             db.add(
@@ -345,6 +375,7 @@ async def _seed() -> dict[str, Any]:
                     user_id=author.user_id,
                     content=f"匿名治理目标{label_run[:6]}：大家记得提前预约座位",
                     is_anonymous=True,
+                    created_at=mint_now(),
                 )
             )
             await db.commit()
@@ -428,7 +459,7 @@ async def _seed() -> dict[str, Any]:
             # state.
             claim_row = await db.get(AssignmentClaim, claim_r.claim_id)
             assert claim_row is not None
-            now = dt.datetime.now(dt.UTC)
+            now = mint_now()
             claim_row.status = ClaimStatus.UNDER_REVIEW
             claim_row.reward_lock_status = RewardLockStatus.PROVISIONAL
             claim_row.reward_tier_locked = 100
@@ -461,6 +492,7 @@ async def _seed() -> dict[str, Any]:
                 status="REQUESTED",
                 term_key=term_key,
                 points=item.point_cost,
+                created_at=mint_now(),
             )
             db.add(redemption)
             await db.flush()
@@ -482,6 +514,7 @@ async def _seed() -> dict[str, Any]:
                 phone_e164=None,
                 role=SeedRole.STUDENT,
                 status=SeedStatus.ACTIVE,
+                created_at=mint_now(),
             )
             db.add(suspended_student)
             await db.commit()
@@ -524,7 +557,8 @@ async def _seed() -> dict[str, Any]:
             "pending_redemption_id": str(redemption.id),
             "term_before": term_before,
             "task_ids": [
-                str(t.task_id) for t in (task_a, task_b, task_c, task_d, task_r)
+                str(t.task_id)
+                for t in (task_a, task_b, task_c, task_d, task_doc, task_r)
             ],
             "task_open": {
                 "task_id": str(task_c.task_id),
@@ -563,6 +597,10 @@ async def _seed() -> dict[str, Any]:
             "CQ_E2E_STUDENT_ID": str(student.user_id),
             "CQ_E2E_TEACHER_ID": str(teacher.user_id),
             "CQ_E2E_ADMIN_ID": str(admin.user_id),
+            # Wave 2a (frontend request 2026-10-19): the composed deep
+            # link to the admin detail (panorama) page, so the specs
+            # never re-derive the id→path rule on the Node side.
+            "CQ_E2E_ADMIN_DETAIL_PATH": f"/admin/users/{admin.user_id}",
             "CQ_E2E_REWARD_ITEM_ID": str(item.reward_item_id),
             "CQ_E2E_REGISTER_NUMBER": _registered_number(run),
             # Plan 10 task 9 (community.spec): the task detail URL, the
@@ -578,6 +616,10 @@ async def _seed() -> dict[str, Any]:
             # (community, cross-browser smoke) are unaffected by which
             # open task they render.
             "CQ_E2E_TASK_URL": f"/tasks/{task_d.task_id}",
+            # §10.1 document-family showcase: the frontend's
+            # document-upload e2e claims THIS task and uploads a real
+            # DOCX/PDF through the integrity pipeline.
+            "CQ_E2E_DOC_TASK_URL": f"/tasks/{task_doc.task_id}",
             "CQ_E2E_AUTHOR_STUDENT": f"{author.username}:{author.password}",
             "CQ_E2E_AUTHOR_STUDENT_ID": str(author.user_id),
             "CQ_E2E_AUTHOR_SECRETS": ",".join(
@@ -968,12 +1010,47 @@ async def _main(argv: list[str]) -> Any:
     if action == "otp-code":
         from tests.e2e.otp_probe import recover_otp_code
 
+        # The purpose rides argv[2] when a flow challenges the same
+        # phone under a different OTP purpose (login-iteration item ①:
+        # PHONE_BIND); REGISTER stays the default the register spec
+        # family rides.
         broker = aioredis.from_url(get_settings().redis_url, decode_responses=True)
         try:
-            challenge_id, code = await recover_otp_code(broker, argv[1])
+            challenge_id, code = await recover_otp_code(
+                broker, argv[1], purpose=(argv[2] if len(argv) > 2 else "REGISTER")
+            )
             return {"challenge_id": str(challenge_id), "code": code}
         finally:
             await broker.aclose()
+    if action == "mobile-code":
+        # The SMS login-code twin of email-code: the student challenge
+        # rests on login_mobile_challenges (tests/e2e/mobile_code_probe.py
+        # for the honesty argument — same keyed-digest closed-space
+        # arithmetic as the email and OTP probes).
+        from tests.e2e.mobile_code_probe import recover_mobile_code
+
+        factory = _factory()
+        try:
+            async with factory() as db:
+                challenge_id, code = await recover_mobile_code(db, argv[1].strip())
+                return {"challenge_id": str(challenge_id), "code": code}
+        finally:
+            await _dispose(factory)
+    if action == "email-code":
+        # The email login-code twin of otp-code: the challenge rests on
+        # the login_email_challenges table, so the probe reads it there
+        # (tests/e2e/email_code_probe.py for the honesty argument).
+        from tests.e2e.email_code_probe import recover_email_code
+
+        factory = _factory()
+        try:
+            async with factory() as db:
+                challenge_id, code = await recover_email_code(
+                    db, argv[1].strip().lower()
+                )
+                return {"challenge_id": str(challenge_id), "code": code}
+        finally:
+            await _dispose(factory)
     if action == "mint":
         return {"token": await _mint(uuid.UUID(argv[1]))}
     if action == "clean":

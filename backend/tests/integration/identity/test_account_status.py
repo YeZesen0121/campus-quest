@@ -85,7 +85,7 @@ async def _open_session(
     """A real `UserSession` row plus its token pair, uncommitted.
 
     Routes are exercised through their dependency chain, not through
-    login, so suspended/banned and not-yet-2FA accounts can hold the
+    login, so suspended/banned accounts and not-yet-2FA admins can hold the
     otherwise-valid tokens their guards must reject.
     """
     service = SessionService(clock=clock, access_codec=codec)
@@ -149,9 +149,11 @@ def _build_app(db: AsyncSession, clock: Clock) -> FastAPI:
     async def admin_guard_op(
         actor: Annotated[Actor, Depends(require_admin_actor)],
     ) -> dict[str, str]:
-        # Stand-in for the PR #2 hardening Admin-only surfaces (the
-        # points redemption review decisions, the notifications failure
-        # query) until scoped delegation lands.
+        # Stand-in for the PR #2 hardening Admin-only surfaces. Plan 08
+        # T4's scoped delegation since covered the points redemption
+        # review decisions (granted Teachers pass a dedicated guard);
+        # this stand-in now represents the faces that stay Admin-only,
+        # e.g. the notifications failure query.
         return {"user_id": str(actor.user_id), "role": actor.role.value}
 
     @app.post("/test/community-op")
@@ -419,6 +421,9 @@ async def test_role_comes_from_the_user_row_not_the_jwt_claim(
     # claim authorizes nothing.
     clock = FrozenClock(_T0)
     user = await _seed_user(db_session, role=Role.ADMIN)
+    # The 0031 trigger guards the last ACTIVE ADMIN: this test's
+    # demotion needs a survivor, so a companion admin rides the world.
+    await _seed_user(db_session, role=Role.ADMIN)
     _, tokens = await _open_session(
         db_session, user, codec=get_access_token_codec(), clock=clock
     )
@@ -453,15 +458,13 @@ async def test_confirmed_staff_passes_the_management_guard(
 
 @pytest.mark.integration
 @pytest.mark.parametrize("with_credential_row", [True, False])
-async def test_staff_without_confirmed_totp_forced_into_setup(
+async def test_admin_without_confirmed_totp_forced_into_management_setup(
     db_session: AsyncSession, with_credential_row: bool
 ) -> None:
-    # Spec §5.8 step 3 / §33.4: the pending staff token is a NORMAL JWT
-    # (identity was proven), but management stays closed until TOTP is
-    # confirmed — gated server-side, with a distinct setup-forcing error
-    # whether setup never started or is unconfirmed.
+    # V1.1 §2 keeps this mandatory setup gate for ADMIN. Teachers no
+    # longer owe a credential merely to use their ordinary workspace.
     clock = FrozenClock(_T0)
-    user = await _seed_user(db_session, role=Role.TEACHER)
+    user = await _seed_user(db_session, role=Role.ADMIN)
     _, tokens = await _open_session(
         db_session, user, codec=get_access_token_codec(), clock=clock
     )
@@ -473,6 +476,32 @@ async def test_staff_without_confirmed_totp_forced_into_setup(
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "TOTP_SETUP_REQUIRED"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("path", ["/test/manage-op", "/test/download-op"])
+@pytest.mark.parametrize("with_credential_row", [True, False])
+async def test_teacher_workspace_and_download_do_not_require_totp(
+    db_session: AsyncSession, path: str, with_credential_row: bool
+) -> None:
+    """V1.1 §2.1/2.3: a fully authenticated teacher can work immediately.
+
+    Neither an absent optional credential nor an unfinished opt-in setup
+    may reintroduce the retired mandatory teacher onboarding gate.
+    """
+    clock = FrozenClock(_T0)
+    user = await _seed_user(db_session, role=Role.TEACHER)
+    _, tokens = await _open_session(
+        db_session, user, codec=get_access_token_codec(), clock=clock
+    )
+    if with_credential_row:
+        await _seed_totp(db_session, user, confirmed=False)
+
+    async with _api(db_session, clock) as client:
+        response = await client.post(path, headers=_auth(tokens))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == Role.TEACHER.value
 
 
 @pytest.mark.integration
@@ -512,7 +541,7 @@ async def test_suspended_teacher_denied_the_management_guard(
     assert response.json()["error"]["code"] == ErrorCode.ACCOUNT_NOT_ACTIVE
 
 
-# --- the Admin-only guard (PR #2: Admin-only until scoped delegation) -----------------
+# --- the Admin-only guard (PR #2; still-Admin-only faces after T4 delegation) ---------
 
 
 @pytest.mark.integration
@@ -535,8 +564,8 @@ async def test_confirmed_admin_passes_the_admin_guard(db_session: AsyncSession) 
 async def test_confirmed_teacher_denied_the_admin_guard(
     db_session: AsyncSession,
 ) -> None:
-    """The hardening flip: a TEACHER holding everything the management
-    guard demands (ACTIVE + confirmed TOTP) is still the wrong role for
+    """The hardening flip: an ACTIVE TEACHER with confirmed TOTP
+    is still the wrong role for
     the Admin-only surfaces."""
     clock = FrozenClock(_T0)
     user = await _seed_user(db_session, role=Role.TEACHER)
@@ -661,8 +690,7 @@ async def test_student_passes_the_download_guard_without_totp(
 async def test_confirmed_staff_passes_the_download_guard(
     db_session: AsyncSession, role: Role
 ) -> None:
-    """The staff arm accepts the management gate's own success shape:
-    ACTIVE + confirmed TOTP for either staff role."""
+    """Both ACTIVE staff roles retain access with confirmed credentials."""
     clock = FrozenClock(_T0)
     user = await _seed_user(db_session, role=role)
     _, tokens = await _open_session(
@@ -679,15 +707,12 @@ async def test_confirmed_staff_passes_the_download_guard(
 
 @pytest.mark.integration
 @pytest.mark.parametrize("with_credential_row", [True, False])
-async def test_staff_without_confirmed_totp_forced_into_setup_on_download(
+async def test_admin_without_confirmed_totp_forced_into_setup_on_download(
     db_session: AsyncSession, with_credential_row: bool
 ) -> None:
-    """A presigned GET is a management-grade read (spec §33.3/§33.4): the
-    pending staff token authenticates, but the staff arm inherits the
-    management gate's setup-forcing refusal — whether setup never
-    started or is unconfirmed."""
+    """The ADMIN download arm retains mandatory confirmed TOTP."""
     clock = FrozenClock(_T0)
-    user = await _seed_user(db_session, role=Role.TEACHER)
+    user = await _seed_user(db_session, role=Role.ADMIN)
     _, tokens = await _open_session(
         db_session, user, codec=get_access_token_codec(), clock=clock
     )

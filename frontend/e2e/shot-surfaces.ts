@@ -30,11 +30,15 @@ export interface Shot {
   path?: string;
   /** …or a world-export env carrying a seeded deep link (claim/task
    * detail): the shot skips when the export is absent, mirroring
-   * visual-capture.spec.ts's conditional-capture discipline. These two
-   * shots are deliberately NOT in scripts/assert-e2e-no-skips.mjs's
-   * watched list — the skip is legal. */
+   * visual-capture.spec.ts's conditional-capture discipline. Their
+   * skips are legal through per-title noskip-exemptions entries (the
+   * v2 gate watches every spec by default). */
   envPath?: string;
   prepare?: (page: Page) => Promise<void>;
+  /** An async panel whose data must SETTLE before the shutter (dev's
+   * cold API compile outruns the harness's fixed 800ms beat — the
+   * invitation list once shot as a perpetual skeleton). */
+  ready?: (page: Page) => Promise<void>;
 }
 
 export const SHOTS: Shot[] = [
@@ -73,6 +77,23 @@ export const SHOTS: Shot[] = [
     },
   },
   { name: "auth-login", path: "/login", auth: "anon", masks: [] },
+  {
+    // The §3.2 admin-issued token's PUBLIC consume page (Wave 2a
+    // terminal round): the pristine empty-token form is the face (the
+    // prefilled variant would carry a volatile one-time secret).
+    name: "auth-reset-password",
+    path: "/reset-password",
+    auth: "anon",
+    masks: [],
+  },
+  {
+    // The custom 404 (audit item B): a stable anonymous surface with no
+    // volatile content — the Chinese copy and the way home ARE the pin.
+    name: "not-found",
+    path: "/definitely-not-a-page",
+    auth: "anon",
+    masks: [],
+  },
   { name: "dev-gallery", path: "/dev/gallery", auth: "anon", masks: [] },
   {
     name: "student-dashboard",
@@ -101,12 +122,26 @@ export const SHOTS: Shot[] = [
         why: "hero deadline — the same relative-clock copy; .hero-line is shared with the deterministic step rail, so the mask keys on the frozen 截止 copy (DashboardView.tsx)",
         locate: (page) => page.locator(".hero-line", { hasText: "截止" }),
       },
+      {
+        id: ".task-grid .meta-deadline",
+        why: "discovery-card deadline line — the square's cards carry the mint-relative countdown (TaskCard.tsx); same clock family the claim/hero masks cover (2026-10-10 baseline time-drift ruling)",
+        locate: (page) => page.locator(".task-grid .meta-deadline"),
+      },
       // Deliberately NOT masked: the reward-progress .progress-note
       // ("（50 积分）现在就可以兑换") is deterministic under fixed labels.
     ],
   },
   {
-    name: "student-tasks", path: "/tasks", auth: "student", masks: [],
+    name: "student-tasks",
+    path: "/tasks",
+    auth: "student",
+    masks: [
+      {
+        id: ".task-grid .meta-deadline",
+        why: "card deadline line — mint-relative countdown (TaskCard.tsx); the same mechanism the dashboard mask covers (2026-10-10 baseline time-drift ruling)",
+        locate: (page) => page.locator(".task-grid .meta-deadline"),
+      },
+    ],
     prepare: async (page) => {
       // The seeded task list loads after the page shell. Sampling a cq-rise
       // entrance while its ancestor is translucent creates contrast findings
@@ -158,7 +193,20 @@ export const SHOTS: Shot[] = [
     ],
   },
   { name: "student-rankings", path: "/rankings", auth: "student", masks: [] },
-  { name: "student-rewards", path: "/rewards", auth: "student", masks: [] },
+  {
+    name: "student-rewards",
+    path: "/rewards",
+    auth: "student",
+    // Probe proof (2026-10-10, mask-contract discipline): the world's
+    // rewards carry NO time bounds — windowLabel renders on zero
+    // cards, so a .reward-window mask is an inert no-op (forbidden).
+    // The marker class stays on the markup (RewardsView.tsx); if
+    // world seeding ever grows a bounded window, this shot MUST gain
+    // the .reward-window mask. The 10-09→10-10 whole-row drift this
+    // ruling chased turned out to be one-time world-content change
+    // (absorbed by the 64c8a08 regen), not recurring window state.
+    masks: [],
+  },
   {
     name: "student-notifications",
     path: "/notifications",
@@ -198,6 +246,63 @@ export const SHOTS: Shot[] = [
         locate: (page) => page.locator("span.mono[title]"),
       },
     ],
+  },
+  {
+    // The pristine form state only — the issued state carries the
+    // run-unique one-time token and never enters a baseline.
+    name: "admin-invitations",
+    path: "/admin/invitations",
+    auth: "admin",
+    masks: [],
+    // The lifecycle list's first fetch rides dev's cold API compile —
+    // wait for the SETTLED state (a row, or the honest empty copy: the
+    // seeded world carries NO invitation rows; the four states stay
+    // e2e-pinned, the pixel face pins the deterministic empty panel).
+    ready: async (page) => {
+      await page
+        .getByText("还没有邀请记录。")
+        .or(page.locator("table[aria-label='邀请列表'] tbody tr").first())
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 });
+    },
+  },
+  {
+    // The registry listing rides the seeded platforms (deterministic
+    // under fixed labels); no clock- or run-derived content.
+    name: "admin-platforms",
+    path: "/admin/platforms",
+    auth: "admin",
+    masks: [],
+  },
+  {
+    // The approvals queue pins the PRISTINE world's face: the EMPTY
+    // state (the world seeds no PENDING_APPROVAL students — every
+    // pending row in a battery is a test's own creation, teardown
+    // residue). No masks: the empty state carries no clock content.
+    name: "admin-approvals",
+    path: "/admin/approvals",
+    auth: "admin",
+    masks: [],
+  },
+  {
+    // Wave 2a (spec §4.1): the dashboard landing — all numbers are
+    // server-owned census facts of the pristine seed (fixed keys,
+    // deterministic under fixed labels); no clock content.
+    name: "admin-dashboard",
+    path: "/admin",
+    auth: "admin",
+    masks: [],
+  },
+  {
+    // Wave 2a (spec §3.1): the SELF view of the detail page (the
+    // seeded admin's own id — deterministic; the self view carries no
+    // action buttons, the calmest face). The deep link rides the
+    // world's export; without it the shot skips (the envPath
+    // discipline, exemption in noskip-exemptions.mjs).
+    name: "admin-user-detail",
+    envPath: "CQ_E2E_ADMIN_DETAIL_PATH",
+    auth: "admin",
+    masks: [],
   },
 ];
 

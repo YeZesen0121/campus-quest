@@ -573,19 +573,32 @@ body {
   animation: cq-rise var(--motion-in) var(--ease-out-soft) both;
 }
 
-/* Lists choreograph: the first three children stagger (capped — a
-   20-row list must not take a second to settle). One :is() rule keeps
-   the reduced-motion override in the consolidated end-of-file block
-   matchable at IDENTICAL specificity (audit finding #1/#6/#7). */
-:is(.task-grid > li, .claim-rows > .claim-row-link):nth-child(-n + 3) {
+/* Task grid (owner ruling 2026-10-10): EVERY card takes the
+ * orchestrated entrance, and the grid stays fast at ANY size — the
+ * component derives --grid-stagger from the card count so the stagger
+ * TAIL (last delay) never exceeds the 80ms the old three-child cap
+ * spent; total entrance keeps §11's ~300ms ceiling. The interval is
+ * monotone-decreasing in the count, so a load-more append can never
+ * push a completed entrance back before its (now larger) delay and
+ * visibly rewind. */
+.task-grid > li {
+  animation: cq-rise var(--motion-in) var(--ease-out-soft) both;
+  animation-delay: calc(var(--grid-stagger, 40ms) * var(--card-index, 0));
+}
+
+/* Dashboard claim rows keep the original capped choreography (the
+ * ruling is the task square's). One :is()-free selector set keeps the
+ * reduced-motion override in the consolidated end-of-file block
+ * matchable at IDENTICAL specificity (audit finding #1/#6/#7). */
+.claim-rows > .claim-row-link:nth-child(-n + 3) {
   animation: cq-rise var(--motion-in) var(--ease-out-soft) both;
 }
 
-:is(.task-grid > li, .claim-rows > .claim-row-link):nth-child(2) {
+.claim-rows > .claim-row-link:nth-child(2) {
   animation-delay: var(--stagger);
 }
 
-:is(.task-grid > li, .claim-rows > .claim-row-link):nth-child(3) {
+.claim-rows > .claim-row-link:nth-child(3) {
   animation-delay: calc(var(--stagger) * 2);
 }
 
@@ -993,6 +1006,115 @@ body {
   gap: var(--space-4);
 }
 
+/* V1.1 Task 8: the staff login channel toggle (验证码/密码) — one quiet
+   row above the form; the pressed button (variant swap) names the
+   active channel, never color alone (§12). */
+.login-channel-toggle {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Login page's conditional fast-login banner (owner feedback ③,
+   2026-10-17): mounted ONLY when the remembered-device probe answers a
+   mask — the cookie-less login page stays byte-identical (零多余元素).
+   A quiet surface-2 card; the masked phone rides the mono face. */
+.login-fast-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.login-fast-hint p {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+/* The stale-device guidance that replaces the banner after a refused
+   click (probe answer raced out) — plain hint tier, never an alert. */
+.login-fast-stale {
+  margin-bottom: var(--space-4);
+}
+
+/* --- recent-logins quick-switch cards (batch 2, 2026-10-20) ---------------
+ * One row per remembered account: a role-tinted initial (the anonymous
+ * page cannot fetch avatars), the G11 mask, the badge + nickname, and
+ * the device-local removal verb. Zero entries render nothing at all.
+ */
+.login-recent {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.login-recent-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.login-recent-pick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.login-recent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: var(--text-md);
+  flex-shrink: 0;
+}
+
+.login-recent-avatar.role-student {
+  background: var(--surface-3);
+  color: var(--primary-strong);
+}
+
+.login-recent-avatar.role-teacher,
+.login-recent-avatar.role-admin {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.login-recent-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.login-recent-sub {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.login-recent-remove {
+  flex-shrink: 0;
+}
+
 .field {
   display: grid;
   gap: var(--space-1);
@@ -1231,13 +1353,23 @@ body {
 .link {
   color: var(--primary);
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .link:hover {
   color: var(--primary-strong);
-  text-decoration-thickness: 2px;
+}
+
+/* --- global link underlines (owner ruling 2026-10-20) -----------------------
+ * ZERO underlines on every link shape site-wide — the accent color and
+ * the 500 weight carry the affordance; hover speaks through the color
+ * step, never a restored line. ONE layer here beats per-site patches;
+ * focus-visible outlines (the accessibility red line) are untouched.
+ */
+a,
+a:hover,
+a:visited {
+  text-decoration: none;
 }
 
 /* --- alerts / result summaries -------------------------------------------- */
@@ -1484,13 +1616,31 @@ body {
   font-weight: 550;
 }
 
+/* Topbar identity cluster. The 10rem bound sits on the WHOLE cluster
+   (the pre-restructure geometry), but the ellipsis machinery lives on
+   the name child: a long nickname truncates on its own line while the
+   staff-role-tag (flex: none) never gets squeezed or clipped — the
+   owner-report fix (2026-10-14): any nickname length keeps the tag
+   legible and the bar's three-zone layout intact; `title` on the
+   cluster carries the full name on hover. */
 .app-user {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   max-width: 10rem;
+}
+
+.app-user-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-user .staff-role-tag {
+  flex: none;
 }
 
 .app-main {
@@ -1719,7 +1869,7 @@ body {
   padding-inline: 0;
 }
 
-.app-sidebar[data-collapsed="true"] :is(.app-sidebar-brand-name, .side-nav a span, .rail-account-name) {
+.app-sidebar[data-collapsed="true"] :is(.app-sidebar-brand-name, .side-nav a span, .rail-account-name, .rail-account-name-slot) {
   position: absolute;
   clip-path: inset(50%);
   width: 1px;
@@ -1927,6 +2077,39 @@ body {
     border-top: 1px solid var(--divider);
     padding-top: var(--space-4);
   }
+}
+
+/* --- Pre-resolve placeholders (refresh shell jump fix) ------------------
+ *
+ * The optimistic loading/error frames hold the workspace geometry
+ * while /me resolves; the session-dependent slots (rail account,
+ * topbar actions) render as placeholders. Rail slots ride the INK
+ * dark rail, so they take rail-toned skeletons — the light surface-2
+ * default would glow there. */
+.rail-account[data-loading] {
+  /* A placeholder is not an affordance: no hover, no pointer. */
+  pointer-events: none;
+}
+
+/* The nickname bar's resting width — the real name is ellipsized at
+ * the same slot, so the placeholder only needs a plausible width.
+ * The collapsed-rail clip list includes this class: the icon rail
+ * must clip the placeholder exactly like the real name. */
+.rail-account-name-slot {
+  width: 5rem;
+}
+
+.app-sidebar .skeleton {
+  background: var(--rail-hover);
+}
+
+.app-sidebar .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--rail-foreground) 10%, transparent),
+    transparent
+  );
 }
 
 /* --- Defect #4 (QA 2026-09-30): the 个人信息 avatar section ----------
@@ -2155,11 +2338,9 @@ body {
 
 /* --- staff menu sheet (narrow band; full navigation list) -------------------- */
 
-/* C3 self-contained shell: the sheet keeps its sanctioned native
-   <dialog> (plan-14 ledger: transient nav menu, outside the five
-   contract flows) but no longer rides the legacy `.dialog*` classes —
-   the shell values below are the retired `.dialog`/`.dialog-body`
-   contract folded in verbatim. */
+/* C3: the sheet keeps its sanctioned native <dialog> (plan-14 ledger:
+   transient nav menu); values inherited from the retired .dialog
+   contract. */
 .app-menusheet {
   width: min(18rem, calc(100vw - 2 * var(--space-4)));
   padding: 0;
@@ -2485,6 +2666,11 @@ body {
   gap: var(--space-1);
 }
 
+/* Marker, zero visual weight: anchors the visual suite's mask over
+   the card's clock-derived deadline line — see e2e/shot-surfaces.ts
+   student-dashboard/student-tasks. */
+.meta-deadline {}
+
 .task-card-meta-item svg {
   color: var(--subtle-foreground);
 }
@@ -2756,6 +2942,31 @@ body {
   padding: 0;
 }
 .task-grid > li { min-width: 0; }
+
+/* Narrow viewport: single column, comfortable tappable cards (§13). */
+@media (max-width: 40rem) {
+  .task-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Batch ③ (owner ruling 2026-10-10): rows are uniform — the li is
+   itself a grid so the card FILLS its stretched row (heights were
+   content-ragged before: 1-line vs 2-line titles, badge presence),
+   and the title clamps at two lines so an extreme title cannot
+   balloon a row. */
+.task-grid > li {
+  display: grid;
+}
+
+.task-card-title a {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .task-card {
   position: relative;
   display: grid;
@@ -2776,6 +2987,11 @@ body {
 .task-card:has(.task-card-title a:focus-visible) { border-color: var(--primary); }
 .task-card:has(.task-card-title a:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .task-card-head { display: flex; align-items: start; justify-content: space-between; gap: var(--work-fact-padding); }
+.task-card[data-depleted="true"] {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--border) 78%, transparent);
+  background: color-mix(in oklab, var(--surface-2) 45%, var(--surface-1));
+}
 .task-card-title {
   min-width: 0;
   flex: 1;
@@ -3413,6 +3629,22 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* --- task form: collapsed 高级 section (defect #22) -------------------------- */
+
+.form-advanced {
+  margin-top: var(--space-2);
+}
+
+.form-advanced > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+
+.form-advanced[open] > summary {
+  margin-bottom: var(--space-2);
+}
+
 .report-preview summary {
   cursor: pointer;
   font-size: var(--text-sm);
@@ -3606,6 +3838,11 @@ body {
   color: var(--muted-foreground);
 }
 
+/* Marker, zero visual weight: anchors the visual suite's mask over
+   the card's one clock-derived string (the formatted window bounds)
+   — see e2e/shot-surfaces.ts student-rewards. */
+.reward-window {}
+
 /* 缺货 / 窗口关闭: the unavailable state is quiet text where the CTA
    would be — no disabled button to knock on, no badge. */
 .reward-unavailable {
@@ -3624,8 +3861,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Native dialog: the platform's focus containment + Escape handling.
-   The element itself is the backdrop target; the body is the card. */
+/* Generic actions strip (Radix dialogs + admin pages). */
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
@@ -4541,17 +4777,27 @@ body {
 
 .topbar-bell {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--control-height);
-  min-width: var(--control-height);
-  border-radius: var(--radius-sm);
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 50%;
   text-decoration: none;
 }
 
+/* Owner feedback (2026-10-10 batch): the bell's hover used to be a
+ * SQUARE surface-2 block — shape-language mismatch beside the round
+ * avatar chip (and the "shadow" read as a clumsy square tint). The
+ * treatment is now the chip's own geometry: a 2rem circle, same
+ * token family for the hover fill. The adjacent chip gets its
+ * missing hover deepen so the pill's two interactive slots agree. */
 .topbar-bell:hover {
   background: var(--surface-2);
+}
+
+.avatar-chip:hover {
+  background: color-mix(in oklab, var(--primary) 20%, var(--surface-1));
 }
 
 .bell-glyph {
@@ -4560,12 +4806,13 @@ body {
   line-height: 1;
 }
 
-/* Count pill: primary fill + inverse text, pinned to the bell's corner;
-   digits stay tabular (§5). Hidden entirely when there is nothing to say. */
-.bell-badge {
+/* Count pill: primary fill + inverse text, pinned to the bell's
+   top-right arc (the bell is a 2rem circle now — the badge centers on
+   the edge and may overlap the pill's rim by design); digits stay
+   tabular (§5). Hidden entirely when there is nothing to say. */.bell-badge {
   position: absolute;
-  top: 0.25rem;
-  right: 0;
+  top: -0.125rem;
+  right: -0.25rem;
   min-width: 1.1rem;
   padding: 0 0.25rem;
   border-radius: 999px;
@@ -5083,9 +5330,9 @@ body {
 }
 
 /* ==== Plan-14 T4: shadcn-pattern Dialog primitive (src/components/ui/dialog).
-   Replicates the retired native .dialog contract verbatim — same tokens,
-   same values (the C3 retirement removed the .dialog* originals; the
-   shared .dialog-actions row below survives as the generic actions strip).
+   Values inherited from the retired native .dialog contract (the C3
+   retirement removed the .dialog* originals; the shared .dialog-actions
+   row above (:2948) survives as the generic actions strip).
    The Radix portal renders plain divs outside the top layer, so the
    primitive carries its own fixed positioning, centering transform, scrim
    element (instead of ::backdrop), and z-index. NO open/close animation: the
@@ -5531,7 +5778,8 @@ body {
 
   .section,
   .hero,
-  :is(.task-grid > li, .claim-rows > .claim-row-link):nth-child(-n + 3) {
+  .task-grid > li,
+  .claim-rows > .claim-row-link:nth-child(-n + 3) {
     animation-name: cq-fade-in;
   }
 }

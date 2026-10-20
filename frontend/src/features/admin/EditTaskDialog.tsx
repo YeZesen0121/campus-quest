@@ -4,7 +4,7 @@
  * over the SAME shared fields (`TaskFormFields`), prefilled from the
  * task detail, on the plan-14 Dialog primitive (components/ui/dialog;
  * the form is the content element via `DialogContent asChild`, keeping
- * the legacy grid/gap that lived on `form.dialog-body`).
+ * the form's own grid/gap intact).
  *
  * This closes the load-bearing gap: a DRAFT created without the
  * submission schema (create is DRAFT-legal) becomes publishable by
@@ -60,9 +60,9 @@ export interface EditTaskDialogProps {
 
 export function EditTaskDialog({ task, open, onClose, onUpdated }: EditTaskDialogProps) {
   // Mounting the inner dialog per open re-seeds the form from the
-  // CURRENT task prop — the legacy reset-on-open effect's job, without
-  // an effect (the parent refetches the task only after the dialog
-  // closes, so no mid-open re-seed case exists).
+  // CURRENT task prop — reset-on-open without an effect (the parent
+  // refetches the task only after the dialog closes, so no mid-open
+  // re-seed case exists).
   return open ? (
     <EditTaskDialogInner task={task} onClose={onClose} onUpdated={onUpdated} />
   ) : null;
@@ -137,8 +137,8 @@ function EditTaskDialogInner({
           <DialogTitle id="edit-task-title">编辑任务</DialogTitle>
           <p className="field-hint">
             {task.status === "DRAFT"
-              ? "草稿阶段可修改全部字段；提交校验 schema 与版本在发布前必须配置。"
-              : "任务已发布：仅标题与描述可修改，契约字段（奖励、截止、文件策略、schema）已冻结。"}
+              ? "草稿阶段可修改全部字段；提交校验规则与版本在发布前必须配置。"
+              : "任务已发布：仅标题与描述可修改，契约字段（奖励、截止、文件策略、校验规则）已冻结。"}
           </p>
 
           <FormErrorSummary view={summary} />

@@ -1,0 +1,152 @@
+# INTEGRATION owns this entire project. Never combine this file with the UI compose file.
+name: campusquest-integration
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: campusquest-integration-postgres
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: ${CQ_INTEGRATION_DB_PASSWORD:?private runtime required}
+      POSTGRES_DB: campusquest_test_integration
+    ports: ["127.0.0.1:16440:5432"]
+    volumes: ["integration-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U test -d campusquest_test_integration"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: campusquest-integration-redis
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:6480:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: campusquest-integration-minio
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: campusquest-integration
+      MINIO_ROOT_PASSWORD: ${CQ_INTEGRATION_S3_SECRET:?private runtime required}
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:3311,http://127.0.0.1:3311
+    ports: ["127.0.0.1:9135:9000"]
+    volumes: ["integration-minio:/data"]
+
+  minio-e2e:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: campusquest-integration-minio-e2e
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    command: ["server", "/data", "--certs-dir", "/etc/minio/certs", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: campusquest-integration
+      MINIO_ROOT_PASSWORD: ${CQ_INTEGRATION_S3_SECRET:?private runtime required}
+      MINIO_API_CORS_ALLOW_ORIGIN: https://localhost:3311,https://127.0.0.1:3311
+    ports: ["127.0.0.1:9136:9000"]
+    volumes:
+      - ./.runtime/minio-certs:/etc/minio/certs:ro
+      - integration-minio-e2e:/data
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    container_name: campusquest-integration-minio-init
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    depends_on: [minio, minio-e2e]
+    environment:
+      MINIO_ROOT_USER: campusquest-integration
+      MINIO_ROOT_PASSWORD: ${CQ_INTEGRATION_S3_SECRET:?private runtime required}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export MC_HOST_integration="http://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio:9000"
+        export MC_HOST_integrationtls="https://$$MINIO_ROOT_USER:$$MINIO_ROOT_PASSWORD@minio-e2e:9000"
+        until mc ready integration >/dev/null 2>&1; do sleep 1; done
+        until mc --insecure ready integrationtls >/dev/null 2>&1; do sleep 1; done
+        mc mb --ignore-existing integration/campusquest-test-integration
+        mc --insecure mb --ignore-existing integrationtls/campusquest-test-integration
+
+  clamav:
+    image: clamav/clamav:1.4.6
+    container_name: campusquest-integration-clamav
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    ports: ["127.0.0.1:3320:3310"]
+    volumes: ["integration-clamav:/var/lib/clamav"]
+
+  runner:
+    # Immutable image layers are reused; this container, mounts and caches are new.
+    image: campusquest-r3-runtime:20261011
+    container_name: campusquest-integration-runner
+    labels:
+      cq.integration.id: ${CQ_INTEGRATION_ID:?private runtime required}
+      cq.integration.source: ${CQ_INTEGRATION_SOURCE:?private runtime required}
+    network_mode: host
+    command: ["sleep", "infinity"]
+    working_dir: /workspace
+    volumes:
+      - ../..:/workspace
+      - integration-node-modules:/workspace/frontend/node_modules
+      - integration-next:/workspace/frontend/.next
+    environment:
+      CQ_INTEGRATION_ID: ${CQ_INTEGRATION_ID:?private runtime required}
+      DATABASE_URL: postgresql+asyncpg://test:${CQ_INTEGRATION_DB_PASSWORD:?private runtime required}@127.0.0.1:16440/campusquest_test_integration
+      REDIS_URL: redis://127.0.0.1:6480/0
+      S3_ENDPOINT_URL: http://127.0.0.1:9135
+      S3_BUCKET: campusquest-test-integration
+      S3_ACCESS_KEY: campusquest-integration
+      S3_SECRET_KEY: ${CQ_INTEGRATION_S3_SECRET:?private runtime required}
+      BUSINESS_TIMEZONE: Asia/Shanghai
+      ENVIRONMENT: development
+      CLAMD_HOST: 127.0.0.1
+      CLAMD_PORT: "3320"
+      CQ_E2E_DATABASE_URL: postgresql+asyncpg://test:${CQ_INTEGRATION_DB_PASSWORD:?private runtime required}@127.0.0.1:16440/campusquest_test_integration
+      CQ_E2E_REDIS_URL: redis://127.0.0.1:6480/1
+      CQ_E2E_BASE_URL: https://localhost:3311
+      CQ_E2E_API_URL: http://localhost:8310/api/v1
+      CQ_E2E_S3_ENDPOINT_URL: https://127.0.0.1:9136
+      CQ_E2E_S3_BUCKET: campusquest-test-integration
+      CQ_E2E_S3_ACCESS_KEY: campusquest-integration
+      CQ_E2E_S3_SECRET_KEY: ${CQ_INTEGRATION_S3_SECRET:?private runtime required}
+      CQ_E2E_S3_CA_BUNDLE: /workspace/infra/integration/.runtime/minio-certs/public.crt
+      CQ_E2E_REUSE_EXISTING: "0"
+      UV_PROJECT_ENVIRONMENT: /opt/cq-noble-venv
+      UV_CACHE_DIR: /tmp/cq-integration-uv-cache
+      RUFF_CACHE_DIR: /tmp/cq-integration-ruff-cache
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+      PYTHONUNBUFFERED: "1"
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+volumes:
+  integration-postgres:
+  integration-minio:
+  integration-minio-e2e:
+  integration-node-modules:
+  integration-next:
+  integration-clamav:

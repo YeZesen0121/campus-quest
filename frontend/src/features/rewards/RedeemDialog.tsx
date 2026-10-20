@@ -5,8 +5,9 @@
  * A short focused confirmation on the plan-14 Dialog primitive
  * (components/ui/dialog): Radix supplies role=dialog, the focus trap,
  * Escape, and outside-click close (modality via hideOthers +
- * RemoveScroll; Radix 1.2 emits no aria-modal); the visual shell is the
- * `.cq-dialog*` replication of the legacy `.dialog` values.
+ * RemoveScroll; Radix 1.2 emits no aria-modal); the visual shell
+ * carries the `.cq-dialog*` values (inherited from the retired native
+ * `.dialog` contract, C3).
  *
  * Mutation rules (patterns §7): NO optimistic anything — the confirm
  * button stays disabled until the server answers; success renders the
@@ -79,8 +80,8 @@ export function RedeemDialog({
         }}
       >
         {/* The primitive unmounts the content on close, so the body's
-            attempt state starts fresh on every open — the legacy reset-
-            on-open effect's job, without an effect. */}
+            attempt state starts fresh on every open — reset-on-open
+            without an effect. */}
         <RedeemDialogBody
           reward={reward}
           spendablePoints={spendablePoints}
@@ -145,7 +146,7 @@ function RedeemDialogBody({
               </div>
             </dl>
             <p className="field-hint">
-              确认后积分将冻结并等待老师审核；审核通过前这部分积分不能再用于其他兑换，未通过会全额退回。
+              积分将冻结等待老师审核；未通过会全额退回。
             </p>
             {conflict !== null ? (
               <div className="alert alert-error" role="alert">
@@ -189,7 +190,7 @@ function RedeemDialogBody({
                 「{reward.name}」兑换申请已提交，{redemption.points} 积分已冻结。
               </p>
               <p className="field-hint">
-                老师审核通过后即可领取；进度以「最近兑换」和积分余额为准。
+                老师审核通过后即可领取；进度看「最近兑换」和积分余额。
               </p>
             </div>
             {status !== null ? (

@@ -57,11 +57,14 @@ Design decisions:
   used invitation tokens and wrong password/TOTP/recovery inputs all
   raise the same ``AUTHENTICATION_REQUIRED``; the unknown-identifier path
   still burns one Argon2 verify (timing shield). Wrong second-factor
-  attempts are counted via server-side rejection logs (rate limiting is
-  deliberately deferred; the login already requires the password).
+  attempts are counted via server-side rejection logs; rate limiting is
+  the endpoint limiter's job (staff_router's ``auth:staff-login``
+  bucket), not this service's.
 - **Audit events** (`events.py`) are published inside the transaction,
-  before commit, so the audit/outbox module's `AuditService` can persist
-  them atomically; the in-memory collector is the interim adapter.
+  before commit, through `DomainEventPublisher` (the interim production
+  adapter is the log-only `LoggingEventPublisher`; the in-memory
+  collector serves tests). Durable audit rows ride the
+  `AuditLogWriter` direct write below, not this event stream.
 - **Durable audit rows (Plan 08 T2) ride the same transactions.** Every
   staff lifecycle write appends a `audit_logs` row through the
   flush-only `AuditLogWriter` before the service's one commit:
@@ -98,6 +101,7 @@ import logging
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from cryptography.fernet import Fernet
@@ -115,8 +119,10 @@ from app.core.security import (
     validate_password_length,
     verify_password,
 )
+from app.integrations.masking import mask_email
 from app.modules.audit.context import AuditContext
 from app.modules.audit.service import AuditLogWriter
+from app.modules.identity import device_credentials
 from app.modules.identity.enums import Role, UserStatus
 from app.modules.identity.events import (
     STAFF_INVITATION_ACCEPTED,
@@ -127,6 +133,7 @@ from app.modules.identity.events import (
     DomainEventPublisher,
     NotificationEventRecorder,
 )
+from app.modules.identity.login_failure_guard import LoginFailureGuard
 from app.modules.identity.models import (
     RecoveryCode,
     StaffInvitation,
@@ -156,6 +163,8 @@ logger = logging.getLogger(__name__)
 # other's names (see the module docstring).
 AUDIT_STAFF_INVITATION_CREATED = "STAFF_INVITATION_CREATED"
 AUDIT_STAFF_INVITATION_ACCEPTED = "STAFF_INVITATION_ACCEPTED"
+AUDIT_STAFF_INVITATION_REVOKED = "STAFF_INVITATION_REVOKED"
+AUDIT_STAFF_INVITATION_RESENT = "STAFF_INVITATION_RESENT"
 
 # The audit target for both staff-lifecycle actions: the invitation
 # itself (target_id = the invitation's UUID as text) — the anchor both
@@ -168,6 +177,8 @@ _AUTHENTICATION_MESSAGE = "邀请链接无效、已过期或已被使用"
 _STAFF_AUTHENTICATION_MESSAGE = "邮箱、密码或动态验证码错误"
 _ACCOUNT_NOT_ACTIVE_MESSAGE = "账号当前状态不允许登录"
 _EMAIL_TAKEN_MESSAGE = "该邮箱已被其他账号使用"
+_INVITATION_NOT_FOUND_MESSAGE = "邀请不存在"
+_INVITATION_CONFLICT_MESSAGE = "邀请已被接受或已撤销，不能再变更"
 _ALREADY_BOUND_MESSAGE = "该账号已绑定 TOTP，不能重复绑定"
 _NOT_STARTED_MESSAGE = "尚未开始 TOTP 绑定"
 _WRONG_CODE_MESSAGE = "动态验证码错误"
@@ -249,6 +260,7 @@ class StaffService:
         invitation_ttl_hours: int = 48,
         notification_recorder: NotificationEventRecorder | None = None,
         audit: AuditLogWriter | None = None,
+        guard: LoginFailureGuard | None = None,
     ) -> None:
         # The clock is the only business-time source (expiry, verified-at,
         # confirmed-at); `sessions` shares the same instance at the
@@ -262,6 +274,9 @@ class StaffService:
         self._users = UserRepository()
         self._notification_recorder = notification_recorder
         self._audit: AuditLogWriter = audit if audit is not None else AuditLogWriter()
+        # Per-account lockout (V1.1 §6); optional for the same reason and
+        # with the same wiring-test pin as SessionService's guard.
+        self._guard = guard
 
     async def create_staff_invitation(
         self,
@@ -298,6 +313,18 @@ class StaffService:
                 details={"field": "role", "reason": "must be TEACHER or ADMIN"},
             )
         email_normalized = self._normalized_email(email)
+
+        # §4.2 occupancy pre-check (the 2026-10-14 frontend finding): an
+        # address already held by an account can never be invited — the
+        # accept path would build a user the unique index then rejects
+        # mid-flow. Normalization has run, so case variants of a held
+        # address resolve here too.
+        if await self._users.find_by_email_normalized(db, email_normalized) is not None:
+            raise BusinessError(
+                ErrorCode.EMAIL_ALREADY_BOUND,
+                _EMAIL_TAKEN_MESSAGE,
+                status_code=409,
+            )
 
         now = self._clock.now()
         token = secrets.token_urlsafe(32)
@@ -352,30 +379,219 @@ class StaffService:
         )
         return IssuedStaffInvitation(invitation=invitation, token=token)
 
+    async def list_invitations(
+        self, db: AsyncSession, *, limit: int = 100, offset: int = 0
+    ) -> list[dict[str, object]]:
+        """The §4.2 admin list: every invitation with its DERIVED state.
+
+        ACCEPTED/REVOKED ride their stored timestamps; the
+        PENDING/EXPIRED split is a read-time fact against the business
+        clock, precedence accepted > revoked > expired. The invited
+        email leaves this method MASKED (G11: the plaintext rests on
+        the row; this read path never widens it), the issuer shows by
+        id and nickname.
+        """
+        rows = (
+            await db.execute(
+                select(StaffInvitation, User.nickname)
+                .join(User, User.id == StaffInvitation.created_by)
+                .order_by(StaffInvitation.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        ).all()
+        now = self._clock.now()
+        listed: list[dict[str, object]] = []
+        for invitation, issuer_nickname in rows:
+            if invitation.accepted_at is not None:
+                status = "ACCEPTED"
+            elif invitation.revoked_at is not None:
+                status = "REVOKED"
+            elif invitation.expires_at <= now:
+                status = "EXPIRED"
+            else:
+                status = "PENDING"
+            listed.append(
+                {
+                    "id": str(invitation.id),
+                    "email": mask_email(invitation.email_normalized),
+                    "role": invitation.role,
+                    "status": status,
+                    "expires_at": invitation.expires_at,
+                    "accepted_at": invitation.accepted_at,
+                    "revoked_at": invitation.revoked_at,
+                    "created_by": str(invitation.created_by),
+                    "issuer_nickname": issuer_nickname,
+                    "created_at": invitation.created_at,
+                }
+            )
+        return listed
+
+    async def revoke_invitation(
+        self,
+        db: AsyncSession,
+        actor: Actor,
+        invitation_id: UUID,
+        *,
+        audit_context: AuditContext | None = None,
+    ) -> None:
+        """§4.2: revoke an un-accepted invitation; its token dies now.
+
+        REVOKED is stored (it must outlive the expiry window), and the
+        accept path rejects revoked rows — the one-time token stops
+        resolving the moment this commits. Accepted rows are history
+        and refuse (409), as does a second revoke of the same row; the
+        row lock serializes a revoke racing an accept.
+        """
+        if actor.role != Role.ADMIN:
+            raise BusinessError(
+                ErrorCode.PERMISSION_DENIED,
+                _PERMISSION_DENIED_MESSAGE,
+                status_code=403,
+            )
+        invitation = await db.scalar(
+            select(StaffInvitation)
+            .where(StaffInvitation.id == invitation_id)
+            .with_for_update()
+        )
+        if invitation is None:
+            raise BusinessError(
+                ErrorCode.NOT_FOUND,
+                _INVITATION_NOT_FOUND_MESSAGE,
+                status_code=404,
+            )
+        if invitation.accepted_at is not None or invitation.revoked_at is not None:
+            raise BusinessError(
+                ErrorCode.CONFLICT,
+                _INVITATION_CONFLICT_MESSAGE,
+                status_code=409,
+            )
+        invitation.revoked_at = self._clock.now()
+        await db.flush()
+        # Durable G12 trace, the CREATED/ACCEPTED shape: the audited
+        # migration is the revocation itself; the email stays OFF the
+        # row (G11) — it rests on the invitation the target_id names.
+        await self._audit.append(
+            db,
+            actor=actor,
+            action=AUDIT_STAFF_INVITATION_REVOKED,
+            target_type=_AUDIT_TARGET_TYPE,
+            target_id=str(invitation.id),
+            after_snapshot={
+                "role": invitation.role,
+                "revoked_at": invitation.revoked_at.isoformat(),
+                "expires_at": invitation.expires_at.isoformat(),
+            },
+            ip_address=audit_context.ip_address if audit_context else None,
+            request_id=audit_context.request_id if audit_context else None,
+        )
+        await db.commit()
+        logger.info(
+            "staff invitation revoked invitation_id=%s actor_id=%s",
+            invitation.id,
+            actor.user_id,
+        )
+
+    async def resend_invitation(
+        self,
+        db: AsyncSession,
+        actor: Actor,
+        invitation_id: UUID,
+        *,
+        audit_context: AuditContext | None = None,
+    ) -> IssuedStaffInvitation:
+        """§4.2: re-issue an un-accepted invitation's one-time token.
+
+        Works on pending, EXPIRED (the rescue path: the window restarts)
+        and revoked rows alike — only an accepted row refuses (409). The
+        row lock is the one accept takes, so a resend racing an accept
+        serializes and the loser re-reads a terminal row; the old hash
+        is replaced (that token stops resolving) and ``revoked_at``
+        clears: a revoked invitation comes back to life. The fresh
+        token returns exactly once, the create contract.
+        """
+        if actor.role != Role.ADMIN:
+            raise BusinessError(
+                ErrorCode.PERMISSION_DENIED,
+                _PERMISSION_DENIED_MESSAGE,
+                status_code=403,
+            )
+        now = self._clock.now()
+        invitation = await db.scalar(
+            select(StaffInvitation)
+            .where(StaffInvitation.id == invitation_id)
+            .with_for_update()
+        )
+        if invitation is None:
+            raise BusinessError(
+                ErrorCode.NOT_FOUND,
+                _INVITATION_NOT_FOUND_MESSAGE,
+                status_code=404,
+            )
+        if invitation.accepted_at is not None:
+            raise BusinessError(
+                ErrorCode.CONFLICT,
+                _INVITATION_CONFLICT_MESSAGE,
+                status_code=409,
+            )
+        token = secrets.token_urlsafe(32)
+        invitation.token_hash = hash_refresh_token(token)
+        invitation.expires_at = now + self._invitation_ttl
+        invitation.revoked_at = None
+        await db.flush()
+        await self._audit.append(
+            db,
+            actor=actor,
+            action=AUDIT_STAFF_INVITATION_RESENT,
+            target_type=_AUDIT_TARGET_TYPE,
+            target_id=str(invitation.id),
+            after_snapshot={
+                "role": invitation.role,
+                "expires_at": invitation.expires_at.isoformat(),
+            },
+            ip_address=audit_context.ip_address if audit_context else None,
+            request_id=audit_context.request_id if audit_context else None,
+        )
+        await db.commit()
+        logger.info(
+            "staff invitation resent invitation_id=%s actor_id=%s",
+            invitation.id,
+            actor.user_id,
+        )
+        return IssuedStaffInvitation(invitation=invitation, token=token)
+
     async def accept_staff_invitation(
         self,
         db: AsyncSession,
         token: str,
-        password: str,
+        password: str | None,
         *,
         audit_context: AuditContext | None = None,
     ) -> PendingStaffSession:
         """Trade the single-use invitation token for a staff account.
 
-        Validation order is load-bearing (the registration principle): the
-        password band is checked BEFORE the invitation is looked up, so a
-        malformed request never burns the one-time token. Unknown, expired,
-        and already-used tokens fail with one uniform error — the branch
-        reason never leaves the server.
+        Validation order is load-bearing (the registration principle): a
+        SUPPLIED password is band-checked BEFORE the invitation is looked
+        up, so a malformed request never burns the one-time token.
+        Unknown, expired, and already-used tokens fail with one uniform
+        error — the branch reason never leaves the server.
 
-        The consumption (``accepted_at``), the User insert, the pending
-        session mint, and the ``AUDIT_STAFF_INVITATION_ACCEPTED`` audit
+        V1.1 §2.3 role split: TEACHER accepts with an OPTIONAL password
+        (blank = no ``password_hash``; the email code becomes the only
+        login channel) and receives a COMPLETE session — no mandatory
+        TOTP, no recovery codes. ADMIN acceptance is unchanged: the
+        password stays mandatory (checked once the invitation's role is
+        known) and the session is the pending-TOTP onboarding state.
+
+        The consumption (``accepted_at``), the User insert, the session
+        mint, and the ``AUDIT_STAFF_INVITATION_ACCEPTED`` audit
         row (Plan 08 T2) share one transaction under the invitation row
         lock: single-use is atomic, and a crashed accept leaves neither
         a half-created account nor a consumed invitation — nor an audit
         row for an acceptance that never happened.
         """
-        self._require_usable_password(password)
+        if password is not None and password != "":
+            self._require_usable_password(password)
 
         now = self._clock.now()
         invitation = await db.scalar(
@@ -383,8 +599,12 @@ class StaffService:
             .where(StaffInvitation.token_hash == hash_refresh_token(token))
             .with_for_update()
         )
-        if invitation is None or invitation.accepted_at is not None:
-            logger.info("staff invitation rejected reason=unknown_or_used")
+        if (
+            invitation is None
+            or invitation.accepted_at is not None
+            or invitation.revoked_at is not None
+        ):
+            logger.info("staff invitation rejected reason=unknown_used_or_revoked")
             raise self._invitation_rejected()
         if invitation.expires_at <= now:
             logger.info(
@@ -392,6 +612,22 @@ class StaffService:
                 invitation.id,
             )
             raise self._invitation_rejected()
+
+        role = Role(invitation.role)
+        stored_password = password if (password or "").strip() else None
+        if role is Role.ADMIN and stored_password is None:
+            # ADMIN keeps the mandatory password (§5.8); blank is a
+            # validation answer, after the lookup because the rule is
+            # role-dependent.
+            raise BusinessError(
+                ErrorCode.VALIDATION_ERROR,
+                _VALIDATION_MESSAGE,
+                status_code=400,
+                details={
+                    "field": "password",
+                    "reason": "admin accounts require a password",
+                },
+            )
 
         email = invitation.email_normalized
         if await self._users.find_by_username(db, email) is not None:
@@ -403,7 +639,9 @@ class StaffService:
 
         user = User(
             username=email,
-            password_hash=hash_password(password),
+            password_hash=(
+                hash_password(stored_password) if stored_password is not None else None
+            ),
             nickname=self._nickname_for_email(email),
             email_normalized=email,
             email_verified_at=now,
@@ -426,7 +664,6 @@ class StaffService:
 
         _, tokens = await self._sessions.issue_session(db, user=user, now=now)
         invitation.accepted_at = now
-        role = Role(invitation.role)
         self._events.publish(
             DomainEvent(
                 event_type=STAFF_INVITATION_ACCEPTED,
@@ -467,7 +704,14 @@ class StaffService:
             user_id,
             invitation_id,
         )
-        return PendingStaffSession(user_id=user_id, role=role, tokens=tokens)
+        # V1.1 §2.3: only ADMIN acceptance is a pending-TOTP onboarding
+        # state; a TEACHER's session is complete on acceptance.
+        return PendingStaffSession(
+            user_id=user_id,
+            role=role,
+            tokens=tokens,
+            must_setup_totp=role is Role.ADMIN,
+        )
 
     async def begin_totp_setup(self, db: AsyncSession, user_id: UUID) -> TotpSetup:
         """Generate and store (encrypted, unconfirmed) a new TOTP secret.
@@ -610,8 +854,16 @@ class StaffService:
         return codes
 
     async def authenticate_staff(
-        self, db: AsyncSession, identifier: str, password: str, totp_code: str
-    ) -> SessionTokens:
+        self,
+        db: AsyncSession,
+        identifier: str,
+        password: str,
+        totp_code: str,
+        *,
+        device_cookie: str | None = None,
+        remember_device: bool = False,
+        second_factor_policy: Literal["strict", "unified"] = "strict",
+    ) -> tuple[SessionTokens | None, str | None]:
         """Staff login: verified email + password + valid second factor.
 
         ``totp_code`` accepts a current RFC 6238 code or one unused
@@ -622,6 +874,15 @@ class StaffService:
         accounts answer with the uniform authentication failure (they have
         no staff second factor by design, and a setup-required signal
         would leak the account's role).
+
+        V1.1 login iteration item 2: an EMPTY ``totp_code`` plus a valid
+        remembered-device cookie bound to this account completes the
+        login (the 30-day re-login: the cookie IS the second factor,
+        mirroring the email-code ADMIN leg); an empty code without one
+        is the uniform authentication failure. ``remember_device`` mints
+        a fresh cookie on any successful login. Returns
+        ``(tokens, device_cookie)`` — the cookie value is None unless
+        the response should set one.
         """
         now = self._clock.now()
         email = identifier.strip().lower()
@@ -631,11 +892,21 @@ class StaffService:
             # SessionService.login_student for the enumeration rationale).
             self._verify_shielded(password)
             raise self._staff_authentication_required()
-        try:
-            matched = verify_password(password, user.password_hash)
-        except ValueError:
+        if self._guard is not None:
+            await self._guard.ensure_not_locked(user.id)
+        if user.password_hash is None:
+            # A passwordless staff account (V1.1 §2.3) matches no
+            # password: the uniform authentication failure, never the
+            # hasher's None-type crash (final review F2).
             matched = False
+        else:
+            try:
+                matched = verify_password(password, user.password_hash)
+            except ValueError:
+                matched = False
         if not matched:
+            if self._guard is not None:
+                await self._guard.record_failure(user.id)
             raise self._staff_authentication_required()
         if user.status != UserStatus.ACTIVE:
             raise BusinessError(
@@ -646,32 +917,80 @@ class StaffService:
         if user.role not in (Role.TEACHER, Role.ADMIN):
             raise self._staff_authentication_required()
 
-        credential = await db.get(TotpCredential, user.id)
-        if credential is None or credential.confirmed_at is None:
-            raise TotpSetupRequiredError("该账号必须先绑定 TOTP 动态验证码")
+        # The 30-day re-login leg (V1.1 item 2): an empty second factor
+        # is accepted ONLY when the remembered-device cookie resolves to
+        # this account — the cookie replaces the factor. Anything else
+        # empty is the uniform failure, decided BEFORE the credential
+        # lookup so the setup-required signal never leaks.
+        empty_code = totp_code is None or totp_code.strip() == ""
+        cookie_user_id: UUID | None = None
+        if empty_code:
+            if device_cookie is not None:
+                cookie_user_id = await device_credentials.validate(
+                    db, device_cookie, clock=self._clock
+                )
+            if cookie_user_id != user.id:
+                # PR-1's unified password form (2026-10-19 spec §3.2,
+                # ``second_factor_policy="unified"``) reshapes ONLY this
+                # arm for the new caller: a TEACHER's password is the
+                # whole auth (§2.3 — no TOTP by design), and an ADMIN's
+                # proven password owes the totp leg — signaled as a
+                # (None, None) return for the facade to mint the pending
+                # credential. The legacy "strict" callers keep the
+                # uniform failure byte-for-byte.
+                if second_factor_policy == "unified" and user.role == Role.ADMIN:
+                    return None, None
+                if second_factor_policy == "unified" and user.role == Role.TEACHER:
+                    logger.info("staff unified login password-only user_id=%s", user.id)
+                else:
+                    if self._guard is not None:
+                        await self._guard.record_failure(user.id)
+                    logger.info(
+                        "staff second factor rejected user_id=%s "
+                        "reason=empty_code_without_valid_device",
+                        user.id,
+                    )
+                    raise self._staff_authentication_required()
+        else:
+            credential = await db.get(TotpCredential, user.id)
+            if credential is None or credential.confirmed_at is None:
+                raise TotpSetupRequiredError("该账号必须先绑定 TOTP 动态验证码")
 
-        secret = decrypt_totp_secret(self._fernet, credential.secret_encrypted)
-        # The second factor is a current TOTP code, or — as the documented
-        # lockout path — one unused recovery code. Neither matching is the
-        # uniform authentication failure; the rejection log line below is
-        # the server-side count (rate limiting is deferred, see the module
-        # docstring).
-        if not verify_totp_code(
-            secret, totp_code, at=now
-        ) and not await self._consume_recovery_code(db, user.id, totp_code, now):
-            logger.info(
-                "staff second factor rejected user_id=%s reason=totp_or_recovery",
-                user.id,
-            )
-            raise self._staff_authentication_required()
+            secret = decrypt_totp_secret(self._fernet, credential.secret_encrypted)
+            # The second factor is a current TOTP code, or — as the
+            # documented lockout path — one unused recovery code. Neither
+            # matching is the uniform authentication failure; the
+            # rejection log line below is the server-side count (rate
+            # limiting is the endpoint limiter's job — see the module
+            # docstring).
+            if not verify_totp_code(
+                secret, totp_code, at=now
+            ) and not await self._consume_recovery_code(db, user.id, totp_code, now):
+                if self._guard is not None:
+                    await self._guard.record_failure(user.id)
+                logger.info(
+                    "staff second factor rejected user_id=%s reason=totp_or_recovery",
+                    user.id,
+                )
+                raise self._staff_authentication_required()
 
         session_row, tokens = await self._sessions.issue_session(db, user=user, now=now)
         user_id, session_id = user.id, session_row.id
+        new_cookie: str | None = None
+        if remember_device or cookie_user_id == user.id:
+            # Checkbox mint, or the renewal-on-use rotation (the #87
+            # discipline: every successful cookie login re-issues).
+            new_cookie = await device_credentials.issue(db, user.id, clock=self._clock)
         await db.commit()
+        if self._guard is not None:
+            await self._guard.reset(user_id)
         logger.info(
-            "staff session opened user_id=%s session_id=%s", user_id, session_id
+            "staff session opened user_id=%s session_id=%s channel=%s",
+            user_id,
+            session_id,
+            "password+device" if empty_code else "password+totp",
         )
-        return tokens
+        return tokens, new_cookie
 
     async def _consume_recovery_code(
         self, db: AsyncSession, user_id: UUID, code: str, now: datetime

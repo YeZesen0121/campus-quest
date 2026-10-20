@@ -20,8 +20,10 @@ Design decisions:
   `NotificationChannel` members (SMS/EMAIL/IN_APP, interfaces.md); the enum
   class itself arrives with the notification module. An empty
   `allowed_file_types` array is representable but useless — publish-time
-  validation (`TaskService.publish`) requires a non-empty file policy, a
-  deadline policy, and a submission schema, so DRAFT rows may legitimately
+  validation (`TaskService.publish`) requires a non-empty file policy and
+  a deadline policy, and the submission-schema leg is family-conditional
+  (spec §10.1: a structured task must carry a schema, a document task
+  must not), so DRAFT rows may legitimately
   carry incomplete configuration and there is deliberately no table-level
   deadline-mode/fixed-deadline consistency CHECK either.
 - `grace_period_minutes` is NOT NULL with server_default 1440 and is
@@ -129,7 +131,7 @@ _COLLABORATOR_CAPABILITIES = (
     "REVIEW_SUBMISSIONS",
     "MODERATE_COMMUNITY",
 )
-_ALLOWED_FILE_TYPES = ("CSV", "XLSX", "SQLITE")  # spec §10/§12
+_ALLOWED_FILE_TYPES = ("CSV", "XLSX", "SQLITE", "DOCX", "PDF")  # spec §10/§10.1/§12
 _NOTIFICATION_CHANNELS = ("SMS", "EMAIL", "IN_APP")  # interfaces.md §25
 
 
@@ -277,10 +279,9 @@ class Assignment(Base):
 
     __tablename__ = "assignments"
     __table_args__ = (
-        CheckConstraint(
-            "platform IN ('xiaohongshu', 'douyin', 'zhihu')",
-            name="platform",
-        ),
+        # platform is registry-bound (V1.1 spec 2026-10-16): the closed
+        # CHECK set became the platforms FK — growth is admin rows, not
+        # migrations.
         CheckConstraint(
             "availability_status IN ('AVAILABLE', 'OCCUPIED', 'COMPLETED', 'RETIRED')",
             name="availability_status",
@@ -297,7 +298,7 @@ class Assignment(Base):
         server_default=text("gen_random_uuid()"), primary_key=True
     )
     task_id: Mapped[UUID] = mapped_column(ForeignKey("tasks.id"), index=True)
-    platform: Mapped[str] = mapped_column(String(32))
+    platform: Mapped[str] = mapped_column(String(32), ForeignKey("platforms.code"))
     keyword: Mapped[str] = mapped_column(Text)
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     availability_status: Mapped[str] = mapped_column(String(16))
@@ -371,14 +372,16 @@ class AssignmentClaim(Base):
     base_reward_points_snapshot: Mapped[int] = mapped_column(Integer)
     # §6.2 MUST-snapshot; NOT NULL here because a claim can only be created
     # against a PUBLISHED Task, which always carries a schema version.
-    submission_schema_version: Mapped[int] = mapped_column(Integer)
+    submission_schema_version: Mapped[int | None] = mapped_column(Integer)
     reward_lock_status: Mapped[str] = mapped_column(String(16))
     # Locked percentage from the snapshotted ladder (spec §9.3).
     reward_tier_locked: Mapped[int | None] = mapped_column(Integer)
     reward_locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     locked_reward_points: Mapped[int | None] = mapped_column(Integer)
-    # Plain UUID on purpose: the submissions table does not exist yet; the
-    # module that introduces it adds the FK.
+    # Plain UUID on purpose (the 0005 decision): submissions FK to
+    # claims, so a reciprocal FK pair would be circular; consistency is
+    # kept transactionally by the upload finalize service with
+    # UNIQUE(claim_id, version) as the anchor.
     latest_submission_id: Mapped[UUID | None] = mapped_column()
     revision_deadline_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
@@ -391,4 +394,26 @@ class AssignmentClaim(Base):
             "The daily abandon cap counts ABANDONED rows by this instant "
             "inside the BUSINESS_TIMEZONE natural day (spec §8.5)."
         ),
+    )
+
+
+class Platform(Base):
+    """One row of the platform registry (V1.1 spec 2026-10-16 §1).
+
+    ``code`` is the stable ASCII key assignments reference (FK) —
+    immutable after creation; ``display_name``/``sort_order``/``enabled``
+    are admin-managed presentation/lifecycle knobs. ``enabled=False``
+    bars the platform from NEW tasks and imports; existing assignment
+    references are untouched (no delete surface exists — the FK IS the
+    lifecycle guard).
+    """
+
+    __tablename__ = "platforms"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(64))
+    sort_order: Mapped[int] = mapped_column(default=0)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
     )

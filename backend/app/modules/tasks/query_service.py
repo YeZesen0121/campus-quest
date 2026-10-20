@@ -33,13 +33,27 @@ Design decisions:
   models.py (CLAIMED/VALIDATING/UNDER_REVIEW/REVISION_REQUIRED) — the
   same definition that builds the partial unique indexes, so
   "active" can never drift between uniqueness and statistics.
+- **Marketplace ordering: claimable before depleted (§42 note).** The
+  public list sorts tasks holding at least one AVAILABLE assignment
+  ahead of fully-claimed ones (zero AVAILABLE, including a task with no
+  units), newest-first inside each group. The sort key is the
+  correlated ``_SQUARE_AVAILABLE_COUNT`` computed inside the page
+  statement — one index probe per PUBLISHED task (hundreds at V1
+  scale), zero denormalization on purpose: a stored ``depleted`` flag
+  would add maintenance points on every availability writer (claim,
+  abandon, expiry, import, retire), each a drift miss waiting to
+  happen. The count also rides the statement as the displayed
+  ``assignments_available``, so a card's group and its number can
+  never disagree within one page fetch. A partial index
+  ``ON assignments(task_id) WHERE availability_status = 'AVAILABLE'``
+  is the documented seam if the catalogue ever outgrows the probe cost.
 - **Offset pagination** is the documented V1 choice for both public
   lists (tasks, own claims): simple to reason about, stable enough at
   V1 volumes, and the route layer owns the limit/offset bounds.
-- **Submission counts are a future seam.** The submissions table does
-  not exist yet; the field ships empty and NO submission query is
-  invented here. The submission module fills it against its own status
-  axes.
+- **Submission counts are a documented-unfilled seam.** The submissions
+  module has landed, but the statistics integration is not built: the
+  field ships empty and NO submission query is invented here. The key
+  set stays reserved for that module's own status axes.
 - **Rating summary** comes from the cross-module ``RatingSummaryPort``
   (interfaces.md: this module ships a null port; the community module
   supplies the concrete adapter backed by TaskRating). The port sketch in
@@ -102,6 +116,22 @@ _STATISTICS_DENIED_MESSAGE = (
 )
 _TASK_READ_DENIED_MESSAGE = "只有任务所有者、协作者或管理员可以查看该任务"
 
+# The marketplace's sort key: one task's AVAILABLE assignment count as a
+# correlated scalar subquery over the assignments' task_id index. Built
+# once, used both as the page's selected count column and inside the
+# ORDER BY, so a card's position and its displayed
+# ``assignments_available`` always come from the same statement.
+_SQUARE_AVAILABLE_COUNT = (
+    select(func.count())
+    .select_from(Assignment)
+    .where(
+        Assignment.task_id == Task.id,
+        Assignment.availability_status == AssignmentAvailability.AVAILABLE.value,
+    )
+    .correlate(Task)
+    .scalar_subquery()
+)
+
 
 # --- cross-module rating port (the community module supplies the adapter) -------
 
@@ -114,10 +144,10 @@ class RatingSummaryPort(Protocol):
 
 
 class NullRatingSummaryPort:
-    """The interim stand-in: every task reports "not rated yet".
+    """Test-only stand-in: every task reports "not rated yet".
 
-    Used until the community module wires the TaskRating-backed adapter,
-    and by tests that exercise the None path.
+    Returns None for the tests that exercise the not-rated path;
+    production wires the community module's TaskRating-backed adapter.
     """
 
     async def summary(self, task_id: UUID) -> RatingSummary | None:
@@ -131,10 +161,10 @@ class NullRatingSummaryPort:
 class TaskStatistics:
     """Counts-only task aggregate (spec §41; privacy per §40/§42).
 
-    ``submission_counts`` is the documented future seam: empty until
-    the submission module lands, and its key set will be defined by
-    that module's own status axes (validation / review), not invented
-    here.
+    ``submission_counts`` is the documented-unfilled seam: the
+    statistics integration is not built, so the field ships empty, and
+    its key set will be defined by the submissions module's own status
+    axes (validation / review), not invented here.
     """
 
     task_id: UUID
@@ -205,14 +235,21 @@ class TaskQueryService:
         limit: int,
         offset: int,
     ) -> tuple[list[TaskCard], int]:
-        """One offset page of §42 task cards, newest publish first.
+        """One offset page of §42 task cards: claimable tasks (at least
+        one AVAILABLE assignment) first, depleted ones (zero AVAILABLE —
+        fully claimed, a retired pool, or no units at all) behind them,
+        newest publish first inside each group (§42 note).
 
         ``limit``/``offset`` arrive already bounded (the route owns the
         caps); the count query and the page query read the same status
         filter, so ``total`` is the whole claimable-ish catalogue, not the
-        page. A PUBLISHED-but-past-cutoff FIXED task still lists (its card
-        shows the passed deadline; claiming it answers CLAIM_CUTOFF_REACHED
-        — the §42 rule that the card never lies by omission).
+        page. The availability count rides the page statement itself
+        (``_SQUARE_AVAILABLE_COUNT``), so a card's group and its
+        displayed ``assignments_available`` cannot disagree within one
+        fetch. A PUBLISHED-but-past-cutoff FIXED task still lists (its
+        card shows the passed deadline; claiming it answers
+        CLAIM_CUTOFF_REACHED — the §42 rule that the card never lies by
+        omission).
         """
         total = int(
             await db.scalar(
@@ -225,18 +262,24 @@ class TaskQueryService:
         if total == 0 or offset >= total:
             return [], total
 
-        tasks = (
-            await db.scalars(
-                select(Task)
+        rows = (
+            await db.execute(
+                select(Task, _SQUARE_AVAILABLE_COUNT.label("assignments_available"))
                 .where(Task.status == TaskStatus.PUBLISHED.value)
-                .order_by(Task.published_at.desc().nulls_last(), Task.id)
+                .order_by(
+                    # Claimable first: the "depleted" boolean (count == 0)
+                    # sorts FALSE before TRUE; the publish order inside
+                    # each group is unchanged.
+                    (_SQUARE_AVAILABLE_COUNT == 0).asc(),
+                    Task.published_at.desc().nulls_last(),
+                    Task.id,
+                )
                 .limit(limit)
                 .offset(offset)
             )
         ).all()
-        counts = await self._available_counts(db, [task.id for task in tasks])
         cards: list[TaskCard] = []
-        for task in tasks:
+        for task, available in rows:
             cards.append(
                 TaskCard(
                     id=task.id,
@@ -246,7 +289,7 @@ class TaskQueryService:
                     deadline_mode=task.deadline_mode,
                     fixed_deadline_at=task.fixed_deadline_at,
                     duration_minutes=task.duration_minutes,
-                    assignments_available=counts.get(task.id, 0),
+                    assignments_available=int(available),
                     rating=await rating_port.summary(task.id),
                 )
             )
@@ -343,9 +386,14 @@ class TaskQueryService:
         row for the requesting user, or the query filtered on it); the
         join reads exactly one assignment row by primary key.
         """
-        platform, keyword, task_title = (
+        platform, keyword, task_title, allowed_file_types = (
             await db.execute(
-                select(Assignment.platform, Assignment.keyword, Task.title)
+                select(
+                    Assignment.platform,
+                    Assignment.keyword,
+                    Task.title,
+                    Task.allowed_file_types,
+                )
                 .select_from(AssignmentClaim)
                 .join(Assignment, Assignment.id == AssignmentClaim.assignment_id)
                 .join(Task, Task.id == AssignmentClaim.task_id)
@@ -363,6 +411,8 @@ class TaskQueryService:
             deadline_at=claim.deadline_at,
             grace_deadline_at=claim.grace_deadline_at,
             base_reward_points_snapshot=claim.base_reward_points_snapshot,
+            latest_submission_id=claim.latest_submission_id,
+            allowed_file_types=tuple(allowed_file_types),
         )
 
     @staticmethod

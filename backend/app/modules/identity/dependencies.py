@@ -14,13 +14,14 @@ Three FastAPI dependencies, one per policy layer:
   lifecycle (claim / abandon / own-claim history, spec §4.1): adds
   ``role == STUDENT`` on top of ``require_active_actor``'s checks, read
   from the user row like every role decision here (stale-role defense).
-- ``require_staff_management_actor`` — the guard for ALL management
-  endpoints (spec §33.4): staff role (TEACHER/ADMIN) + ACTIVE + CONFIRMED
-  TOTP credential.
+- ``require_staff_management_actor`` — the guard for management
+  endpoints: staff role (TEACHER/ADMIN) + ACTIVE; ADMIN additionally
+  requires confirmed TOTP (V1.1 §2.1/2.3 exempts teachers).
 - ``require_admin_actor`` — the guard for Admin-only surfaces (PR #2
   hardening ruling): the management guard's checks with ``role == ADMIN``
-  — the narrow composition staff review/oversight endpoints sit behind
-  until scoped delegation lands.
+  — the narrow composition for staff review/oversight endpoints; scoped
+  delegation has landed (Plan 08 T4), and this guard covers the surfaces
+  that stayed Admin-only.
 - ``require_active_community_actor`` — the guard for ordinary community
   participation (spec §4.1/§4.2 "普通社区能力"): ACTIVE Student or
   Teacher. Admin is deliberately NOT a participant (the PR #2 hardening
@@ -117,7 +118,12 @@ __all__ = [
     "require_active_student_actor",
     "require_active_student_or_staff_management_actor",
     "require_admin_actor",
+    "require_active_except_pending_student",
+    "require_browsing_student_actor",
+    "require_approved_community_actor",
+    "require_approved_student_actor",
     "require_staff_management_actor",
+    "resolve_access_token",
 ]
 
 _AUTHENTICATION_REQUIRED_MESSAGE = "未登录或登录状态已失效"
@@ -127,6 +133,7 @@ _STUDENT_ACTION_PERMISSION_MESSAGE = "仅学生账号可执行该操作"
 _COMMUNITY_PARTICIPATION_PERMISSION_MESSAGE = "仅学生或教师账号可参与社区互动"
 _ADMIN_ACTION_PERMISSION_MESSAGE = "只有管理员可以执行该操作"
 _TOTP_SETUP_REQUIRED_MESSAGE = "必须先完成 TOTP 两步验证才能使用管理功能"
+_APPROVAL_PENDING_MESSAGE = "账号待管理员审核，期间可浏览但不能执行该操作"
 
 # auto_error=False: a missing or malformed Authorization header is OUR
 # AUTHENTICATION_REQUIRED business error (401, §29 envelope), not
@@ -178,8 +185,20 @@ async def _resolve_user(
     """
     if credentials is None:
         raise _authentication_required()
+    return await resolve_access_token(db, credentials.credentials, codec, clock)
+
+
+async def resolve_access_token(
+    db: AsyncSession, token: str, codec: AccessTokenCodec, clock: Clock
+) -> User:
+    """Authenticate one raw access-token string; return the fresh user row.
+
+    The Bearer-header guards delegate here; routes that carry the token
+    in the request body (the email-code totp leg's ``pending_token``)
+    call it directly with the same uniform-failure semantics.
+    """
     try:
-        claims = codec.decode(credentials.credentials)
+        claims = codec.decode(token)
     except AccessTokenError as exc:
         raise _authentication_required() from exc
     try:
@@ -234,7 +253,13 @@ async def require_active_actor(
     anything the client carries.
     """
     user = await _resolve_user(credentials, db, codec, clock)
-    if user.status != UserStatus.ACTIVE:
+    if user.status not in (
+        UserStatus.ACTIVE,
+        # PENDING_APPROVAL browses (V1.1 spec 2026-10-16 §2: login and
+        # the reading surfaces are open; the acting surfaces use the
+        # approved guards).
+        UserStatus.PENDING_APPROVAL,
+    ):
         raise BusinessError(
             ErrorCode.ACCOUNT_NOT_ACTIVE,
             _ACCOUNT_NOT_ACTIVE_MESSAGE,
@@ -342,6 +367,152 @@ async def require_active_staff_actor(
     return Actor(user_id=user.id, role=Role(user.role))
 
 
+async def require_approved_student_actor(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    codec: Annotated[AccessTokenCodec, Depends(get_access_token_codec)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+) -> Actor:
+    """The Student ACTING surface under the approval regime (V1.1 spec
+    2026-10-16 §2): every require_active_student_actor check plus the
+    PENDING_APPROVAL freeze — a pending student may log in and browse,
+    but claim/submit/redeem/engage answers 403 APPROVAL_PENDING until an
+    admin approves. Staff never carries the state, so nothing changes
+    for them by construction."""
+
+    async def _pending_gate(user: User) -> None:
+        if (
+            user.role == Role.STUDENT.value
+            and user.status == UserStatus.PENDING_APPROVAL.value
+        ):
+            raise BusinessError(
+                ErrorCode.APPROVAL_PENDING,
+                _APPROVAL_PENDING_MESSAGE,
+                status_code=403,
+            )
+
+    user = await _resolve_user(credentials, db, codec, clock)
+    await _pending_gate(user)
+    if not rbac.is_student(user.role):
+        raise BusinessError(
+            ErrorCode.PERMISSION_DENIED,
+            _STUDENT_ACTION_PERMISSION_MESSAGE,
+            status_code=403,
+        )
+    if user.status != UserStatus.ACTIVE.value:
+        raise BusinessError(
+            ErrorCode.ACCOUNT_NOT_ACTIVE,
+            _ACCOUNT_NOT_ACTIVE_MESSAGE,
+            status_code=403,
+        )
+    return Actor(user_id=user.id, role=Role(user.role))
+
+
+async def require_approved_community_actor(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    codec: Annotated[AccessTokenCodec, Depends(get_access_token_codec)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+) -> Actor:
+    """The community WRITE surface under the approval regime: the
+    require_active_community_actor checks plus the PENDING_APPROVAL
+    freeze for the Student arm — a pending student reads the square but
+    cannot comment/vote/react/rate/report; the Teacher arm is untouched
+    (staff never carries the state)."""
+
+    user = await _resolve_user(credentials, db, codec, clock)
+    if (
+        user.role == Role.STUDENT.value
+        and user.status == UserStatus.PENDING_APPROVAL.value
+    ):
+        raise BusinessError(
+            ErrorCode.APPROVAL_PENDING,
+            _APPROVAL_PENDING_MESSAGE,
+            status_code=403,
+        )
+    if not rbac.has_any_role(user.role, Role.STUDENT, Role.TEACHER):
+        raise BusinessError(
+            ErrorCode.PERMISSION_DENIED,
+            _COMMUNITY_PARTICIPATION_PERMISSION_MESSAGE,
+            status_code=403,
+        )
+    if user.status != UserStatus.ACTIVE.value:
+        raise BusinessError(
+            ErrorCode.ACCOUNT_NOT_ACTIVE,
+            _ACCOUNT_NOT_ACTIVE_MESSAGE,
+            status_code=403,
+        )
+    return Actor(user_id=user.id, role=Role(user.role))
+
+
+async def require_browsing_student_actor(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    codec: Annotated[AccessTokenCodec, Depends(get_access_token_codec)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+) -> Actor:
+    """The student READING surfaces that stay role-gated (rankings,
+    growth, notifications — spec §4.1): the student-role check of
+    require_active_student_actor with PENDING_APPROVAL admitted (spec
+    2026-10-16 §2 — a pending student browses the boards and the bell)."""
+
+    user = await _resolve_user(credentials, db, codec, clock)
+    if not rbac.is_student(user.role):
+        raise BusinessError(
+            ErrorCode.PERMISSION_DENIED,
+            _STUDENT_ACTION_PERMISSION_MESSAGE,
+            status_code=403,
+        )
+    if user.status not in (
+        UserStatus.ACTIVE,
+        UserStatus.PENDING_APPROVAL,
+    ):
+        raise BusinessError(
+            ErrorCode.ACCOUNT_NOT_ACTIVE,
+            _ACCOUNT_NOT_ACTIVE_MESSAGE,
+            status_code=403,
+        )
+    return Actor(user_id=user.id, role=Role(user.role))
+
+
+async def require_active_except_pending_student(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    codec: Annotated[AccessTokenCodec, Depends(get_access_token_codec)],
+    clock: Annotated[Clock, Depends(get_business_clock)],
+) -> Actor:
+    """Any-ACTIVE-role gate with the PENDING_APPROVAL freeze: browsing
+    semantics for every role (staff never carries the state), used where
+    a surface serves all roles but a pending student must not write
+    (avatar: the ADMIN arm the community variant would drop)."""
+
+    user = await _resolve_user(credentials, db, codec, clock)
+    if (
+        user.role == Role.STUDENT.value
+        and user.status == UserStatus.PENDING_APPROVAL.value
+    ):
+        raise BusinessError(
+            ErrorCode.APPROVAL_PENDING,
+            _APPROVAL_PENDING_MESSAGE,
+            status_code=403,
+        )
+    if user.status != UserStatus.ACTIVE.value:
+        raise BusinessError(
+            ErrorCode.ACCOUNT_NOT_ACTIVE,
+            _ACCOUNT_NOT_ACTIVE_MESSAGE,
+            status_code=403,
+        )
+    return Actor(user_id=user.id, role=Role(user.role))
+
+
 async def require_staff_management_actor(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
@@ -352,14 +523,11 @@ async def require_staff_management_actor(
 ) -> Actor:
     """The guard for ALL management endpoints (spec §5.8 step 3, §33.4).
 
-    Requires a staff role (TEACHER/ADMIN via the core predicates — the
-    role predicates are pure functions, and identity OWNS wiring them to
-    real actors), an ACTIVE account, and a CONFIRMED TOTP credential
-    (``totp_credentials.confirmed_at IS NOT NULL``). Pending staff —
-    setup not started or unconfirmed — gets ``TotpSetupRequiredError``,
-    the distinct setup-forcing error, which the router maps to its
-    documented §29 code. Routers mount this dependency; they never
-    re-derive these rules (backend-engineering §3, §16).
+    Requires a staff role and an ACTIVE account. V1.1 §2.1/2.3 removes
+    mandatory teacher TOTP, including access after invitation acceptance.
+    ADMIN still requires a confirmed credential; missing or unfinished
+    setup gets ``TotpSetupRequiredError``. Routers mount this dependency;
+    they never re-derive these rules (backend-engineering §3, §16).
     """
     user = await _resolve_user(credentials, db, codec, clock)
     if not rbac.is_staff(user.role):
@@ -374,9 +542,10 @@ async def require_staff_management_actor(
             _ACCOUNT_NOT_ACTIVE_MESSAGE,
             status_code=403,
         )
-    credential = await db.get(TotpCredential, user.id)
-    if credential is None or credential.confirmed_at is None:
-        raise TotpSetupRequiredError(_TOTP_SETUP_REQUIRED_MESSAGE)
+    if user.role == Role.ADMIN:
+        credential = await db.get(TotpCredential, user.id)
+        if credential is None or credential.confirmed_at is None:
+            raise TotpSetupRequiredError(_TOTP_SETUP_REQUIRED_MESSAGE)
     return Actor(user_id=user.id, role=Role(user.role))
 
 
@@ -395,9 +564,11 @@ async def require_admin_actor(
     same typed errors. A TEACHER — even ACTIVE with a confirmed TOTP
     credential — answers ``PERMISSION_DENIED`` (403): the guarded
     surfaces are the ones the hardening ruling pulled out of the staff
-    family until scoped delegation lands (the points redemption review
-    decisions, the notifications failure query), where any-active-staff
-    power was judged too broad. An ACTIVE Admin without a confirmed TOTP
+    family (the notifications failure query), where any-active-staff
+    power was judged too broad. The points redemption review decisions
+    now ride scoped delegation instead (Plan 08 T4's
+    ``require_reward_review_actor``); this guard keeps the remaining
+    Admin-only face. An ACTIVE Admin without a confirmed TOTP
     credential still gets ``TotpSetupRequiredError``: the Admin role does
     not waive the §5.8 step-3 management 2FA gate these surfaces inherit.
     """
@@ -477,14 +648,13 @@ async def require_active_student_or_staff_management_actor(
     The route serves the owning STUDENT and the reviewing staff (task
     owner teacher / ``REVIEW_SUBMISSIONS`` collaborator / Admin) through
     one path, so the arm is selected by role: the student arm is exactly
-    ``require_active_student_actor``'s state gate — no TOTP, a Student
-    never establishes one — while the staff arm adds the management
-    gate's CONFIRMED-TOTP check (§33.4), so a pending-setup staff
-    account cannot pull a presigned GET before the second factor is
-    proven. Only STUDENT, TEACHER and ADMIN have an arm; MENTOR has no
+    ``require_active_student_actor``'s state gate. The staff arm mirrors
+    the management gate: teacher TOTP is optional (V1.1 §2.1/2.3), while
+    ADMIN must have a confirmed credential before a presigned GET.
+    Only STUDENT, TEACHER and ADMIN have an arm; MENTOR has no
     task-submission capability. Check order follows the family — role
     selects the arm or denies, then status (``ACCOUNT_NOT_ACTIVE``), then the
-    staff-only 2FA gate (``TotpSetupRequiredError`` → 403
+    ADMIN-only 2FA gate (``TotpSetupRequiredError`` → 403
     ``TOTP_SETUP_REQUIRED``, rendered by the app-wide identity handler).
 
     Resource-level standing — whose submission, which task — is NOT this
@@ -498,14 +668,13 @@ async def require_active_student_or_staff_management_actor(
             "当前账号没有任务提交访问权限",
             status_code=403,
         )
-    staff = rbac.is_staff(user.role)
     if user.status != UserStatus.ACTIVE:
         raise BusinessError(
             ErrorCode.ACCOUNT_NOT_ACTIVE,
             _ACCOUNT_NOT_ACTIVE_MESSAGE,
             status_code=403,
         )
-    if staff:
+    if user.role == Role.ADMIN:
         credential = await db.get(TotpCredential, user.id)
         if credential is None or credential.confirmed_at is None:
             raise TotpSetupRequiredError(_TOTP_SETUP_REQUIRED_MESSAGE)

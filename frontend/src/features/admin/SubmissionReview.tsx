@@ -60,6 +60,9 @@ import {
   versionText,
 } from "./teacherView";
 import { Button } from "@/components/ui/button";
+import { usePlatformNames } from "@/features/platforms/platformDictionary";
+import { platformDisplayName } from "@/features/platforms/platformView";
+
 
 const PAGE_SIZE = 20;
 
@@ -252,6 +255,7 @@ function QueueRow({
   onSelect: () => void;
 }) {
   const claim = claimStatusView(item.claim_status);
+  const platformNames = usePlatformNames();
   const review = reviewStatusView(item.review_status);
   const validation = validationSummary(item.validation);
   return (
@@ -265,7 +269,7 @@ function QueueRow({
       <span className="review-item-head">
         <strong className="review-item-title">{item.task_title}</strong>
         <span className="mono review-pair">
-          {item.platform} / {item.keyword}
+          {platformDisplayName(item.platform, platformNames)} / {item.keyword}
         </span>
       </span>
       <span className="review-item-meta">
@@ -315,6 +319,7 @@ function ReviewDetail({
   onDecided: (decision: Outcome) => void;
   fallbackFocus: () => HTMLElement | null;
 }) {
+  const platformNames = usePlatformNames();
   const [dialog, setDialog] = useState<"approve" | "revision" | "invalidate" | null>(
     null,
   );
@@ -363,7 +368,7 @@ function ReviewDetail({
         <div className="fact-row">
           <dt className="fact-label">平台 / 关键词</dt>
           <dd className="fact-value mono">
-            {item.platform} / {item.keyword}
+            {platformDisplayName(item.platform, platformNames)} / {item.keyword}
           </dd>
         </div>
         <div className="fact-row">
@@ -403,7 +408,7 @@ function ReviewDetail({
                 <div className="comment-meta">
                   <span className="badge badge-info">{versionText(version.version)}</span>
                   <span className="mono review-pair">
-                    {version.platform} / {version.keyword}
+                    {platformDisplayName(version.platform, platformNames)} / {version.keyword}
                   </span>
                   <time className="notif-time" dateTime={version.submitted_at}>
                     {formatDeadlineDateTime(parseServerInstant(version.submitted_at))}
@@ -522,11 +527,11 @@ function ApproveDialog({
       <DialogContent {...dialogFocus} aria-labelledby="approve-title">
         <DialogTitle id="approve-title">通过该提交</DialogTitle>
         <p className="field-hint">
-          确认后该领取将标记为已完成
+          该领取将标记完成
           {item.locked_reward_points !== null
-            ? `，并向学生发放锁定的 ${item.locked_reward_points} 积分`
-            : "，奖励按服务端结算发放"}
-          ；此操作会立即生效并记入积分流水。
+            ? `，发放锁定的 ${item.locked_reward_points} 积分`
+            : "，奖励按结算发放"}
+          ，立即记入积分流水。
         </p>
         {error !== null ? <SectionError error={error} /> : null}
         <DialogFooter>
@@ -610,7 +615,7 @@ function RevisionDialog({
         {...dialogFocus}
         aria-labelledby={invalidate ? "invalidate-title" : "revision-title"}
         onPointerDownOutside={(event) => {
-          // The legacy dialog had NO backdrop-click close (a half-typed
+          // Deliberate: no backdrop-click close (a half-typed
           // mandatory note must survive an accidental scrim click).
           event.preventDefault();
         }}
@@ -707,16 +712,16 @@ function OutcomeAlert({
           {outcome.result.points_granted !== null
             ? `，已发放 ${outcome.result.points_granted} 积分`
             : ""}
-          {outcome.result.already_reviewed ? "（该领取此前已审核，未重复发放）" : ""}。
+          {outcome.result.already_reviewed ? "（该领取此前已审核，未重复发放）" : ""}
         </p>
       ) : outcome.kind === "revision" ? (
         <p>
-          已退回修改；学生需在 {revisionDeadline} 前重新提交，奖励档位已保留。
+          已退回修改；学生需在 {revisionDeadline} 前重新提交，奖励档位已保留
         </p>
       ) : (
         <p>
           已判无效；奖励锁定已取消（{lockLabel}），学生需在 {revisionDeadline}{" "}
-          前重新提交并重新核算。
+          前重新提交并重新核算
         </p>
       )}
       <p>

@@ -163,11 +163,15 @@ export function validatePhone(value: string): string | null {
 }
 
 /** Username convenience rule for the login/reset forms (student number). */
+/** Password login accepts the upstream dual identifier and mentor accounts. */
 export function validateUsername(value: string, account: "student" | "mentor" = "student"): string | null {
   if (account === "mentor") {
     if (value.trim().length === 0) return "请输入导师账号";
     if (countCodePoints(value) > 64) return "导师账号最长 64 个字符";
     return null;
   }
-  return validateStudentNumber(value);
+  if (validateStudentNumber(value) === null || /^1[3-9]\d{9}$/.test(value)) {
+    return null;
+  }
+  return "请输入学号或手机号";
 }

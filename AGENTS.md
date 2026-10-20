@@ -45,6 +45,7 @@ When deciding whether to copy a pattern from another codebase, read:
 - Use test-driven development for features and bug fixes.
 - Reproduce a bug with a failing regression test before fixing it.
 - Run focused tests while developing, then the relevant module gate before completion.
+- Run `make pre-push` before pushing (fast local gate — lint/types/architecture/contract freshness/frontend ratchet, ~30s–2min, no docker stack; the pre-push hook runs it automatically, `git push --no-verify` skips a single push).
 - Use a fresh verification run before claiming the task is complete.
 - Request code review for completed implementation tasks before merging them into a wider workstream.
 - Do not silently change product semantics to make implementation easier. Amend the spec or plan first if a real ambiguity is discovered.
@@ -142,17 +143,18 @@ A task is not complete until:
 
 ## Owner acceptance
 
-Merge approval belongs to the owner. Reviewer APPROVE and green CI are necessary, not sufficient. Before merging a reviewed PR, the owner checks:
+Merge approval belongs to the owner. Branch protection on main enforces the first line of defense for every merge, owner included (enforce_admins): the three required status checks ("Backend (Python 3.12)", "Frontend (Node 22)", "Pixel visual regression (Playwright)") must be green on the exact head, the PR must be up-to-date with main (strict), and force pushes and branch deletion are blocked. Reviewer APPROVE plus these enforced checks are necessary, not sufficient. Before merging a reviewed PR, the owner double-checks:
 
 - the reviewer verdict names the exact head commit and is APPROVE;
 - CI is green on that same head (match the run URL to the head commit, not an earlier run);
+- the PR is up-to-date with main — the strict requirement blocks merging a stale head;
 - no unresolved reviewer or bot threads remain on the PR.
 
 Merge order follows reviewer-stated dependencies when they exist.
 
 After a batch of merges lands on main, the owner accepts at the product level:
 
-- run the strongest currently implemented gate on merged main (`make verify`, then the `make release-gate` subset that exists) as a fresh run — a reused or pre-merge log is not acceptance evidence;
+- run the strongest currently implemented gate on merged main (`make verify`, then `make release-gate`) as a fresh run — a reused or pre-merge log is not acceptance evidence;
 - manually reproduce every fixed defect from the QA sheet (docs/qa/*.csv) against a running stack, following the reproduction steps in each row, and record the outcome in the fix-status column;
 - treat any number claimed in chat, PR descriptions, or handoffs as unverified until it matches a fresh gate output or the reviewer's independently re-run results.
 
@@ -167,7 +169,7 @@ A feature or fix PR walks this manifest before requesting review; "yes" items sh
 - new stable-screen UI → pixel baseline under the pinned-font discipline; never regenerate baselines to force green (font-normalization regenerations are separate commits with a walk-through note);
 - new selectors that specs depend on → docs/quality/e2e-selector-contract.md B-table entry;
 - coverage moved → ratchet floors updated via the documented `--update`/`coverage:update` path with the reason in the same PR;
-- API surface changed → regenerated OpenAPI snapshot + generated client types.
+- API surface changed → regenerated OpenAPI snapshot + generated client types. **Docstrings count**: any router/endpoint docstring edit lands in the OpenAPI `description` layer and flips both freshness gates — regen (`dump_openapi.py` + `npm run api:types:snapshot`) rides in the same PR. Two incidents on record: #71→#75, #76→this.
 
 The campusquest-test-process skill (repo `.claude/skills/`) holds the full gate matrix and protocols; invoke it when writing tests or touching test infrastructure.
 

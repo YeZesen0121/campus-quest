@@ -36,8 +36,8 @@ import { readControlClearance, API_URL, mintToken } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
-const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/staff/login`;
-const STAFF = process.env.CQ_E2E_STAFF; // "teacher@school.edu:correct-horse"
+const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/login`;
+const STAFF = process.env.CQ_E2E_STAFF; // "e2e-teacher-{run}@school.edu:password" (factories' DEFAULT_PASSWORD)
 const STAFF_TOTP_SECRET = process.env.CQ_E2E_STAFF_TOTP_SECRET;
 // An UNRELATED teacher for the access-denied negative (F6): a second
 // seeded account with no collaboration on the first teacher's task.
@@ -46,7 +46,7 @@ const STAFF2_TOTP_SECRET = process.env.CQ_E2E_STAFF2_TOTP_SECRET;
 
 test.skip(
   !E2E_ENABLED,
-  "Playwright lands in Plan 10; set CQ_E2E=1 (and the CQ_E2E_* vars) to run this suite.",
+  "set CQ_E2E=1 (and the CQ_E2E_* vars) to run this suite.",
 );
 
 // The staff contract itself is a HARD requirement now (PR #6 final
@@ -101,13 +101,24 @@ async function loginAsStaff(
 ): Promise<void> {
   const [email, password] = credentials.split(":");
   await page.goto(STAFF_LOGIN_URL);
-  await page.getByLabel("邮箱").fill(email);
+  // The unified page: the weak link expands the password form; an
+  // ADMIN's password answers totp_required (the leg completes it).
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  await page.getByLabel("账号", { exact: true }).fill(email);
   await page.getByLabel("密码").fill(password);
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
     await page.getByRole("button", { name: "登录", exact: true }).click();
+    const legAppeared = await page
+      .getByTestId("unified-login-totp-leg")
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (legAppeared) {
+      await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
+      await page.getByRole("button", { name: "完成登录" }).click();
+    }
     try {
-      await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: 5_000 });
+      await expect(page).not.toHaveURL(/\/login/, { timeout: 5_000 });
       return;
     } catch {
       // A slow hop can carry the submit across the step boundary —
@@ -149,7 +160,26 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
     await dialog.getByLabel("任务描述").fill("e2e 创建的采集任务");
     await dialog.getByLabel("基础奖励积分").fill("120");
     await dialog.getByLabel("固定截止时间").fill("2030-09-30T18:00");
-    await dialog.locator("#task-schema").fill('{"columns":["platform","keyword"]}');
+    // Defect #22: the schema rides collapsed in the 高级 section and
+    // arrives PRE-FILLED with the per-type default template (CSV is
+    // the default type selection).
+    await dialog.getByText("高级：提交校验规则").click();
+    const schemaField = dialog.locator("#task-schema");
+    await expect(schemaField).toHaveValue(/"platform"/);
+    // §10.1 document family: a DOCX-only selection carries NO schema —
+    // the pristine template blanks; back on CSV it returns. The type
+    // checkboxes reuse the identity-option pattern (hidden native
+    // inputs): act on the visible label text, exactly like the
+    // community identity radios.
+    await dialog.getByText("DOCX", { exact: true }).click();
+    await dialog.getByText("CSV", { exact: true }).click();
+    await expect(schemaField).toHaveValue("");
+    await dialog.getByText("CSV", { exact: true }).click();
+    await expect(schemaField).toHaveValue(/"platform"/);
+    // Return DOCX to off: the flow's task below stays CSV-only (the
+    // toggle dance above is the assertion itself, not the task shape).
+    await dialog.getByText("DOCX", { exact: true }).click();
+    await schemaField.fill('{"columns":["platform","keyword"]}');
     await dialog.locator("#task-schema-version").fill("1");
     for (const label of ["截止前 24 小时", "截止前 4 小时", "站内", "短信", "已验证邮箱"]) {
       await expect(dialog.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
@@ -198,6 +228,8 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
     await page.getByRole("button", { name: "编辑", exact: true }).click();
     const editDialog = page.getByRole("dialog", { name: "编辑任务" });
     await expect(editDialog).toBeVisible();
+    // The 高级 section is collapsed here too (defect #22).
+    await editDialog.getByText("高级：提交校验规则").click();
     await editDialog.locator("#task-schema").fill('{"columns":["platform","keyword"]}');
     await editDialog.locator("#task-schema-version").fill("1");
     for (const label of ["截止前 24 小时", "截止前 4 小时", "站内", "短信", "已验证邮箱"]) await expect(editDialog.getByRole("checkbox", { name: label, exact: true })).not.toBeChecked();
@@ -230,6 +262,7 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
     const confirm = page.getByRole("dialog", { name: "发布任务" });
     await expect(confirm).toBeVisible();
     await expect(confirm.getByText(/发布后任务立即对学生可见/)).toBeVisible();
+    await expect(confirm.getByText(/不可修改/)).toBeVisible();
     await confirm.getByRole("button", { name: "确认发布" }).click();
     await expect(page.locator(".page-head").getByText("已发布")).toBeVisible();
 
@@ -291,7 +324,8 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
     const studentPage = await context.newPage();
     const [username, password] = (process.env.CQ_E2E_STUDENT ?? "").split(":");
     await studentPage.goto(`${BASE_URL}/login`);
-    await studentPage.getByLabel("学号").fill(username);
+    await studentPage.getByRole("button", { name: "使用密码登录" }).click();
+    await studentPage.getByLabel("账号", { exact: true }).fill(username);
     await studentPage.getByLabel("密码").fill(password);
     await studentPage.getByRole("button", { name: "登录", exact: true }).click();
     // Wait for the login to actually LAND before navigating (the same
@@ -302,6 +336,32 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
       studentPage.getByText("教师工作台仅对教师与管理员开放"),
     ).toBeVisible();
     await context.close();
+  });
+
+  test("the workspace carries its own profile page (defect #17)", async ({
+    page,
+  }) => {
+    // 个人信息 is a first-class nav destination post-login.
+    await page.goto(`${BASE_URL}/teacher/reviews`);
+    const nav = page.getByRole("link", { name: "个人信息", exact: true });
+    await expect(nav).toBeVisible();
+    await nav.click();
+    await expect(page).toHaveURL(/\/teacher\/profile/);
+
+    // The /me facts render as definition rows (the owner's own account
+    // view, spec §40). 注册日期 joined with PR #46's created_at —
+    // date-only, year-inclusive, so the row must read 年.
+    const section = page.getByRole("region", { name: "个人信息" });
+    await expect(section).toBeVisible();
+    for (const label of ["昵称", "账号", "角色", "账号状态", "注册日期"]) {
+      await expect(section.getByText(label, { exact: true })).toBeVisible();
+    }
+    await expect(section.getByText("教师", { exact: true })).toBeVisible();
+    await expect(section.getByText("正常", { exact: true })).toBeVisible();
+    const registration = section
+      .locator(".fact-row", { hasText: "注册日期" })
+      .locator(".fact-value");
+    await expect(registration).toContainText(/年/);
   });
 
   test("review decisions: mandatory note/reason and the invalidate warning", async ({
@@ -325,14 +385,14 @@ test.describe("teacher workspace (brief: create -> import -> publish)", () => {
 
     // 判无效: the prominent warning renders BEFORE the mandatory reason.
     await page.getByRole("button", { name: "判无效", exact: true }).click();
-    await expect(page.getByText("判无效将取消该学生当前锁定的奖励档位与积分")).toBeVisible();
+    await expect(page.getByText(/判无效会取消锁定的奖励与积分/)).toBeVisible();
     await page.getByRole("button", { name: "确认判无效" }).click();
     await expect(page.getByText("判无效原因不能为空")).toBeVisible();
     await page.getByRole("button", { name: "取消" }).click();
 
     // 通过 shows the explicit grant confirm.
     await page.getByRole("button", { name: "通过并发放奖励" }).click();
-    await expect(page.getByText(/确认后该领取将标记为已完成/)).toBeVisible();
+    await expect(page.getByText(/该领取将标记完成/)).toBeVisible();
     await page.getByRole("button", { name: "取消" }).click();
   });
 

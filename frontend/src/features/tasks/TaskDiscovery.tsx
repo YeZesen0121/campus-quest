@@ -9,16 +9,28 @@
  * State-shape note (lint-driven): fetchers are setState-free; the mount
  * effect only starts a fetch and applies results in async callbacks, so
  * effects never cascade renders synchronously.
+ *
+ * Batch ① (flicker, 2026-10-10): the first page rides the shared data
+ * cache via `useSection` — a REMOUNTING square (back-navigation from a
+ * task detail) renders its cached snapshot synchronously instead of a
+ * skeleton-flash-refetch cycle (the exact QA #2 contract the dashboard
+ * sections already ride; the square was the missed adoption surface).
+ * Load-more pages stay uncached by design: offset pagination over a
+ * mutating availability surface means only the server's per-page
+ * verdict is authoritative, and appended pages always reflect the
+ * moment of their click.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 
 import {
   EmptyState,
   SectionCardsSkeleton,
   SectionError,
 } from "@/components/ui/sectionStates";
+import { useSection } from "@/components/ui/useSection";
 
 import { listTasks, type TaskCardDto, type TaskListPageDto } from "./api";
+import { entranceStaggerMs } from "./display";
 import { TaskCard } from "./TaskCard";
 import { useNow } from "./useNow";
 import { Button } from "@/components/ui/button";
@@ -28,52 +40,15 @@ const PAGE_SIZE = 12;
 export function TaskDiscovery() {
   // Minute-granularity text; the card countdown is display-only (§42).
   const now = useNow(60_000);
-  const [items, setItems] = useState<TaskCardDto[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
-  const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState<unknown>(null);
+  const { state, retry } = useSection(
+    () => listTasks({ limit: PAGE_SIZE, offset: 0 }),
+    `tasks:list:${PAGE_SIZE}:0`,
+  );
+  // Load-more appends are mount-local state (see the module note: they
+  // are deliberately NOT cached across navigations).
+  const [appended, setAppended] = useState<TaskCardDto[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<unknown>(null);
-
-  const fetchFirstPage = useCallback(
-    () => listTasks({ limit: PAGE_SIZE, offset: 0 }),
-    [],
-  );
-
-  const applyPage = useCallback((page: TaskListPageDto) => {
-    setItems(page.items);
-    setTotal(page.total);
-    setPhase("ready");
-  }, []);
-
-  const applyError = useCallback((cause: unknown) => {
-    setError(cause);
-    setPhase("error");
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchFirstPage().then(
-      (page) => {
-        if (!cancelled) {
-          applyPage(page);
-        }
-      },
-      (cause: unknown) => {
-        if (!cancelled) {
-          applyError(cause);
-        }
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchFirstPage, applyPage, applyError]);
-
-  const retry = useCallback(() => {
-    setPhase("loading");
-    fetchFirstPage().then(applyPage, applyError);
-  }, [fetchFirstPage, applyPage, applyError]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore) {
@@ -82,22 +57,28 @@ export function TaskDiscovery() {
     setLoadingMore(true);
     setMoreError(null);
     try {
-      const page = await listTasks({ limit: PAGE_SIZE, offset: items.length });
-      setItems((previous) => [...previous, ...page.items]);
-      setTotal(page.total);
+      const base = state.status === "ready" ? state.data.items.length : 0;
+      const page: TaskListPageDto = await listTasks({
+        limit: PAGE_SIZE,
+        offset: base + appended.length,
+      });
+      setAppended((previous) => [...previous, ...page.items]);
     } catch (cause) {
       setMoreError(cause);
     } finally {
       setLoadingMore(false);
     }
-  }, [items.length, loadingMore]);
+  }, [appended.length, loadingMore, state]);
 
-  if (phase === "loading") {
+  if (state.status === "loading") {
     return <SectionCardsSkeleton cards={6} />;
   }
-  if (phase === "error") {
-    return <SectionError error={error} onRetry={retry} retryLabel="重新加载" />;
+  if (state.status === "error") {
+    return <SectionError error={state.error} onRetry={retry} retryLabel="重新加载" />;
   }
+
+  const items = [...state.data.items, ...appended];
+  const total = state.data.total;
   if (items.length === 0) {
     return (
       <EmptyState
@@ -108,11 +89,20 @@ export function TaskDiscovery() {
   }
 
   const canLoadMore = total !== null && items.length < total;
+  // Owner ruling 2026-10-10: every card enters, bounded in total —
+  // the interval shrinks with the count so the stagger tail stays
+  // inside the 80ms the old three-child cap spent (§11 ~300ms).
+  const gridStyle = {
+    "--grid-stagger": `${entranceStaggerMs(items.length)}ms`,
+  } as CSSProperties;
   return (
     <>
-      <ul className="task-grid" aria-label="可领取的任务">
-        {items.map((card) => (
-          <li key={card.id}>
+      <ul className="task-grid" aria-label="可领取的任务" style={gridStyle}>
+        {items.map((card, index) => (
+          <li
+            key={card.id}
+            style={{ "--card-index": index } as CSSProperties}
+          >
             <TaskCard card={card} nowMs={now} headingLevel={2} />
           </li>
         ))}

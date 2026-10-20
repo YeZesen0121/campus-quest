@@ -1,29 +1,17 @@
 /**
  * CampusQuest task-claim e2e — Plan 09 Task 3 (task discovery + claim).
  *
- * STATUS: SPEC ONLY — NOT WIRED TO A RUNNER YET.
- *
- * Same guard pattern as `e2e/auth.spec.ts`: Playwright itself is installed
- * by Plan 10 (no `@playwright/test` dependency and no `test:e2e` script
- * yet). Until then this file stays invisible to the gates:
- * - `tsconfig.json` includes only `src/**` + `.next/**`, so `tsc` skips it;
- * - `eslint.config.mjs` lists `e2e/**` in globalIgnores for the same reason;
- * - `next build` never touches files outside `src/app`.
- * Once Plan 10 installs Playwright, remove the eslint ignore, add the
- * `test:e2e` script, and run with `CQ_E2E=1` — every test below is skipped
- * unless that flag is set, so importing the file can never depend on a
- * live backend during ordinary development.
+ * Gate discipline: every test is skipped unless CQ_E2E=1, so importing
+ * the file never depends on a live backend during ordinary development.
+ * ESLint covers e2e/**; tsc does not (tsconfig's include stops at src).
  *
  * Environment contract (defaults work against local dev servers):
  * - CQ_E2E=1               enable the suite (required);
  * - CQ_E2E_BASE_URL        frontend origin (default https://localhost:3000);
- * - CQ_E2E_LOGIN_URL       login page (default $CQ_E2E_BASE_URL/login);
  * - CQ_E2E_TASK_URL        task DETAIL deep link to a published task with
  *                          at least one AVAILABLE assignment (required for
- *                          the claim-flow tests; Plan 10's fixture prepares
- *                          it — until then those tests skip);
- * - CQ_E2E_EMPTY_TASK_URL  task detail deep link whose assignments are all
- *                          taken (optional; drives the conflict-copy test);
+ *                          the claim-flow tests; the world export provides
+ *                          it);
  * - CQ_E2E_STUDENT         pre-seeded student credentials
  *                          "student-number:password" (required with
  *                          CQ_E2E_TASK_URL; the fixture seeds the account).
@@ -38,10 +26,9 @@ import { ensureStudentLogin, expect, test } from "./fixtures";
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 const TASK_URL = process.env.CQ_E2E_TASK_URL;
-const EMPTY_TASK_URL = process.env.CQ_E2E_EMPTY_TASK_URL;
-const STUDENT = process.env.CQ_E2E_STUDENT; // "20240001:correct-horse"
+const STUDENT = process.env.CQ_E2E_STUDENT; // "username:password" (factories' DEFAULT_PASSWORD)
 
-test.skip(!E2E_ENABLED, "Playwright lands in Plan 10; set CQ_E2E=1 (and the CQ_E2E_* URLs) to run this suite.");
+test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* URLs) to run this suite.");
 
 /** Scoped to the claim-flow describe ONLY (r4 M2): the defect-#5 card
  * tests below need just CQ_E2E_STUDENT + the /tasks square, so a
@@ -139,16 +126,32 @@ test.describe("student task claim", () => {
     await expect(ownAssignment).toContainText(allocation.keyword);
   });
 
-  test("conflict shows typed copy and stays retry-friendly", async ({ page }) => {
-    test.skip(EMPTY_TASK_URL === undefined, "needs CQ_E2E_EMPTY_TASK_URL (all assignments taken)");
-    await page.goto(EMPTY_TASK_URL!);
+  test("a depleted task's detail says so up front — the CTA is disabled, not pressable-then-rejected (owner defect 2026-10-10)", async ({ page }) => {
+    // The standard world's deterministic depleted card (task_r, its
+    // one assignment claimed by the redeemer — the square badge test
+    // above pins the same task) doubles as the depleted DETAIL deep
+    // link, so this pin runs in every battery — no extra env stage.
+    const depletedCard = page
+      .locator(".task-card", { hasText: "已被领完" })
+      .first();
+    await page.goto(`${BASE_URL}/tasks`);
+    await expect(depletedCard).toBeVisible();
+    await depletedCard.locator(".task-card-title a").click();
+    await page.waitForURL(/\/tasks\/[0-9a-f-]{36}$/);
 
-    await page.getByRole("button", { name: "领取任务" }).click();
-
-    // Typed NO_ASSIGNMENT_AVAILABLE copy, not a generic crash.
-    await expect(page.getByRole("alert")).toContainText("当前没有可领取的任务单元");
-    // Retry-friendly: the button re-enables so another attempt is possible.
-    await expect(page.getByRole("button", { name: "领取任务" })).toBeEnabled();
+    // The page must never offer a pressable 领取任务 that the next
+    // press would reject: the server's availability number drives the
+    // CTA (disabled + explicit copy), and the random-allocation hint
+    // is gone — it would promise an allocation that cannot happen.
+    const cta = page.getByRole("button", { name: "名额已满" });
+    await expect(cta).toBeVisible();
+    await expect(cta).toBeDisabled();
+    await expect(page.getByRole("button", { name: "领取任务" })).toHaveCount(0);
+    await expect(page.getByText("随机分配一个任务单元")).toHaveCount(0);
+    await expect(page.getByText("该任务的所有名额都已被领取")).toBeVisible();
+    // The typed 409 copy stays the CONCURRENT-RACE fallback only
+    // (last slot leaving after render); its mapping is unit-covered
+    // (claim-errors.test.ts), not reachable from a disabled CTA.
   });
 });
 
@@ -243,5 +246,133 @@ test.describe("task card affordances (defect #5)", () => {
     expect(box.cx).toBeLessThan(11.5);
     expect(box.cy).toBeGreaterThan(8.5);
     expect(box.cy).toBeLessThan(11.5);
+  });
+
+  test("a fully-claimed task stays browsable and carries the depleted badge (defect #20)", async ({ page }) => {
+    // The world seeds task_r with ONE assignment already claimed by
+    // the redeemer — the square's deterministic depleted card. The
+    // document-family task F joins it once the §10.1 e2e (earlier in
+    // the battery) claims both its slots — so assert on the FIRST
+    // depleted card's shape, never an exact square-wide count.
+    const depleted = page.locator(".task-card", { hasText: "已被领完" }).first();
+    await expect(depleted).toBeVisible();
+    // The MARK is a real text badge (never a color-only cue), and the
+    // meta row keeps its numeric shape — the phrase rides the badge
+    // exactly once per card.
+    await expect(depleted.locator(".badge", { hasText: "已被领完" })).toBeVisible();
+    await expect(depleted.getByText("可领取 0 个")).toBeVisible();
+    // Browsable means the title link still navigates to the detail.
+    const href = await depleted.locator(".task-card-title a").getAttribute("href");
+    expect(href).toMatch(/^\/tasks\/[0-9a-f-]{36}$/);
+    // Batch ④ (2026-10-10): the recede treatment rides the same
+    // verdict — the marker attribute plus the NON-TEXT cues (dashed
+    // border, grayed neutral background; text contrast is untouched —
+    // axe's color-contrast gate rejects any opacity dim on the muted
+    // meta rows). The badge keeps full contrast.
+    await expect(depleted).toHaveAttribute("data-depleted", "true");
+    await expect(depleted).toHaveCSS("border-style", "dashed");
+    const { bg, metaOpacity } = await depleted.evaluate((el) => ({
+      bg: getComputedStyle(el).backgroundColor,
+      metaOpacity: getComputedStyle(el.querySelector(".task-card-meta")).opacity,
+    }));
+    // The grayed step toward surface-2 is present, and the copy keeps
+    // full opacity (the a11y contract of the treatment).
+    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(Number.parseFloat(metaOpacity)).toBe(1);
+  });
+
+  test("back-navigation renders the cached square without a skeleton pass (batch ①)", async ({ page }) => {
+    // The flicker root cause: the square island refetched from zero on
+    // every mount — a task-detail round trip re-entered through a
+    // skeleton flash. With the first page on the shared data cache, a
+    // remount inside the fresh window renders the cached snapshot
+    // with NO skeleton pass and NO refetch.
+    const taskRequests: number[] = [];
+    page.on("request", (req) => {
+      if (new URL(req.url()).pathname === "/api/v1/tasks") {
+        taskRequests.push(Date.now());
+      }
+    });
+
+    await page.goto(`${BASE_URL}/tasks`);
+    await expect(page.locator(".task-card").first()).toBeVisible();
+    const requestsAfterLoad = taskRequests.length;
+
+    // Watch for any skeleton recurrence during the round trip.
+    await page.evaluate(() => {
+      (window as unknown as { __sawSkeleton?: boolean }).__sawSkeleton = false;
+      const look = () => {
+        if (document.querySelector(".skeleton-cards") !== null) {
+          (window as unknown as { __sawSkeleton?: boolean }).__sawSkeleton = true;
+        }
+      };
+      look();
+      new MutationObserver(look).observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    });
+
+    await page.locator(".task-card-title a").first().click();
+    await page.waitForURL(/\/tasks\/[0-9a-f-]{36}/);
+    await page.goBack();
+    await expect(page.locator(".task-card").first()).toBeVisible();
+    // Cards are back WITHOUT a skeleton pass…
+    const sawSkeleton = await page.evaluate(
+      () => (window as unknown as { __sawSkeleton?: boolean }).__sawSkeleton,
+    );
+    expect(sawSkeleton).toBe(false);
+    // …and without a refetch (the fresh cache window serves read-only).
+    expect(taskRequests.length).toBe(requestsAfterLoad);
+  });
+
+  test("every card takes the orchestrated entrance, bounded in total (owner ruling 2026-10-10)", async ({ page }) => {
+    // Batch ②: the old choreography animated only the first three
+    // children — every later card (and every load-more append) popped
+    // in with no entrance. The ruling: ALL cards enter, and the grid
+    // stays fast at any size (§11's ~300ms ceiling).
+    const cards = page.locator(".task-grid > li");
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(4);
+    let previousDelay = -1;
+    for (let i = 0; i < count; i += 1) {
+      const { name, delay } = await cards.nth(i).evaluate((el) => ({
+        name: getComputedStyle(el).animationName,
+        delay: getComputedStyle(el).animationDelay,
+      }));
+      // EVERY card rises — not just the first three.
+      expect(name).toBe("cq-rise");
+      const ms = Number.parseFloat(delay);
+      // Delays increase monotonically (the stagger is ordered)…
+      expect(ms).toBeGreaterThanOrEqual(previousDelay);
+      previousDelay = ms;
+    }
+    // …and the whole grid settles inside the §11 budget: last delay +
+    // --motion-in 220ms ≤ ~320ms (small float slack).
+    expect(previousDelay + 220).toBeLessThanOrEqual(320);
+  });
+
+  test("cards in the same grid row share one height (batch ③)", async ({ page }) => {
+    // Owner ruling: rows are uniform — the card fills its stretched
+    // li (heights were content-ragged: 1-line vs 2-line titles, badge
+    // presence). Group by row via bounding-rect top and compare.
+    const rows = await page.evaluate(() => {
+      const byRow = new Map<number, number[]>();
+      for (const card of document.querySelectorAll<HTMLElement>(".task-card")) {
+        const rect = card.getBoundingClientRect();
+        const top = Math.round(rect.top);
+        const heights = byRow.get(top) ?? [];
+        heights.push(Math.round(rect.height));
+        byRow.set(top, heights);
+      }
+      return [...byRow.values()];
+    });
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of rows) {
+      const tallest = Math.max(...row);
+      for (const height of row) {
+        expect(Math.abs(height - tallest)).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });

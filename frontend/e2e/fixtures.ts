@@ -106,7 +106,11 @@ export async function loginThroughUi(
   account: SeededAccount,
 ): Promise<void> {
   await openLoginForm(page, `${BASE_URL}/login`);
-  await page.getByLabel("学号").fill(account.username);
+  // The unified page (spec 2026-10-19 §4): the password form is the
+  // weak link's expansion — the identifier field is THREE-state there
+  // (手机号、邮箱或学号), and the seeded student rides its 学号.
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  await page.getByLabel("账号", { exact: true }).fill(account.username);
   await page.getByLabel("密码").fill(account.password);
   const loginResponse = page.waitForResponse(
     (response) =>
@@ -244,6 +248,20 @@ type StorageCookie = {
   sameSite: "Strict" | "Lax" | "None";
 };
 
+/** Follow the approved student exit link and its separate confirmation page. */
+export async function logoutStudentThroughUi(page: Page): Promise<void> {
+  await page.getByRole("region", { name: "退出当前账号", exact: true })
+    .getByRole("link", { name: "退出登录", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "退出当前账号", level: 1, exact: true })).toBeVisible();
+  const revoked = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/v1/auth/logout" && response.request().method() === "POST");
+  const loginDocument = page.waitForURL(/\/login$/, { waitUntil: "load" });
+  await page.getByRole("button", { name: "确认退出登录", exact: true }).click();
+  expect((await revoked).status()).toBe(204);
+  await loginDocument;
+  if (studentSessionContext === page.context()) studentSessionContext = null;
+}
+
 /** Where this run's resumable student session lives. */
 function sessionStatePath(): string {
   return `/tmp/cq-e2e-state-${process.env.CQ_E2E_RUN ?? "adhoc"}.json`;
@@ -256,7 +274,60 @@ function sessionStatePath(): string {
 // uses — one TOTP implementation, one form-driving discipline.
 
 export const STAFF_LOGIN_URL =
-  process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/staff/login`;
+  // /staff/login now redirects to the unified page; go there directly.
+  process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/login`;
+
+export async function staffLogin(
+  page: Page,
+  credentials: string,
+  totpSecret: string,
+): Promise<void> {
+  const account = parseSeededAccount(credentials, "staff credentials");
+  await openLoginForm(page, STAFF_LOGIN_URL);
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  await page.getByLabel("账号", { exact: true }).fill(account.username);
+  await page.getByLabel("密码").fill(account.password);
+  await completeStaffPasswordLogin(page, totpSecret);
+}
+
+/** Only a rejected TOTP response permits retry; route latency never does. */
+export async function completeStaffPasswordLogin(page: Page, totpSecret: string): Promise<void> {
+  const passwordReply = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/v1/auth/login" && response.request().method() === "POST");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  const response = await passwordReply;
+  expect(response.status()).toBe(200);
+  const outcome = await response.json() as { status: string };
+  if (outcome.status === "authenticated") {
+    await waitForStaffLanding(page);
+    return;
+  }
+  expect(outcome.status).toBe("totp_required");
+  await completeStaffTotpLogin(page, totpSecret);
+}
+
+/** Authentication is acknowledged; wait for navigation without resubmission. */
+async function waitForStaffLanding(page: Page): Promise<void> {
+  await page.waitForURL(url => /^\/(?:admin|teacher)(?:\/|$)/.test(url.pathname));
+}
+
+export async function completeStaffTotpLogin(page: Page, totpSecret: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
+    const totpReply = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/v1/auth/challenge/totp" && response.request().method() === "POST");
+    await page.getByRole("button", { name: "完成登录" }).click();
+    const verdict = await totpReply;
+    if (verdict.ok()) {
+      await waitForStaffLanding(page);
+      return;
+    }
+    const error = await verdict.json() as { error?: { code?: string } };
+    expect(verdict.status(), "Only uniform TOTP rejection may retry").toBe(401);
+    expect(error.error?.code).toBe("AUTHENTICATION_REQUIRED");
+  }
+  throw new Error("Seeded staff TOTP rejected three current-code attempts");
+}
 
 /** RFC 4648 base32 (the TOTP secret alphabet) -> bytes. */
 function base32Decode(input: string): Buffer {
@@ -279,8 +350,10 @@ function base32Decode(input: string): Buffer {
   return Buffer.from(out);
 }
 
-/** The current RFC 6238 code for `secret` (SHA-1, 30s step, 6 digits). */
-function totpCode(secret: string, atMs: number = Date.now()): string {
+/** The current RFC 6238 code for `secret` (SHA-1, 30s step, 6 digits).
+ * Exported since V1.1: the email-code login spec's ADMIN leg computes
+ * the same code this module's staffLogin does — ONE implementation. */
+export function totpCode(secret: string, atMs: number = Date.now()): string {
   const counter = Math.floor(atMs / 30_000);
   const block = Buffer.alloc(8);
   block.writeBigUInt64BE(BigInt(counter));
@@ -298,39 +371,6 @@ function totpCode(secret: string, atMs: number = Date.now()): string {
  * A staff session on a context disqualifies that context from the
  * student resume chain — the marker clear keeps a later persist from
  * handing the NEXT test a staff session as "the student". */
-export async function staffLogin(
-  page: Page,
-  credentials: string,
-  totpSecret: string,
-): Promise<void> {
-  const [email, password] = credentials.split(":");
-  await openLoginForm(page, STAFF_LOGIN_URL);
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const submitted = page.waitForResponse(response =>
-      new URL(response.url()).pathname === '/api/v1/auth/staff/login' &&
-      response.request().method() === 'POST');
-    await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
-    await page.getByRole("button", { name: "登录", exact: true }).click();
-    const response = await submitted;
-    if (response.ok()) {
-      // Accepted credentials must never be submitted again merely because
-      // a cold route is still loading. Use the existing navigation budget.
-      await page.waitForURL(url => url.pathname !== '/staff/login');
-      return;
-    }
-    const body = await response.json().catch(() => null) as { error?: { code?: string } } | null;
-    // The seeded password is known. Only the server's uniform auth rejection
-    // can justify recomputing the rolling TOTP; transport/navigation failures
-    // and other business errors must surface instead of triggering a login.
-    if (response.status() !== 401 || body?.error?.code !== 'AUTHENTICATION_REQUIRED') {
-      throw new Error(`Seeded staff login rejected: HTTP${response.status()} (${body?.error?.code ?? 'unknown'})`);
-    }
-  }
-  throw new Error('Seeded staff login rejected all three current TOTP attempts');
-}
-
 /** Mentor login uses its dedicated form and clears any student resume state. */
 export async function mentorLogin(
   page: Page,
@@ -437,8 +477,26 @@ export function mintToken(userId: string): string {
 }
 
 /** Recover the current SMS OTP code for a phone (the real Redis hash). */
-export function recoverOtpCode(phoneE164: string): string {
-  return runWorldAction<{ code: string }>("otp-code", phoneE164).code;
+export function recoverOtpCode(phoneE164: string, purpose?: string): string {
+  return runWorldAction<{ code: string }>(
+    "otp-code",
+    phoneE164,
+    ...(purpose !== undefined ? [purpose] : []),
+  ).code;
+}
+
+/** Recover the current staff login email code for an address (V1.1
+ * Wave 1; world action `email-code` — the otp-code pattern). The FORM
+ * value passes as typed: the action strips/lowercases internally. */
+export function recoverEmailCode(email: string): string {
+  return runWorldAction<{ code: string }>("email-code", email).code;
+}
+
+/** Recover the student login mobile code (auth extension II §3; world
+ * action `mobile-code`, the email-code twin — login_mobile_challenges
+ * newest row + closed-space brute force). The address passes E.164. */
+export function recoverMobileCode(phoneE164: string): string {
+  return runWorldAction<{ code: string }>("mobile-code", phoneE164).code;
 }
 
 /** Read the complete target/ring bounds and the actual approved rounded hit shape. */

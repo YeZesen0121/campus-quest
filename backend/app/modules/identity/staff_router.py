@@ -15,22 +15,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.modules.audit.context import AuditContext
-from app.modules.identity.dependencies import require_active_staff_actor
+from app.modules.identity.dependencies import (
+    require_active_staff_actor,
+)
 from app.modules.identity.events import Actor
 from app.modules.identity.providers import (
     AppSettings,
     DbSession,
-    LimiterDep,
     get_staff_service,
 )
 from app.modules.identity.routing_common import (
-    _enforce_rate_limit,
-    _token_pair_response,
+    _issue_session_cookies,
 )
 from app.modules.identity.schemas import (
     StaffInvitationAcceptRequest,
-    StaffLoginRequest,
-    TokenPairResponse,
+    StaffSessionResponse,
     TotpConfirmRequest,
     TotpConfirmResponse,
     TotpSetupResponse,
@@ -46,29 +45,7 @@ _staff_setup_guard = require_active_staff_actor
 router = APIRouter()
 
 
-@router.post("/auth/staff/login", response_model=TokenPairResponse)
-async def staff_login(
-    body: StaffLoginRequest,
-    response: Response,
-    staff: Annotated[StaffService, Depends(get_staff_service)],
-    settings: AppSettings,
-    limiter: LimiterDep,
-    db: DbSession,
-) -> TokenPairResponse:
-    """Staff login: verified email + password + TOTP-or-recovery (§5.8).
-
-    A correct password without a confirmed TOTP raises the typed setup
-    error, rendered as 403 ``TOTP_SETUP_REQUIRED`` — the client's signal to
-    finish ``/staff/totp/*`` first.
-    """
-    await _enforce_rate_limit(limiter, "auth:staff-login", body.email.strip().lower())
-    tokens = await staff.authenticate_staff(
-        db, body.email, body.password, body.totp_code
-    )
-    return _token_pair_response(response, tokens, settings)
-
-
-@router.post("/auth/staff/invitations/accept", response_model=TokenPairResponse)
+@router.post("/auth/staff/invitations/accept", response_model=StaffSessionResponse)
 async def accept_staff_invitation(
     body: StaffInvitationAcceptRequest,
     response: Response,
@@ -76,13 +53,16 @@ async def accept_staff_invitation(
     staff: Annotated[StaffService, Depends(get_staff_service)],
     settings: AppSettings,
     db: DbSession,
-) -> TokenPairResponse:
-    """Trade the single-use invitation token for a pending staff session.
+) -> StaffSessionResponse:
+    """Trade the single-use invitation token for a staff session.
 
-    The returned tokens are a real session confined to finishing TOTP
-    setup (§5.8); management endpoints stay closed until 2FA is confirmed.
-    The accept writes its durable audit row inside the service's
-    transaction, carrying this request's correlation pair (§30).
+    V1.1 §2.3: a TEACHER acceptance is a COMPLETE login (optional
+    password, no TOTP onboarding — ``totp_required: false``); an ADMIN
+    acceptance is the V1 pending-TOTP onboarding session
+    (``totp_required: true``; management endpoints stay closed until 2FA
+    is confirmed). The accept writes its durable audit row inside the
+    service's transaction, carrying this request's correlation pair
+    (§30).
     """
     pending = await staff.accept_staff_invitation(
         db,
@@ -90,7 +70,12 @@ async def accept_staff_invitation(
         body.password,
         audit_context=AuditContext.from_request(request),
     )
-    return _token_pair_response(response, pending.tokens, settings)
+    csrf_token = _issue_session_cookies(response, pending.tokens, settings)
+    return StaffSessionResponse(
+        access_token=pending.tokens.access_token,
+        csrf_token=csrf_token,
+        totp_required=pending.must_setup_totp,
+    )
 
 
 @router.post("/staff/totp/begin", response_model=TotpSetupResponse)

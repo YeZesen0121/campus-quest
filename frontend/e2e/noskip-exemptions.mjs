@@ -63,13 +63,6 @@ export const NOSKIP_EXEMPTIONS = [
     reason: "Wave-probe instrumentation runs as its own battery stage.",
   },
   {
-    file: "task-claim.spec.ts",
-    title: "conflict shows typed copy",
-    gate: "CQ_E2E_EMPTY_TASK_URL",
-    reason:
-      "Needs a task whose assignments are all taken; the orchestrated world exports no such deep link.",
-  },
-  {
     file: "notifications.spec.ts",
     title: "owner mark-read (the §28 owner-only surface)",
     gate: "runtime seed state",
@@ -99,16 +92,23 @@ export const NOSKIP_EXEMPTIONS = [
     (title) => ({
       file: "visual-capture.spec.ts",
       title,
-      gate: "CQ_E2E_CAPTURE=1",
+      gate: "CQ_E2E_CAPTURE_DIR",
       reason:
         "Evidence-capture harness (screenshots for review), gated off the standard battery.",
     }),
   ),
   ...[
+    "admin-approvals",
+    "admin-dashboard",
+    "admin-invitations",
+    "admin-platforms",
+    "admin-user-detail",
     "admin-users",
     "admin-owner-qualifications",
     "admin-innovation-operations",
     "auth-login",
+    "auth-reset-password",
+    "not-found",
     "dev-gallery",
     "student-claim",
     "student-dashboard",
@@ -128,4 +128,15 @@ export const NOSKIP_EXEMPTIONS = [
     reason:
       "The pixel suite is its own battery/CI stage (`make visual-regression` + the CI visual job), skipped in the functional battery on purpose.",
   })),
+  {
+    // Wave 2a's detail shot: the deep link rides the world's
+    // CQ_E2E_ADMIN_DETAIL_PATH export (the backend session's wave2a
+    // PR adds it beside ADMIN_ID); before that lands the shot skips
+    // on the missing export — the same conditional discipline as the
+    // claim/task-detail deep links.
+    file: "accessibility.spec.ts",
+    title: "axe: admin-user-detail",
+    gate: "CQ_E2E_ADMIN_DETAIL_PATH",
+    reason: "World-export deep link (the seeded admin's own detail page).",
+  },
 ];

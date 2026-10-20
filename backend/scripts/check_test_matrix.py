@@ -11,7 +11,10 @@ Checks, per matrix file:
 1. every table row carries a status from the closed vocabulary
    (covered / gap / mismatch / process, Chinese markers included);
 2. covered rows cite at least one ``path::name`` (or a bare tests/
-   path) whose FILE part exists on disk relative to the backend root;
+   path) whose FILE part exists on disk — backend suites (``tests/``)
+   resolve against the backend root, frontend suites
+   (``frontend/e2e/`` or ``frontend/src/``) against the repository
+   root;
 3. gap rows reference a gap id (G-\\d+) that the file's gap section
    also lists;
 4. mismatch rows appear in the file's mismatch section.
@@ -31,21 +34,38 @@ import sys
 from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = _BACKEND_ROOT.parent
 
 _COVERED = ("已覆盖", "covered")
 _GAP = ("缺口", "gap")
 _MISMATCH = ("不匹配", "mismatch")
 _PROCESS = ("流程行", "process")
+# PR-3 (2026-10-19): a retired row's route family left the tree — its
+# citation names dead files BY DESIGN; the row points at the behavior's
+# new door instead, so it is citation-exempt like a process row.
+_RETIRED = ("已退役", "retired")
 
+# A covered row's citation: a backend suite path (tests/...) or a
+# frontend suite path (frontend/e2e/... or frontend/src/...), each with
+# an optional ::test suffix. The two roots differ (backend root vs
+# repository root), so _cite_file resolves the prefix.
 _TEST_CITE = re.compile(
-    r"`((?:tests/|frontend/(?:e2e/|src/__tests__/))[^`:]+)(?:::[\w.]+)?`"
+    r"`(tests/[^`:]+|frontend/(?:e2e|src)/[^`:]+|infra/integration/[^`:]+)(?:::[\w.]+)?`"
 )
 _GAP_ID = re.compile(r"G-\d+")
 
 
+def _cite_file(cited: str) -> Path:
+    """Resolve one cited suite path to its on-disk file: backend suites
+    hang off the backend root, frontend suites off the repository root."""
+    if cited.startswith("frontend/"):
+        return _REPO_ROOT / cited
+    return _BACKEND_ROOT / cited
+
+
 def _status_of(cells: list[str]) -> str | None:
     status = cells[-1].strip()
-    for marker in _COVERED + _GAP + _MISMATCH + _PROCESS:
+    for marker in _COVERED + _GAP + _MISMATCH + _PROCESS + _RETIRED:
         if marker in status:
             return (
                 "covered"
@@ -99,8 +119,17 @@ def check_matrix(path: Path) -> list[str]:
                 if not normalized.startswith("frontend/"):
                     normalized = cited_file
                 frontend = normalized.startswith("frontend/")
-                base = _BACKEND_ROOT.parent if frontend else _BACKEND_ROOT
-                allowed = base / ("frontend" if frontend else "tests")
+                integration = normalized.startswith("infra/integration/")
+                base = (
+                    _BACKEND_ROOT.parent if frontend or integration else _BACKEND_ROOT
+                )
+                allowed = base / (
+                    "frontend"
+                    if frontend
+                    else "infra/integration"
+                    if integration
+                    else "tests"
+                )
                 target = (base / normalized).resolve()
                 if not target.is_relative_to(allowed.resolve()) or not target.is_file():
                     violations.append(

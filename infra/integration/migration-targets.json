@@ -1,0 +1,551 @@
+{
+  "upstream_sha": "55cc27ed64ce8c5273648175a0f84775bf1ac718",
+  "upstream_head": "0032_invitation_revoked_at",
+  "r6_sha": "e20bf06f95b0dcfec6d24a8a9e4d8abbc0a61285",
+  "innovation_start": "ie_0025",
+  "innovation_r5": "ie_0037",
+  "innovation_r6": "ie_0042",
+  "final_head": "ie_0042",
+  "revision_map": {
+    "0025": "ie_0025",
+    "0026": "ie_0026",
+    "0027": "ie_0027",
+    "0028": "ie_0028",
+    "0029": "ie_0029",
+    "0030": "ie_0030",
+    "0031": "ie_0031",
+    "0032": "ie_0032",
+    "0033": "ie_0033",
+    "0034": "ie_0034",
+    "0035": "ie_0035",
+    "0036": "ie_0036",
+    "0037": "ie_0037",
+    "0038": "ie_0038",
+    "0039": "ie_0039",
+    "0040": "ie_0040",
+    "0041": "ie_0041",
+    "0042": "ie_0042"
+  },
+  "upstream_files": [
+    {
+      "path": "backend/alembic/versions/0001_foundation.py",
+      "revision": "0001",
+      "parent": null,
+      "sha256_lf": "7995b8059192f5139bc979ef76fb3aa6bda24eaca8bd31722e69c1121ba2ae8a",
+      "operations": {
+        "upgrade": "ad10c6404da3fc1b59d6c74cc5c037377fae9b0d4720ebcc7e187f86e8d902a7",
+        "downgrade": "954d556f81ba7c87334abc7375dcb078d6fd47d76b1356c8809a57e29c20b84d"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0002_identity.py",
+      "revision": "0002",
+      "parent": "0001",
+      "sha256_lf": "3bcd131087ec4ac5f3a7edbd57a70ddec200e82ee86eff3ebb540069b583de1a",
+      "operations": {
+        "upgrade": "a826d9edb400f5562de2787bb4f0de22163ecf945b25ff0d9d83816824e0df12",
+        "downgrade": "5c473dc06c2ed7b96d4d82c0d4389c6c1c3762e74016339af2cfed77f6609581"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0003_tasks_assignments.py",
+      "revision": "0003",
+      "parent": "0002",
+      "sha256_lf": "05cb35757fd5e6f899930a6494bf4ae7f8522e6fb399ff670662301f8f0644a8",
+      "operations": {
+        "upgrade": "6428095dc2f213fe67062ba917cd1c45107e785fb1e57dbaaf8991f4585f7701",
+        "downgrade": "a4cd6969f054126f736e2d8c490b198ba774f1b2527ad798636a1d8263430135"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0004_pin_grace_period.py",
+      "revision": "0004",
+      "parent": "0003",
+      "sha256_lf": "ad13f4c8004c83cbd97242e53b7c68828d25faf553589e0456a8faaf0932a135",
+      "operations": {
+        "upgrade": "1b623bc5e7af79b9e5eeeb074cb81e7f5b3146eb59c879d29f76f385ee74ad85",
+        "downgrade": "c329d82ec5af6bc3ccdedd7778c759b55b7a1a21ef8fe447cf972087527fc418"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0005_submissions.py",
+      "revision": "0005",
+      "parent": "0004",
+      "sha256_lf": "c2cd24f8bb9b9c56d5e245a5fa45ec3b29e10b32a92b85a156f87a5377882b5e",
+      "operations": {
+        "upgrade": "80a08bab06d791f2ae26f228cb259b3d22140a434734f5ded4f8ae3d2ed468f2",
+        "downgrade": "09d6b07f85535205256020279deafd551fd0a69ef162c223287d45fb0779e124"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0006_upload_intents.py",
+      "revision": "0006",
+      "parent": "0005",
+      "sha256_lf": "b29d46cfc77f029d6b3aaa6090b57d0ea88beb4d3823c1e3d24b73e1ed6b4b05",
+      "operations": {
+        "upgrade": "78f1f383160b81eec9042ccd90fa835bfd3e564c84024016cf3eda1c79d5dfa1",
+        "downgrade": "1d7a5fd7a9774a26d62b150ecdfec05f2c591e851a4d6e9fb53d7cc48ff488ec"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0007_points_rewards.py",
+      "revision": "0007",
+      "parent": "0006",
+      "sha256_lf": "7fd9e1ba522eef7d0cc0b6774e740a60646e634316aa096b8b2c14322458cefc",
+      "operations": {
+        "upgrade": "48d4dff1d21219677d95f214548cc31db4e42388acde60457231d5449e7ea9af",
+        "downgrade": "cb5fc6df702def468c92c5ffdc7e5e609dc93f62eb494d12b645e63907fcc899"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0008_honors.py",
+      "revision": "0008",
+      "parent": "0007",
+      "sha256_lf": "9c8ec6a94032f8f3e6d6d0186e65cb77899fc9d3df6acb596e245af001e5809f",
+      "operations": {
+        "upgrade": "79f2863531bdc5d0b256b0905f89398a155b81d50489d58bf7e9d7baf38d0d97",
+        "downgrade": "5c88314421d1eb3eada8f3fb64453f45282e597227dc8a8792985ef91d95cefc"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0009_community.py",
+      "revision": "0009",
+      "parent": "0012",
+      "sha256_lf": "e3f091610d14767406a17ce32f979288ca3584bd4fe669ac2f4a200f96b8f928",
+      "operations": {
+        "upgrade": "dd7db49dbc3c350019b587e6ac00ff0469c27d36f4c429c506ce3f4375fa3a9c",
+        "downgrade": "2e7adce07dcecd0f9884d2645908f4957dbc13005c4e810de41b01d4a162f127"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0010_notifications.py",
+      "revision": "0010",
+      "parent": "0009",
+      "sha256_lf": "bc0b4396452191aa1e9ab6813e650582c4135a77876d8ad264df32d795c54670",
+      "operations": {
+        "upgrade": "ceca3b5ebd8b07465e031674989edb3ba8ba3e1a3dc242c55a59cff15f928e69",
+        "downgrade": "c023d1fb130b1eafdca95ae0294efa0e60c079f2490a4ab178a151080aa49dd7"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0011_admin_reason_check.py",
+      "revision": "0011",
+      "parent": "0008",
+      "sha256_lf": "107e2de9e9015c4ade737a97b911086b53842ed11a373c0c74e4ed2d1598121b",
+      "operations": {
+        "upgrade": "7cf76aa5d5cc72c15c977c7b1786e6f97d9eebaf5fde1cf12b7a83214663487d",
+        "downgrade": "387536d6967bfda33c6e2e33ee713c0dc28416de26048462fe095b51957f71ab"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0012_wallet_overdraft.py",
+      "revision": "0012",
+      "parent": "0011",
+      "sha256_lf": "3c302f8ffbd464f8a445447f1906837d32ac6ed4a6bdfe9cd8bd846b8137225c",
+      "operations": {
+        "upgrade": "122c9f2e38aabc6996e89d88ea4d708cb093702d54ae535cf206ec5076001684",
+        "downgrade": "c6158cf77eb65667fd93af01f901ba8c6445f6c524c64aa005faca3f63a3134f"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0013_expiry_scan_index.py",
+      "revision": "0013",
+      "parent": "0010",
+      "sha256_lf": "9237648ea3f1f84fe526d8d49b2b8100df418d1da3851c8b38e3dcaee0c7e395",
+      "operations": {
+        "upgrade": "c73b16fc14fa85781e449478d6f63d74ff2c50cca1ce3e105088657a3613b70a",
+        "downgrade": "19192063b1a40fd2a710e2acddb908d23e64d1fdbe60821d61ad7393df0057fc"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0014_audit_log_rejection_reason.py",
+      "revision": "0014",
+      "parent": "0013",
+      "sha256_lf": "0de8c0386c3fb7d8c68a3f310723ad692f9c1347726290606209a37d82bf3c42",
+      "operations": {
+        "upgrade": "74cab935330260631e4e02521b95757965cd224499504a577617e6e7ba9ac301",
+        "downgrade": "82c8b28fc71e2013e10f2ecfa0baa274d3f372accf0682ce5613a3b74a90e08f"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0015_system_settings.py",
+      "revision": "0015",
+      "parent": "0014",
+      "sha256_lf": "e3ab170e8c127ea48403ce22c64bd4679277433eecd17c6e627bd2e2f64e63fa",
+      "operations": {
+        "upgrade": "136a185f647d4035e5b49bffa730171f845453705133458346d2a6948942c3e3",
+        "downgrade": "ef27b13c844c32cb076016af03c3bd7a9afd11512ff6ff4a42813bbcb5f9bd11"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0016_audit_log_snapshots.py",
+      "revision": "0016",
+      "parent": "0015",
+      "sha256_lf": "b43276dd3c7bd3213cd5cf700be475393c77415175cd300e54226e3d54a3713f",
+      "operations": {
+        "upgrade": "a8f3e2d63bc32b96336d49ef2b1a8b3b87ae383b5e0eb907c27d0e578f0354fb",
+        "downgrade": "76301ceee0e2857bf4378b6f6c89c3e60633642ff65842ca436a44b96a60e8b2"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0017_cleanup_deletion_claims.py",
+      "revision": "0017",
+      "parent": "0016",
+      "sha256_lf": "01b99a251f950300af30bb038247a65ed75b4960d7a7ef71d6f5db19f2eb05ad",
+      "operations": {
+        "upgrade": "d798a297d370680ce7849cde574b527257421d13bb663c8fa395f60f188fce1a",
+        "downgrade": "8a35d5e2b94fa553ae42f65d19bee051c7b332411cf8d7bad0397005ea62999c"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0018_cleanup_claim_leases.py",
+      "revision": "0018",
+      "parent": "0017",
+      "sha256_lf": "7efe854779d03271b53779a3626e4d5ca709c9a08cedbe40607873108086f6a1",
+      "operations": {
+        "upgrade": "d714df636e6dab18b48ddac1edd8bc0e32c539d70630229b12841742d62ed734",
+        "downgrade": "e93ecca1022f71ec249b369f2b38871784cfaec73a64902e5220d7e1ba9096d3"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0019_cleanup_claim_fencing.py",
+      "revision": "0019",
+      "parent": "0018",
+      "sha256_lf": "f33409a1e06319bca9d4a5420028b787a933d997cbe47b835c8cb046a5f91b72",
+      "operations": {
+        "upgrade": "199f1fbad06ea6d579447bd88c71723a1bc0c7ae8a1676c17eb4c441f165d887",
+        "downgrade": "af4559deccf5222d4456bd99c5999d95daafc2f83ddead8f0059fe29a59fe4b5"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0020_system_settings_version.py",
+      "revision": "0020",
+      "parent": "0019",
+      "sha256_lf": "96419ab99bd9d03a1cc85a7c7ff27712dba0063c443fd2fca0e0e944c2f3fe52",
+      "operations": {
+        "upgrade": "279a211a888f5284eb1c82161c7a87fe19575072ca9e9f8a33e171416adfa96a",
+        "downgrade": "39bd4c6b43488fa266a6237a914d0b86db0d897cd7a3a3099d69785a141b63d3"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0021_reward_review_grants.py",
+      "revision": "0021",
+      "parent": "0020",
+      "sha256_lf": "104e3f4296d42bc1ae068a7679a533d93f28f3b4e792216ee30004e293c5f03d",
+      "operations": {
+        "upgrade": "9041c0749588eca09dce60bc884a1c74bcfcc1cfd40ee4ba9ea55b5cf3e396e3",
+        "downgrade": "6d6a0b8d9ab8ca1e751286b7920e6dbfc01de4a15c75bb0ec2d3c0f7d41f13f2"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0022_refresh_grace_window.py",
+      "revision": "0022",
+      "parent": "0021",
+      "sha256_lf": "d684d7ce34434c69a7cf5a075aa7900730cac044b9441d255f73d320882874e5",
+      "operations": {
+        "upgrade": "3baa7791771623373ef3cfcaa93ce57eb31cdc5d6add5379ddb595651a8d2069",
+        "downgrade": "c8fc80340780e59978e1fe0055e218a2b88c5b977ce339acd8cd9a1a284cf598"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0023_refresh_replay_envelope.py",
+      "revision": "0023",
+      "parent": "0022",
+      "sha256_lf": "20f33e0d1fbfa6fcfad1d50c7567d11084952d97d9eb48a44eef3eb665b14a3b",
+      "operations": {
+        "upgrade": "88c6411121df496d6210c965f82792fc8b016c1ef4197c13026bb97f8ae61336",
+        "downgrade": "e9d666f24e3a5fca316bfd3a7368f830f51a522245c2bae7982db96d9b694b1d"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0024_user_avatar_object_key.py",
+      "revision": "0024",
+      "parent": "0023",
+      "sha256_lf": "4d082543625c26ed8f3d07beb16687c6cabd34f870b5301f47bcd2937218b671",
+      "operations": {
+        "upgrade": "aa105b1547397ff8ecc23e9a92c8899f627b943bcb322fb8f24bbdb06586ada0",
+        "downgrade": "e1c393d5923a82f02486503ded0e3548b6c313ae91b302bb977645482464f262"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0025_document_file_types.py",
+      "revision": "0025",
+      "parent": "0024",
+      "sha256_lf": "891294a9e5653fd5161f0e1979d38a5fbddf51a08bb773de87088bc2625a7b3f",
+      "operations": {
+        "upgrade": "c218b38cd3890f23b315b26121b8dce2ce190513ed4ab373c3c9d1ab3c3f4940",
+        "downgrade": "164adc2fad877ae49dfd54b6441f84004df644416f985c5d3dd4094c281fed4f"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0026_submission_document_types.py",
+      "revision": "0026",
+      "parent": "0025",
+      "sha256_lf": "dcc1ef9296acd1f2e9e9f4be51883d7d47862becec0fd63bdc24fa558aa68125",
+      "operations": {
+        "upgrade": "00294c8f6adaedee859491d276ed49fa738c973177a3c35dfad5e7cd0ff9f3bc",
+        "downgrade": "951b03e5078f67b14981de6062b32f7e9a2fdbafbc19e393e8b84aaeaf8f32b7"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0027_claim_schema_version_nullable.py",
+      "revision": "0027",
+      "parent": "0026",
+      "sha256_lf": "3fdf1a3ea8d81511a0e6b4467ef201a93b09f866d59acc92241db2a645800c71",
+      "operations": {
+        "upgrade": "9d30b30b99ce533cb60b12e03d3e2b50ec0a5e0af3064e5750264b046530b180",
+        "downgrade": "d82a244269b411483157cf4062f1b210b10102e55a4849786fd91dee0872926d"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0028_staff_login_convenience.py",
+      "revision": "0028",
+      "parent": "0027",
+      "sha256_lf": "36f10dc05ced74742d7a3de08a62b16cfa8dd5542e7b6620239d1c5dd8010f16",
+      "operations": {
+        "upgrade": "5288d55cba1b7e0c636dc163f310dee0b84d24d265b012a77c32035506c7fda1",
+        "downgrade": "ff3efc587755d93857c0a6d6a01b71a01b7a11e3f9b58ab764191e5e73a92179"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0029_platform_registry.py",
+      "revision": "0029",
+      "parent": "0028",
+      "sha256_lf": "003079b39ee101dd9a3f25824f23c31a99c34abdab9d40fe003c0f05e3c7542c",
+      "operations": {
+        "upgrade": "d7b3ab016ac2b951ce6a4a572a7f965739c8130b1d7ea8a62e973486695a9208",
+        "downgrade": "f57c47a4dde2ca909221f168f28ec8a5ccfda463974efa92a26f97a485a0e630"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0030_registration_approval_mobile_login.py",
+      "revision": "0030",
+      "parent": "0029",
+      "sha256_lf": "4686fa5c800d0a9d590e5deac31da4bfd1e998c248699d515986f45adf030f79",
+      "operations": {
+        "upgrade": "e8a9c3c9d073b86fb2bec733ded09d5ff40f41b4ba6dc4bcf8b52877252694b3",
+        "downgrade": "f12289b9acf43d67de0d4a1a27c325c5adae0fbfd62dae6641f08ccd9b5fc5f5"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0031_last_admin_trigger.py",
+      "revision": "0031_last_admin_trigger",
+      "parent": "0030",
+      "sha256_lf": "4c00414f26576dd9035dbf82abef7dc90caac7116db7b52e1987c62373213416",
+      "operations": {
+        "upgrade": "5494ceb17228ff64282ac6a6e981b160e7ef3f60488fed6b8c2a83bc4b83ecea",
+        "downgrade": "afc4a23446ee01dfa3e8b1085231cace4e88963a24d2a6fba87fb0abca0dec87"
+      }
+    },
+    {
+      "path": "backend/alembic/versions/0032_invitation_revoked_at.py",
+      "revision": "0032_invitation_revoked_at",
+      "parent": "0031_last_admin_trigger",
+      "sha256_lf": "177856121f7cd2043fcb8949550abc8daadfe650b8fdb18be5c56fa086d31f2e",
+      "operations": {
+        "upgrade": "74c243026dbb38a44f621f09e0e48371cfed23274d37856db2503d1d7d658849",
+        "downgrade": "81261de6a5c325532559293a897c65335b6aa5b1e6c5625594f5082a5ac06af3"
+      }
+    }
+  ],
+  "innovation_operations": {
+    "ie_0025": {
+      "source_revision": "0025",
+      "source_path": "backend/alembic/versions/0025_innovation_project_drafts.py",
+      "target_path": "backend/alembic/versions/ie_0025_innovation_project_drafts.py",
+      "source_sha256_lf": "ef9141a654f5cb2abfea32c59a423f2918fd9fedeee2926adfadf45cd45b30c3",
+      "operations": {
+        "upgrade": "283fb083c612df0a780c3b1e0f66d44673a6cd6748de9384711bb3457e838536",
+        "downgrade": "2f3754b1c0fb42a3b3d7e7c835b8228d1767df74c11248075a9b777112a79e58"
+      },
+      "module_contract_sha256": "05eabf6d8f19d6a7835af5b30e23175c4514ae09b472cbf383094717c6e72c2e"
+    },
+    "ie_0026": {
+      "source_revision": "0026",
+      "source_path": "backend/alembic/versions/0026_innovation_owner_profiles.py",
+      "target_path": "backend/alembic/versions/ie_0026_innovation_owner_profiles.py",
+      "source_sha256_lf": "e7a124f212c80a30acc0951a1674d136bd5a313359068c3dace2c2a590334ee4",
+      "operations": {
+        "upgrade": "bcb09328bceaa3830f45628d8809a6ed64b39598ed732dca90925b1e3bf249b7",
+        "downgrade": "9267984ff5f919a2a0d6648438618360bbddd7588ddc6225a408fde5bf234c93"
+      },
+      "module_contract_sha256": "aeccc90f860cc72339e8b657c25baac8ed227134dfd21bbf4adc0b3a3e1bf129"
+    },
+    "ie_0027": {
+      "source_revision": "0027",
+      "source_path": "backend/alembic/versions/0027_innovation_operations_grants.py",
+      "target_path": "backend/alembic/versions/ie_0027_innovation_operations_grants.py",
+      "source_sha256_lf": "8fbe0a1bff9254747c58162701fe75a1bb5db916509e537610592266fc7003ec",
+      "operations": {
+        "upgrade": "9a480929a2c7106dcb23ac6d50e21fdb295cb7debbb560edc3955de9a98fdb18",
+        "downgrade": "c35d62f549d8721a43c904933771e827290ff97cdde7018c7d9210dfcb6674d5"
+      },
+      "module_contract_sha256": "da0843aefb3bdada9cba663f8492b00f74663835f5a42f1ef949fbc3145c4a47"
+    },
+    "ie_0028": {
+      "source_revision": "0028",
+      "source_path": "backend/alembic/versions/0028_innovation_achievement_drafts.py",
+      "target_path": "backend/alembic/versions/ie_0028_innovation_achievement_drafts.py",
+      "source_sha256_lf": "3c7ea70615a263c15e7dd3141d340e3b92b2e6b15dba121ca84d097d16599458",
+      "operations": {
+        "upgrade": "6e0ad3770bb0e4266f5ddb5866300c07cfe63f76c8edefec40d53aabc57c8b0f",
+        "downgrade": "b608101633a58cdc641dbcd12c4e2c7964872045b772fa1565e905fdda683594"
+      },
+      "module_contract_sha256": "2707520a4bbe42c0deb1046713c1b5572ba6aec6438544d100033260d4d0c34d"
+    },
+    "ie_0029": {
+      "source_revision": "0029",
+      "source_path": "backend/alembic/versions/0029_innovation_owner_qualification.py",
+      "target_path": "backend/alembic/versions/ie_0029_innovation_owner_qualification.py",
+      "source_sha256_lf": "c1b1c4843670ffb1e3a775acde5fbc97b158079c6a2700b3d795eefd05cd307c",
+      "operations": {
+        "upgrade": "1180b523b1816b69dc4e88633c00a103622e053bf62c5453868dbe61c6cb0e5a",
+        "downgrade": "990325d5e148a8a877789da5efe70250f7be5f42473c6efefecf23c67d22f98e"
+      },
+      "module_contract_sha256": "b647f930ecbaa8e84b3969a8dc7749d2000cc15c88d7e613e3c923ae092680e8"
+    },
+    "ie_0030": {
+      "source_revision": "0030",
+      "source_path": "backend/alembic/versions/0030_innovation_evidence.py",
+      "target_path": "backend/alembic/versions/ie_0030_innovation_evidence.py",
+      "source_sha256_lf": "e7f6ecee7d645c84090fa73e1ec389c87c5608dd2fa3f68b21ccf47e36ea2ec2",
+      "operations": {
+        "upgrade": "735a4faa020b4e6290db1b62301bda1473351b11060ef92166eb3751032a765e",
+        "downgrade": "0c36576639a87081d490cd1af36dbe54d72acbf7b874876f07312c552bb74b9a"
+      },
+      "module_contract_sha256": "2c951ffed1f70ec987646f10d6ff69edfa58c31761d2dbb8c9470ce717665b8b"
+    },
+    "ie_0031": {
+      "source_revision": "0031",
+      "source_path": "backend/alembic/versions/0031_innovation_achievement_review.py",
+      "target_path": "backend/alembic/versions/ie_0031_innovation_achievement_review.py",
+      "source_sha256_lf": "39025d4156721ac549dc507ec7167191b5a15e7f110f3aff141f713708ec424a",
+      "operations": {
+        "upgrade": "d8b3f1b15be3d11b90b969d45f8234d7dd72028c45e6b7f85a3abf866cbc6ff4",
+        "downgrade": "db35cf583c106e570620ef8524d1c049d1d294b206dead8066d289baec64bab6"
+      },
+      "module_contract_sha256": "04018836e580976483f1bce7000668088b800b68be52533976e539c8fe7eb2fc"
+    },
+    "ie_0032": {
+      "source_revision": "0032",
+      "source_path": "backend/alembic/versions/0032_innovation_review_notifications.py",
+      "target_path": "backend/alembic/versions/ie_0032_innovation_review_notifications.py",
+      "source_sha256_lf": "bf22f0be724e10986fad44dd2d7679ab379455ffb4ab61c48fecbba6b8fe38ba",
+      "operations": {
+        "upgrade": "7349908a2ec4c2f1b5a84f8cc65861e38ccc32f99a56d07e9f92cc1914dc8272",
+        "downgrade": "d0fd141eda5ad858cc016f21c3521baa3dfbd02d0469ac44c6fc3c9fc7b80747"
+      },
+      "module_contract_sha256": "7224e863556d6f38a2b2215941deb6fb7a53f99d8f854c7c44cb3127011ebee5"
+    },
+    "ie_0033": {
+      "source_revision": "0033",
+      "source_path": "backend/alembic/versions/0033_innovation_recruitments.py",
+      "target_path": "backend/alembic/versions/ie_0033_innovation_recruitments.py",
+      "source_sha256_lf": "d2878bf5d9c4fe21aa824cb1d14c9678626c1e22c147777f0607928b0be00455",
+      "operations": {
+        "upgrade": "449690abaa11ce568a47fc57c6ad461761e13cd75ca5c2c654dce98ee3a5dab1",
+        "downgrade": "41794f31d7494343939a497137d1bf924d701ffef90d31e8819ec954e18b9dc3"
+      },
+      "module_contract_sha256": "54ec9b2ca6235bf8b277c923fa110d406749f758644d2107efbe3455c3a72238"
+    },
+    "ie_0034": {
+      "source_revision": "0034",
+      "source_path": "backend/alembic/versions/0034_innovation_recruitment_notifications.py",
+      "target_path": "backend/alembic/versions/ie_0034_innovation_recruitment_notifications.py",
+      "source_sha256_lf": "f347323c1f4966ade1a5d2e4d1feaa1bc46dc3695adb2d2189084e5539a76b85",
+      "operations": {
+        "upgrade": "7ab4b8ba6778b26d13b4a06a64336f0c79da2d17a91fd2ec87a88d311523fb68",
+        "downgrade": "a99ca053f7f8cc5baadae7ef06a769b7d8cc83cf160db4b42a9dda0900b41bcf"
+      },
+      "module_contract_sha256": "bbeea19cb9e209e732bbff0daa0aad4c0eb04088e65421150b4f2568ccb26d46"
+    },
+    "ie_0035": {
+      "source_revision": "0035",
+      "source_path": "backend/alembic/versions/0035_innovation_talents.py",
+      "target_path": "backend/alembic/versions/ie_0035_innovation_talents.py",
+      "source_sha256_lf": "018b05b14c0aa51a018c87f6b56162d4d47cfd6fa313b254d4c0cfd1ef5da67b",
+      "operations": {
+        "upgrade": "1ceb290c202f4c923f3718e2f907bb358f1b05337596e600bb7c14b4a4d47e84",
+        "downgrade": "e83cb05cb1fdc5c7685b25f9e55ffbd343987e23fb5074cbd4b3ebb04310ca6e"
+      },
+      "module_contract_sha256": "d81046ca4776b0303a7fd66100d24fc6daa8266dd93dd03b83c7805343d4390f"
+    },
+    "ie_0036": {
+      "source_revision": "0036",
+      "source_path": "backend/alembic/versions/0036_talent_file_upload_contract.py",
+      "target_path": "backend/alembic/versions/ie_0036_talent_file_upload_contract.py",
+      "source_sha256_lf": "a21765195971dd10e559630aace6d4da2f480832908ae8cf10b3249879f3ed63",
+      "operations": {
+        "upgrade": "ccca4df0cb4e5fb99ac935d16c85222f25dd1fa62e90079e0e601c6b6eed4722",
+        "downgrade": "c5a6dbe2e0a8a515a68ea245d085e670f393d262a41e53f5f93d63b01d0738e5"
+      },
+      "module_contract_sha256": "c4fdb3cdcbf2b5bd6b9f7f6c102a36c98420f32d28ee0a930f304138c561810b"
+    },
+    "ie_0037": {
+      "source_revision": "0037",
+      "source_path": "backend/alembic/versions/0037_innovation_mentors.py",
+      "target_path": "backend/alembic/versions/ie_0037_innovation_mentors.py",
+      "source_sha256_lf": "23ec1f178bcb705961e52c2140deb6f5ad266b5c21e12e3e089a206e242d26fa",
+      "operations": {
+        "upgrade": "855aae766e2fa6d133e3287294f21a6ef2455d68c704bb47f6ddcfc01c1cff00",
+        "downgrade": "f57496f84bd35769689c92a1d81ada14107a35f8e7878c0f412410275815c2fe"
+      },
+      "module_contract_sha256": "53d7e7b10eab653433cf59f80fabb964187ea1d965ac18c5cbc13de41ca0e2da"
+    },
+    "ie_0038": {
+      "source_revision": "0038",
+      "source_path": "backend/alembic/versions/0038_innovation_collaboration.py",
+      "target_path": "backend/alembic/versions/ie_0038_innovation_collaboration.py",
+      "source_sha256_lf": "c9d1434b3f5850e7735240c164743d80b0c7b0a844e41543320f293f751838ee",
+      "operations": {
+        "upgrade": "cc64a30c096f8662148ecb770dd847668a56473669ecfbb8d320c2e268579b0c",
+        "downgrade": "824d48451d5d0fafe13a1b880383aa66bb2de3bb752a8116e8d4115d3f5b2664"
+      },
+      "module_contract_sha256": "3a26d7ee9cdde3067579dbaee445bd6ac3f1b042db651ed21f779609095289e3"
+    },
+    "ie_0039": {
+      "source_revision": "0039",
+      "source_path": "backend/alembic/versions/0039_project_creation_identity.py",
+      "target_path": "backend/alembic/versions/ie_0039_project_creation_identity.py",
+      "source_sha256_lf": "688fced0c87e2fd490bc38787906967746a6a79cf824fb2b24ce83ccf9f350d2",
+      "operations": {
+        "upgrade": "55b1ce2fedbe822c01925a871b0acf43a2a434943d9f7d78b7f7ba776cd11f59",
+        "downgrade": "0f64c28c07e06db94d1adec397e536ec81cbf9c31d40ae1c9c336842ed836c93"
+      },
+      "module_contract_sha256": "c2cca3329c5394294ae2ecc44ab09286fabd14decaf1eb7512ba730fa383e491"
+    },
+    "ie_0040": {
+      "source_revision": "0040",
+      "source_path": "backend/alembic/versions/0040_workspace_command_receipts.py",
+      "target_path": "backend/alembic/versions/ie_0040_workspace_command_receipts.py",
+      "source_sha256_lf": "c857ac484787afaba64c8e555b6d0ecd4f9ac21f0414a24cdbb1ec8870db99cb",
+      "operations": {
+        "upgrade": "c330d0b05bfff6a50d01d398376095df2d01a632deefc9de89a6790d32fbb5ee",
+        "downgrade": "4d4e99313d834b1ebb2b55fb436579ad805b1d417c6b15a0012dadfdaaca0a00"
+      },
+      "module_contract_sha256": "92d0a03a145346de7a6326b577c43341b204b21f9b6402d5f5482299c7d092f8"
+    },
+    "ie_0041": {
+      "source_revision": "0041",
+      "source_path": "backend/alembic/versions/0041_project_transfer.py",
+      "target_path": "backend/alembic/versions/ie_0041_project_transfer.py",
+      "source_sha256_lf": "500142dacaf2be2961e3de78fde9274b9fabc454d5f2148e43d9443f649ec8b8",
+      "operations": {
+        "upgrade": "83f0357bed942f1588486fd6122349abce6bc61dde16a9aa00106d3331f9cd3f",
+        "downgrade": "e39cc542eca550ab9da6bab15b476f47f077f2443fd44eca1b475519a0fa782d"
+      },
+      "module_contract_sha256": "330d745347ba35dbec06b83e2b3ea35fa5f048f2892f7ee07f34fe65e12ca9db"
+    },
+    "ie_0042": {
+      "source_revision": "0042",
+      "source_path": "backend/alembic/versions/0042_project_lifecycle.py",
+      "target_path": "backend/alembic/versions/ie_0042_project_lifecycle.py",
+      "source_sha256_lf": "d32421f24a7830f9eb3c493a9b662c80501d7a23fe7f5a7a4893f164a4b966e0",
+      "operations": {
+        "upgrade": "eb1e12f63b707b9483a0724d64725794a524d7190da06a701e037851c58fe539",
+        "downgrade": "6e90ea8123bb0c351e4d81598951544bbfe196a39f1fae94c46d05b70f6a3c7c"
+      },
+      "module_contract_sha256": "3b5229b63a709dfaddcb4dc7354dd92c696563f5168b733f698208b93553053b"
+    }
+  }
+}

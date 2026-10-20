@@ -124,13 +124,14 @@ async def test_fixed_labels_byte_identical_across_runs(
     # …produce byte-identical visible labels.
     assert labels[0] == labels[1]
 
-    # The frozen strings are the documented fixed-marker ones. All five
+    # The frozen strings are the documented fixed-marker ones. All six
     # seeded task titles are equal (the factories slice the run marker's
     # first 6 chars, so the a/b/c/d/r suffixes never reach the title) —
-    # the fixed mode inherits that shape unchanged. Five = A/B (claimed
+    # the fixed mode inherits that shape unchanged. Six = A/B (claimed
     # deep links), C (submission's UI-claim pool), D (task-claim's
-    # exclusive pool, flake B), R (review).
-    assert labels[0]["task_titles"] == [f"端到端数据采集任务{FIXED[:6]}"] * 5
+    # exclusive pool, flake B), DOC (the §10.1 document showcase),
+    # R (review).
+    assert labels[0]["task_titles"] == [f"端到端数据采集任务{FIXED[:6]}"] * 6
     assert labels[0]["reward_name"] == f"端到端奖励卡{FIXED[:6]}"
     assert f"端到端同学{FIXED[:4]}" in labels[0]["nicknames"]
     assert f"停用目标同学{FIXED[:4]}" in labels[0]["nicknames"]
@@ -151,7 +152,7 @@ async def test_default_mode_still_embeds_run_id(
         labels = await _world_labels(db_factory, world)
         # Default behavior is byte-identical to the pre-flag world: every
         # label family carries THIS run's marker…
-        assert labels["task_titles"] == [f"端到端数据采集任务{run[:6]}"] * 5
+        assert labels["task_titles"] == [f"端到端数据采集任务{run[:6]}"] * 6
         assert labels["reward_name"] == f"端到端奖励卡{run[:6]}"
         assert f"端到端同学{run[:4]}" in labels["nicknames"]
         assert f"e2e-teacher-{run}@school.edu" in labels["usernames"]
@@ -195,3 +196,17 @@ async def test_mentor_world_seeds_only_a_marked_identity_and_cleans_it(
         await browser_world._clean(world["world_file"])
     async with db_factory() as db:
         assert await db.get(User, mentor_id) is None
+
+
+async def test_admin_detail_path_rides_the_env_contract() -> None:
+    """Wave 2a (frontend request 2026-10-19): the env contract carries
+    the composed admin-detail deep link beside the raw id, so the
+    admin-surface specs and dev tooling point at the panorama page
+    without re-deriving the id→path rule on the Node side."""
+    world = await browser_world._seed()
+    try:
+        assert world["env"]["CQ_E2E_ADMIN_DETAIL_PATH"] == (
+            f"/admin/users/{world['env']['CQ_E2E_ADMIN_ID']}"
+        )
+    finally:
+        await browser_world._clean(world["world_file"])

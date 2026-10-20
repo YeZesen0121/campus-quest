@@ -88,6 +88,7 @@ import {
   TEMPLATE_EVENT_TYPE_OPTIONS,
 } from "./adminView";
 import { Button } from "@/components/ui/button";
+import { COPY_GENERIC_FAIL } from "@/lib/errors";
 
 export function SystemAdmin() {
   return (
@@ -325,7 +326,7 @@ function SettingKeyEditor({
 
   const next = draft();
   const errorView =
-    error !== null ? describeAdminMutationError(error, "保存失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <div className="field">
@@ -483,7 +484,7 @@ function ConfirmSettingDialog({
       <DialogContent
         aria-labelledby="setting-confirm-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }} className="campus-admin-dialog" {...dialogFocus}
       >
@@ -587,7 +588,7 @@ function TemplatesSection() {
 
   const createErrorView =
     createError !== null
-      ? describeAdminMutationError(createError, "创建失败，请稍后重试")
+      ? describeAdminMutationError(createError, COPY_GENERIC_FAIL)
       : null;
 
   return (
@@ -596,9 +597,9 @@ function TemplatesSection() {
         <h2 className="section-title">通知模板</h2>
       </div>
       <p className="field-hint">
-        创建模板，或从审计日志取得模板 ID 后管理；下表仅展示本次会话处理过的模板。
-        停用后恢复后续通知的默认文案，不会停止该渠道发送。
-        更新会整段替换标题与正文，版本 +1；不安全语法与未知占位符会被拒绝。
+        新建的模板会直接出现在下方继续编辑；历史模板可在审计日志查到编号后，用「按编号管理」调出。
+        保存会整体替换内容并自动升版本；内容不合规时保存会被拒绝并说明原因。
+        停用后恢复该渠道通知的默认文案，不会停止发送。
       </p>
       <div className="workbench-columns cq-divided-sections">
         <form className="panel moderation-panel" onSubmit={onCreate} noValidate>
@@ -770,7 +771,7 @@ function TemplateByIdPanel({
   }
 
   const errorView =
-    error !== null ? describeAdminMutationError(error, "操作失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <div className="panel moderation-panel">
@@ -936,7 +937,7 @@ function FailuresSection() {
           retryLabel="重新加载"
         />
       ) : items.length === 0 ? (
-        <EmptyState title="没有失败的投递" hint="投递失败的通知会出现在这里供排查" />
+        <EmptyState title="没有失败的投递" hint="失败投递会集中在这里供排查" />
       ) : (
         <>
           <div className="table-scroll">
@@ -1045,14 +1046,14 @@ function RepairForm({ kind }: { kind: "release-assignment" | "force-fail" }) {
     setOutcome(null);
     try {
       if (isRelease) {
-        const result = await releaseOccupiedAssignment(targetId.trim(), reason.trim());
+        await releaseOccupiedAssignment(targetId.trim(), reason.trim());
         setOutcome(
-          `已释放任务单元 ${result.id}（任务 ${result.task_id}），当前可用状态：${result.availability_status}。`,
+          `任务单元已释放，可再次被领取`,
         );
       } else {
         const result = await forceFailDelivery(targetId.trim(), reason.trim());
         setOutcome(
-          `投递 ${result.id} 已标记失败（状态 ${result.status}，尝试 ${result.attempts} 次）。`,
+          `投递已标记失败（共尝试 ${result.attempts} 次）`,
         );
       }
       setTargetId("");
@@ -1065,15 +1066,15 @@ function RepairForm({ kind }: { kind: "release-assignment" | "force-fail" }) {
   }
 
   const errorView =
-    error !== null ? describeAdminMutationError(error, "修复失败，请稍后重试") : null;
+    error !== null ? describeAdminMutationError(error, COPY_GENERIC_FAIL) : null;
 
   return (
     <form className="panel moderation-panel" onSubmit={onSubmit} noValidate>
       <h3 className="section-title">{isRelease ? "释放占用中的任务单元" : "强制失败卡住的投递"}</h3>
       <p className="field-hint">
         {isRelease
-          ? "将悬空的 OCCUPIED 任务单元放回 AVAILABLE，保留领取历史；正常占用不可释放。"
-          : "仅将卡在 SENDING 的投递标为 FAILED，保留消息与历史；其他状态不可操作。"}
+          ? "把悬空占用的任务单元放回可领取。仅处理已悬空的占用；正常占用会被拒绝。"
+          : "把卡住的通知投递标记为失败（消息与历史不变）。仅处理发送中的投递。"}
       </p>
       <div className="field">
         <label className="field-label" htmlFor={`repair-id-${kind}`}>

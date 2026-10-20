@@ -9,6 +9,15 @@
  *
  * Pages inside stay Server Components; this file is the ONLY client
  * boundary of the shell (patterns §2: isolate the interactive child).
+ *
+ * Chrome verdict (backlog UX: the refresh shell jump): while the
+ * session resolves, the pre-resolve frames (loading, error) render the
+ * workspace geometry OPTIMISTICALLY when the server HTML carried
+ * session evidence (`shellChromeFor` + the layout's cookie probe), so
+ * a reload never repaints a different shell for the ~0.6s resolve
+ * window. The user-data slots (rail account, topbar actions) render
+ * as placeholders; the notification bell does NOT mount until the
+ * session answers (no speculative polling).
  */
 import Link from "next/link";
 import { AuthFrame } from "@/features/auth/AuthFrame";
@@ -20,7 +29,13 @@ import { SectionError } from "@/components/ui/sectionStates";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { WorkspaceContext } from "@/components/shell/WorkspaceContext";
 import { ApprovedNavIcon, WorkspaceSidebar, navItemActive, type SideNavItem } from "@/components/shell/WorkspaceSidebar";
+import { BellIcon } from "@/components/shell/navIcons";
+import type { MeProfile } from "@/features/auth/session";
 import { useSession } from "@/features/auth/session";
+import { NicknameNudge } from "@/features/auth/NicknameNudge";
+import { ApprovalPendingBanner } from "@/features/auth/ApprovalPendingBanner";
+import { shellChromeFor, type ShellHint } from "@/features/auth/shellChrome";
+import { StaffRouteRedirect } from "@/features/auth/StaffRouteRedirect";
 import { studentWorkspaceGate } from "@/features/auth/workspace";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { StaffMenuSheet } from "@/components/shell/StaffMenuSheet";
@@ -47,7 +62,9 @@ const SIDEBAR_SECONDARY = [
 ] as const;
 
 /* The medium menu keeps every destination between sidebar and bottom. */
-const MEDIUM_NAV = [...SIDEBAR_PRIMARY, ...SIDEBAR_SECONDARY];
+const SIDEBAR_GROUPS = [{ label: "主导航", items: SIDEBAR_PRIMARY }, { label: "个人", items: SIDEBAR_SECONDARY }];
+
+const MEDIUM_NAV: readonly SideNavItem[] = [...SIDEBAR_PRIMARY, ...SIDEBAR_SECONDARY];
 
 const BOTTOM_NAV = [
   { href: "/", label: "首页", icon: <ApprovedNavIcon name="home" /> },
@@ -65,80 +82,210 @@ function nicknameInitial(nickname: string): string {
   return first.done ? "同" : first.value.segment;
 }
 
-export function StudentShell({ children }: { children: ReactNode }) {
+/** The medium band's horizontal top nav — shared by the authenticated
+ * shell and the optimistic pre-resolve frame so the two cannot drift. */
+function MediumTopNav({ pathname }: { pathname: string }) {
+  return (
+    <nav className="app-nav" aria-label="主导航">
+      {MEDIUM_NAV.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={navItemActive(pathname, item.href, item.exclude) ? "page" : undefined}
+        >
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** The rail footer's account slot while the session resolves: the
+ * real avatar + nickname are user data, so the optimistic frame holds
+ * their geometry with rail-toned placeholders instead. */
+function RailAccountPlaceholder() {
+  return (
+    <div className="rail-account" data-loading="true" aria-hidden="true">
+      <span className="rail-avatar skeleton" />
+      <span className="rail-account-name-slot skeleton skeleton-line" />
+    </div>
+  );
+}
+
+/**
+ * The optimistic workspace frame: the authenticated shell's geometry
+ * (rail, degraded topbar strip with its actions pill, bottom nav)
+ * with the session-dependent slots as placeholders. Serves the
+ * loading frame (skeleton content) and the session-outage frame
+ * (retryable error card) — a resolve or a retry then settles into
+ * the authenticated shell WITHOUT a layout jump.
+ */
+function OptimisticWorkspaceShell({
+  state,
+  main,
+}: {
+  state: "loading" | "error";
+  main: ReactNode;
+}) {
+  const pathname = usePathname();
+  return (
+    <div className="app-shell" data-shell={state}>
+      <WorkspaceSidebar
+        brand={{ href: "/", label: "华师令" }}
+        groups={SIDEBAR_GROUPS}
+        footer={<RailAccountPlaceholder />}
+      />
+      <div className="app-body">
+        <header className="app-topbar">
+          <div className="app-topbar-inner">
+            <span className="app-brand">华师令</span>
+            <MediumTopNav pathname={pathname} />
+            <div className="app-topbar-actions" aria-hidden="true">
+              {/* The bell's glyph at rest — the real NotificationBell
+               * polls, so it mounts only once the session answers. */}
+              <span className="topbar-bell">
+                <span className="bell-glyph">
+                  <BellIcon />
+                </span>
+              </span>
+              <span className="avatar-chip skeleton" />
+            </div>
+          </div>
+        </header>
+        <main className="app-main" aria-busy={state === "loading" ? "true" : undefined}>
+          {main}
+        </main>
+      </div>
+      <BottomNav items={BOTTOM_NAV} />
+    </div>
+  );
+}
+
+/** The minimal single-column shell: the chrome for visitors WITHOUT
+ * session evidence (the pre-resolve frames) and for everyone the
+ * workspace is not for (anonymous card, staff guidance). */
+function MinimalShell({ state, children }: { state: string; children?: ReactNode }) {
+  return (
+    <div className="app-shell" data-shell={state}>
+      <div className="app-topbar">
+        <div className="app-topbar-inner">
+          <span className="app-brand">华师令</span>
+        </div>
+      </div>
+      <main className="app-main" aria-busy={state === "loading" ? "true" : undefined}>
+        {children}
+      </main>
+    </div>
+  );
+}
+
+export function StudentShell({
+  children,
+  sessionCookiePresent,
+  shellHint,
+}: {
+  children: ReactNode;
+  /** The layout's server-side probe: did the document request carry
+   * the readable csrf cookie (session evidence)? */
+  sessionCookiePresent: boolean;
+  /** The mint's coarse role hint (cq_shell), when present — routes a
+   * STAFF session's pre-resolve frames to the minimal chrome (their
+   * terminal geometry here) instead of the student workspace. */
+  shellHint: ShellHint | undefined;
+}) {
   const { state, refresh } = useSession();
 
   if (state.status === "loading") {
+    if (shellChromeFor("loading", sessionCookiePresent, shellHint) === "workspace") {
+      return (
+        <OptimisticWorkspaceShell
+          state="loading"
+          main={
+            <>
+              <span className="skeleton skeleton-line" style={{ width: "40%" }} />
+              <span className="skeleton skeleton-line" />
+              <span className="skeleton skeleton-block" />
+            </>
+          }
+        />
+      );
+    }
+    if (shellHint === "staff") {
+      // The staff redirect placeholder: the hint routes the pre-resolve
+      // frame to minimal geometry carrying the SAME quiet copy the
+      // redirect island shows — one placeholder across the whole jump.
+      return (
+        <MinimalShell state="loading">
+          <p className="field-hint" role="status">
+            正在前往工作台…
+            <span className="spinner" aria-hidden="true" />
+          </p>
+        </MinimalShell>
+      );
+    }
     return (
-      <div className="app-shell">
-        <div className="app-topbar">
-          <div className="app-topbar-inner">
-            <Link className="app-brand" href="/">华师令</Link>
-          </div>
-        </div>
-        <main className="app-main" aria-busy="true">
-          <span className="skeleton skeleton-line" style={{ width: "40%" }} />
-          <span className="skeleton skeleton-line" />
-          <span className="skeleton skeleton-block" />
-        </main>
-      </div>
+      <MinimalShell state="loading">
+        <span className="skeleton skeleton-line" style={{ width: "40%" }} />
+        <span className="skeleton skeleton-line" />
+        <span className="skeleton skeleton-block" />
+      </MinimalShell>
     );
   }
 
   if (state.status === "anonymous") {
-    return <AuthFrame><AuthPage title="登录华师令" kicker="校内空间" description="领取任务单元、累积积分并兑换奖励" links={<Link href="/register">注册学生账号</Link>}><Link className="btn btn-primary" href="/login">去登录</Link></AuthPage></AuthFrame>;
+    return <div className="app-shell" data-shell="anonymous"><AuthFrame><AuthPage title="登录华师令" kicker="校内空间" description="领取任务单元、累积积分并兑换奖励" links={<Link href="/register">注册学生账号</Link>}><Link className="btn btn-primary" href="/login">去登录</Link></AuthPage></AuthFrame></div>;
   }
 
   if (state.status === "error") {
-    return (
-      <div className="app-shell">
-        <div className="app-topbar">
-          <div className="app-topbar-inner">
-            <Link className="app-brand" href="/">华师令</Link>
-          </div>
-        </div>
-        <main className="app-main">
-          <SectionError error={state.error} onRetry={refresh} retryLabel="重新加载" />
-        </main>
-      </div>
-    );
+    const errorCard = <SectionError error={state.error} onRetry={refresh} retryLabel="重新加载" />;
+    if (shellChromeFor("error", sessionCookiePresent, shellHint) === "workspace") {
+      return <OptimisticWorkspaceShell state="error" main={errorCard} />;
+    }
+    if (shellHint === "staff") {
+      // A /me failure under a staff hint: the error frame lives INSIDE
+      // the placeholder shell — a retry AND a way out (the session may
+      // be dead), never an infinite 正在前往.
+      return (
+        <MinimalShell state="error">
+          {errorCard}
+          <p className="auth-alt-action">
+            <Link className="link" href="/login">
+              前往员工登录
+            </Link>
+          </p>
+        </MinimalShell>
+      );
+    }
+    return <MinimalShell state="error">{errorCard}</MinimalShell>;
   }
 
   // Role gate (PR #4 hardening Task 3): the student workspace mounts
-  // ONLY for a STUDENT session. A TEACHER/ADMIN session gets guidance
-  // to the staff workspace instead — and because the pages (children)
-  // never mount, none of the student-only sections can fire their API
-  // calls from a staff session.
+  // ONLY for a STUDENT session. A TEACHER/ADMIN session is REDIRECTED
+  // to its own workspace (audit item A, owner feedback 2026-10-15 —
+  // the guidance card is retired for this family; true cross-role
+  // errors keep their cards in the staff shells) — and because the
+  // pages (children) never mount, none of the student-only sections
+  // can fire their API calls from a staff session.
   const gate = studentWorkspaceGate(state.me.role);
   if (gate.kind !== "student") {
     return (
-      <div className="app-shell">
-        <div className="app-topbar">
-          <div className="app-topbar-inner">
-            <Link className="app-brand" href="/">华师令</Link>
-          </div>
-        </div>
-        <main className="app-main">
+      <MinimalShell state="gate">
+        {gate.kind === "mentor-guidance" ? (
           <div className="alert alert-warning" role="alert">
-            <p>
-              <span className="alert-marker" aria-hidden="true">!</span>
-              学生工作区仅对学生账号开放，当前登录的是{gate.kind === "mentor-guidance" ? "导师" : "教师或管理员"}账号。
-            </p>
-            <p>
-              <Link className="btn btn-primary" href={gate.workspacePath}>
-                {gate.kind === "mentor-guidance" ? "前往我的导师档案" : "前往教师工作台"}
-              </Link>
-            </p>
+            <p>学生工作区仅对学生账号开放，当前登录的是导师账号。</p>
+            <Link className="btn btn-primary" href={gate.workspacePath}>前往我的导师档案</Link>
           </div>
-        </main>
-      </div>
+        ) : <StaffRouteRedirect role={state.me.role} />}
+      </MinimalShell>
     );
   }
 
-  return <StudentNavigationShell key={`${state.me.id}:${getAuthEpoch()}`} nickname={state.me.nickname} active={state.me.status === "ACTIVE"}>{children}</StudentNavigationShell>;
+  return <StudentNavigationShell key={`${state.me.id}:${getAuthEpoch()}`} me={state.me}>{children}</StudentNavigationShell>;
 }
 
-function StudentNavigationShell({ children, nickname, active }: { children: ReactNode; nickname: string; active: boolean }) {
+function StudentNavigationShell({ children, me }: { children: ReactNode; me: MeProfile }) {
+  const nickname = me.nickname;
+  const active = me.status === "ACTIVE";
   const pathname = usePathname();
   const { state: capabilities, retry } = useSection(() => active ? getInnovationCapabilities().then((data) => data.operations_enabled) : Promise.resolve(false));
   const operationsEnabled = capabilities.status === "ready" && capabilities.data;
@@ -149,7 +296,7 @@ function StudentNavigationShell({ children, nickname, active }: { children: Reac
   ];
   const nav: SideNavItem[] = [...MEDIUM_NAV, ...(operationsEnabled ? [OPERATIONS_NAV] : [])];
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-shell="workspace">
       <WorkspaceSidebar
         brand={{ href: "/", label: "华师令" }}
         groups={groups}
@@ -199,6 +346,8 @@ function StudentNavigationShell({ children, nickname, active }: { children: Reac
         </header>
         <main className="app-main">
           {capabilities.status === "error" ? <SectionError error={capabilities.error} onRetry={retry} retryLabel="重新读取运营入口" /> : null}
+          <ApprovalPendingBanner me={me} />
+          <NicknameNudge me={me} />
           {children}
         </main>
       </div>

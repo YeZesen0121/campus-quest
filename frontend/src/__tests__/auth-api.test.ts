@@ -21,16 +21,17 @@ import { afterEach, beforeEach, describe, test } from "node:test";
 
 import {
   confirmPasswordReset,
-  loginStudent,
+  loginWithPassword,
   registerStudent,
   requestPasswordReset,
   requestPhoneChallenge,
   verifyPhoneChallenge,
 } from "../features/auth/api";
 import * as authApi from "../features/auth/api";
-import { getAccessToken, getAuthEpoch } from "../lib/accessToken";
+import { getAuthEpoch } from "../lib/accessToken";
 import { cooldownSecondsFrom, describeAuthError, resendButtonLabel } from "../features/auth/errors";
 import { isApiError } from "../lib/errors";
+import { clearAccessToken, getAccessToken } from "../lib/accessToken";
 
 type RecordedRequest = {
   url: string;
@@ -97,26 +98,12 @@ describe("login", () => {
     assert.equal(getAccessToken(), "mentor-at");
     assert.ok(getAuthEpoch() > previousEpoch);
   });
-  test("posts username/password to /api/v1/auth/login with cookie credentials", async () => {
-    stubFetch(JSON.stringify({ access_token: "at", csrf_token: "ct", token_type: "bearer" }), 200);
-    const tokens = await loginStudent("20240001", "correct-horse");
-    assert.equal(tokens.access_token, "at");
-    assert.equal(recorded?.url, "/api/v1/auth/login");
-    assert.equal(recorded?.method, "POST");
-    assert.equal(recorded?.credentials, "include");
-    assert.equal(recorded?.headers.get("Content-Type"), "application/json");
-    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
-      username: "20240001",
-      password: "correct-horse",
-    });
-  });
-
   test("401 envelope maps to the uniform wrong-credentials copy", async () => {
     stubFetch(envelope("AUTHENTICATION_REQUIRED", "未登录或登录状态已失效"), 401);
-    const error = await rejectionOf(loginStudent("20240001", "wrong"));
+    const error = await rejectionOf(loginWithPassword("20240001", "wrong", false));
     assert.ok(isApiError(error));
     const view = describeAuthError(error as never);
-    assert.equal(view.summary, "学号或密码不正确");
+    assert.equal(view.summary, "账号或密码不正确");
     assert.deepEqual(view.fieldErrors, {});
   });
 });
@@ -194,24 +181,33 @@ describe("registration OTP chain", () => {
     assert.equal(view.requestId, null);
   });
 
-  test("register posts the exact backend field names", async () => {
+  test("register posts the exact backend field names; the {user, tokens} envelope opens the session", async () => {
+    clearAccessToken();
     stubFetch(
       JSON.stringify({
-        id: "22222222-2222-4222-8222-222222222222",
-        username: "20240001",
-        nickname: "小明",
-        role: "STUDENT",
-        status: "ACTIVE",
+        user: {
+          id: "22222222-2222-4222-8222-222222222222",
+          username: "20240001",
+          nickname: "小明",
+          role: "STUDENT",
+          status: "ACTIVE",
+        },
+        tokens: { access_token: "reg-at", csrf_token: "ct", token_type: "bearer" },
       }),
       201,
     );
-    const user = await registerStudent({
+    const outcome = await registerStudent({
       student_number: "20240001",
       nickname: "小明",
       phone_token: "proof-token",
       password: "correct-horse",
     });
-    assert.equal(user.status, "ACTIVE");
+    assert.equal(outcome.kind, "session");
+    assert.equal(outcome.user.status, "ACTIVE");
+    // The envelope's tokens ARE the login (owner feedback ④): the
+    // wrapper adopts them — the memory manager carries the bearer from
+    // the first post-register request on.
+    assert.equal(getAccessToken(), "reg-at");
     assert.equal(recorded?.url, "/api/v1/auth/register");
     assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
       student_number: "20240001",
@@ -219,6 +215,33 @@ describe("registration OTP chain", () => {
       phone_token: "proof-token",
       password: "correct-horse",
     });
+  });
+
+  test("a NON-envelope register body is a contract violation that throws (the post-#100 cleanup)", async () => {
+    clearAccessToken();
+    // The bare-UserPublic shape retired with the backend half (#100 on
+    // main): a 201 without the {user, tokens} envelope means the
+    // contract broke — the wrapper fails loudly instead of silently
+    // downgrading to a token-less "success".
+    stubFetch(
+      JSON.stringify({
+        id: "22222222-2222-4222-8222-222222222222",
+        username: "20240001",
+        nickname: "小明",
+        role: "STUDENT",
+        status: "PENDING_APPROVAL",
+      }),
+      201,
+    );
+    await assert.rejects(
+      registerStudent({
+        student_number: "20240001",
+        nickname: "小明",
+        phone_token: "proof-token",
+        password: null,
+      }),
+    );
+    assert.equal(getAccessToken(), null);
   });
 
   test("whitelist rejection keeps its stable copy and code branch", async () => {
@@ -277,7 +300,7 @@ describe("error-code branching pin at the transport level", () => {
       }),
       400,
     );
-    const error = await rejectionOf(loginStudent("20240001", "whatever"));
+    const error = await rejectionOf(loginWithPassword("20240001", "whatever", false));
     assert.ok(isApiError(error));
     const view = describeAuthError(error as never);
     assert.equal(view.summary, "操作失败，请稍后重试");
@@ -286,7 +309,7 @@ describe("error-code branching pin at the transport level", () => {
 
   test("out-of-surface business code -> backend message as fallback text", async () => {
     stubFetch(envelope("ASSIGNMENT_LIMIT_REACHED", "当前进行中的任务已达到上限"), 409);
-    const error = await rejectionOf(loginStudent("20240001", "whatever"));
+    const error = await rejectionOf(loginWithPassword("20240001", "whatever", false));
     assert.ok(isApiError(error));
     const view = describeAuthError(error as never);
     assert.equal(view.summary, "当前进行中的任务已达到上限");

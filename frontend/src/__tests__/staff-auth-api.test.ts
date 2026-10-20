@@ -20,11 +20,14 @@ import { afterEach, beforeEach, describe, test } from "node:test";
 import {
   acceptStaffInvitation,
   beginTotpSetup,
+  confirmPhoneBind,
   confirmTotpSetup,
-  loginStaff,
+  readMe,
+  requestPhoneBind,
 } from "../features/auth/api";
 import { describeStaffError } from "../features/auth/staffAuthView";
 import { isApiError } from "../lib/errors";
+import { clearAccessToken, getAccessToken } from "../lib/accessToken";
 
 type RecordedRequest = {
   url: string;
@@ -76,10 +79,12 @@ afterEach(() => {
 });
 
 describe("acceptStaffInvitation", () => {
-  test("posts {token, password} with cookie credentials", async () => {
-    stubFetch(JSON.stringify({ access_token: "at", csrf_token: "ct", token_type: "bearer" }), 200);
-    const tokens = await acceptStaffInvitation("invite-token", "correct-horse");
-    assert.equal(tokens.access_token, "at");
+  test("posts {token, password} with cookie credentials; an old-shape body lands on the admin leg UNADOPTED", async () => {
+    clearAccessToken();
+    stubFetch(JSON.stringify({ access_token: "pending-at", csrf_token: "ct", token_type: "bearer" }), 200);
+    const outcome = await acceptStaffInvitation("invite-token", "correct-horse");
+    assert.deepEqual(outcome, { kind: "admin", pendingToken: "pending-at" });
+    assert.equal(getAccessToken(), null);
     assert.equal(recorded?.url, "/api/v1/auth/staff/invitations/accept");
     assert.equal(recorded?.method, "POST");
     assert.equal(recorded?.credentials, "include");
@@ -89,37 +94,32 @@ describe("acceptStaffInvitation", () => {
     });
   });
 
+  test("totp_required:false adopts the TEACHER full login; an empty password posts null", async () => {
+    clearAccessToken();
+    stubFetch(
+      JSON.stringify({
+        totp_required: false,
+        access_token: "teacher-at",
+        csrf_token: "ct",
+        token_type: "bearer",
+      }),
+      200,
+    );
+    const outcome = await acceptStaffInvitation("invite-token", null);
+    assert.equal(outcome.kind, "teacher");
+    assert.equal(getAccessToken(), "teacher-at");
+    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
+      token: "invite-token",
+      password: null,
+    });
+  });
+
   test("the uniform 401 (unknown/expired/used token) renders the invite copy", async () => {
     stubFetch(envelope("AUTHENTICATION_REQUIRED", "登录状态已失效或凭证不正确"), 401);
     const error = await rejectionOf(acceptStaffInvitation("dead", "correct-horse"));
     assert.ok(isApiError(error));
     const view = describeStaffError(error as never, "invite-accept");
     assert.equal(view.summary, "邀请链接无效或已被使用");
-  });
-});
-
-describe("loginStaff", () => {
-  test("posts {email, password, totp_code} to the dedicated staff endpoint", async () => {
-    stubFetch(JSON.stringify({ access_token: "at", csrf_token: "ct", token_type: "bearer" }), 200);
-    await loginStaff("teacher@school.edu", "correct-horse", "234567");
-    assert.equal(recorded?.url, "/api/v1/auth/staff/login");
-    assert.equal(recorded?.method, "POST");
-    assert.equal(recorded?.credentials, "include");
-    assert.equal(recorded?.headers.get("Content-Type"), "application/json");
-    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
-      email: "teacher@school.edu",
-      password: "correct-horse",
-      totp_code: "234567",
-    });
-  });
-
-  test("403 TOTP_SETUP_REQUIRED stays a code branch for the form's setup panel", async () => {
-    stubFetch(envelope("TOTP_SETUP_REQUIRED", "该账号必须先绑定 TOTP 动态验证码"), 403);
-    const error = await rejectionOf(loginStaff("teacher@school.edu", "correct-horse", "234567"));
-    assert.ok(isApiError(error));
-    assert.equal((error as { code: string }).code, "TOTP_SETUP_REQUIRED");
-    const view = describeStaffError(error as never, "staff-login");
-    assert.match(view.summary!, /尚未完成动态口令绑定/);
   });
 });
 
@@ -164,5 +164,103 @@ describe("TOTP setup calls (pending-session bearer)", () => {
     assert.ok(isApiError(error));
     const view = describeStaffError(error as never, "totp-confirm");
     assert.match(view.summary!, /动态验证码错误/);
+  });
+});
+
+describe("readMe (the post-login role source; owner report 2026-10-15)", () => {
+  test("rides a bare GET /api/v1/me with cookie credentials", async () => {
+    stubFetch(
+      JSON.stringify({
+        id: "u1",
+        username: "a@b.edu",
+        nickname: "A",
+        role: "ADMIN",
+        status: "ACTIVE",
+        has_avatar: false,
+        phone_e164: null,
+        email_normalized: null,
+        email_verified_at: null,
+        created_at: "2030-01-01T00:00:00Z",
+      }),
+      200,
+    );
+    const me = await readMe();
+    assert.equal(me.role, "ADMIN");
+    assert.equal(recorded?.url, "/api/v1/me");
+    assert.equal(recorded?.method, "GET");
+    assert.equal(recorded?.credentials, "include");
+  });
+});
+
+
+
+// --- staff mobile-code login + phone binding (login-iteration item ①;
+// frozen contract, backend PR #101 head 69bf413) -------------------------
+//
+// The mobile channel mirrors the email-code family endpoint-for-endpoint:
+// a 202-always request, a verify whose 200 body is EITHER a full
+// TokenPairResponse (TEACHER, or ADMIN riding a remembered device) or
+// the ADMIN {status:"totp_required", pending_token} second leg, and that
+// leg's body-carried totp completion. The TERMINAL remember-device
+// ruling (2026-10-15) applies verbatim: the UI never sends
+// remember_device on the verify leg a TEACHER can complete — the
+// checkbox lives ONLY on the totp leg.
+
+
+
+
+// --- the unified staff code channel (two-channel convergence,
+// 2026-10-20; frozen contract): ONE identifier field (email or phone)
+// rides both legs; the backend routes the code stream by shape. The
+// TERMINAL remember-device ruling holds verbatim (option a): the
+// verify leg a TEACHER completes NEVER sends remember_device — the
+// checkbox's meaning lives on the ADMIN totp leg.
+describe("staff phone binding (item ①; /me/phone/bind family)", () => {
+  test("bind POSTs {phone} and yields the challenge", async () => {
+    stubFetch(
+      JSON.stringify({
+        challenge_id: "44444444-4444-4444-8444-444444444444",
+        expires_at: "2026-10-17T12:05:00Z",
+      }),
+      202,
+    );
+    const challenge = await requestPhoneBind("13900005678");
+    assert.equal(challenge.challenge_id, "44444444-4444-4444-8444-444444444444");
+    assert.equal(recorded?.url, "/api/v1/me/phone/bind");
+    assert.equal(recorded?.credentials, "include");
+    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), { phone: "13900005678" });
+  });
+
+  test("confirm POSTs {challenge_id, code} and yields the updated MePublic", async () => {
+    stubFetch(
+      JSON.stringify({
+        id: "u1",
+        username: "admin@school.edu",
+        nickname: "A",
+        role: "ADMIN",
+        status: "ACTIVE",
+        has_avatar: false,
+        phone_e164: "+8613900005678",
+        email_normalized: null,
+        email_verified_at: null,
+        created_at: "2030-01-01T00:00:00Z",
+      }),
+      200,
+    );
+    const me = await confirmPhoneBind("44444444-4444-4444-8444-444444444444", "234567");
+    assert.equal(me.phone_e164, "+8613900005678");
+    assert.equal(recorded?.url, "/api/v1/me/phone/bind/confirm");
+    assert.deepEqual(JSON.parse(recorded?.body ?? "{}"), {
+      challenge_id: "44444444-4444-4444-8444-444444444444",
+      code: "234567",
+    });
+  });
+
+  test("a bound-elsewhere phone answers the 409 family copy (PHONE_ALREADY_BOUND)", async () => {
+    stubFetch(envelope("PHONE_ALREADY_BOUND", "该手机号已绑定其他账号"), 409);
+    const error = await rejectionOf(requestPhoneBind("13900009999"));
+    assert.ok(isApiError(error));
+    assert.equal((error as { code: string }).code, "PHONE_ALREADY_BOUND");
+    assert.equal((error as { message: string }).message, "该手机号已绑定其他账号");
   });
 });

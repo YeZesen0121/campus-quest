@@ -25,102 +25,39 @@
  *                           the pending redemption, the suspend-target
  *                           student, and the review-queue row).
  *
- * Brief flow: privilege navigation (teacher denied on /admin/whitelist,
- * no admin data request fires), whitelist import preview/confirm,
+ * Brief flow: privilege navigation (teacher denied on /admin/approvals,
+ * no admin data request fires), user suspend, redemption decisions,
  * user suspend with mandatory reason, redemption decisions, and the
  * settings confirm dialog.
  */
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext, type Page, type Response } from "@playwright/test";
 
+import { staffLogin } from "./fixtures";
+
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
-const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/staff/login`;
 const TEACHER = process.env.CQ_E2E_TEACHER;
 const TEACHER_TOTP_SECRET = process.env.CQ_E2E_TEACHER_TOTP_SECRET;
 const ADMIN = process.env.CQ_E2E_ADMIN;
 const ADMIN_TOTP_SECRET = process.env.CQ_E2E_ADMIN_TOTP_SECRET;
+// The seeded item name is run-derived (factories: 端到端奖励卡 +
+// run[:6]) — the redemption queue's business key (see the redemption
+// test).
+const RUN = process.env.CQ_E2E_RUN;
 
 test.skip(
   !E2E_ENABLED,
-  "Playwright lands in Plan 10; set CQ_E2E=1 (and the CQ_E2E_* vars) to run this suite.",
+  "set CQ_E2E=1 (and the CQ_E2E_* vars) to run this suite.",
 );
 
 // The staff contract itself is a HARD requirement now (PR #6 final
 // review): the world always provides it, and a missing export must
 // fail the suite — never read as a skip the gate would have to catch.
 
-/** RFC 4648 base32 (the TOTP secret alphabet) -> bytes. */
-function base32Decode(input: string): Buffer {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = 0;
-  let value = 0;
-  const out: number[] = [];
-  for (const char of input.toUpperCase().replace(/=+$/, "")) {
-    const index = alphabet.indexOf(char);
-    if (index === -1) {
-      throw new Error(`non-base32 character in secret: ${char}`);
-    }
-    value = (value << 5) | index;
-    bits += 5;
-    if (bits >= 8) {
-      out.push((value >>> (bits - 8)) & 0xff);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(out);
-}
-
-/** The current RFC 6238 code for `secret` (SHA-1, 30s step, 6 digits). */
-function totpCode(secret: string, atMs: number = Date.now()): string {
-  const counter = Math.floor(atMs / 30_000);
-  const block = Buffer.alloc(8);
-  block.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", base32Decode(secret)).update(block).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const binary =
-    ((digest[offset] & 0x7f) << 24) |
-    ((digest[offset + 1] & 0xff) << 16) |
-    ((digest[offset + 2] & 0xff) << 8) |
-    digest[offset + 3];
-  return String(binary % 1_000_000).padStart(6, "0");
-}
-
-/** Staff login through the real form; retries across a 30s step rollover.
- * The success wait is the NEGATED login URL (community.spec's proven
- * shape): an unanchored `BASE_URL/` match would also match /staff/login
- * itself and let the test navigate away while the login POST is still
- * in flight — aborting it and landing the next page anonymous. */
-async function loginAsStaff(
-  page: Page,
-  credentials: string,
-  totpSecret: string,
-): Promise<void> {
-  const [email, password] = credentials.split(":");
-  await page.goto(STAFF_LOGIN_URL);
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
-  // Keep the original three-by-five-second budget, but acknowledge the real
-  // response before deciding whether a TOTP retry is needed. A slow destination
-  // must never turn an accepted login into a second successful session.
-  const deadline = Date.now() + 15_000;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
-    const acknowledged = page.waitForResponse(response =>
-      response.request().method() === "POST" && new URL(response.url()).pathname === "/api/v1/auth/staff/login",
-      { timeout: Math.max(1, Math.min(5_000, deadline - Date.now())) },
-    );
-    await page.getByRole("button", { name: "登录", exact: true }).click();
-    const response = await acknowledged;
-    if (response.ok()) {
-      await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: Math.max(1, deadline - Date.now()) });
-      return;
-    }
-    expect(response.status(), "Only a rejected credential/TOTP response permits a fresh login attempt").toBe(401);
-  }
-  await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: Math.max(1, deadline - Date.now()) });
-}
+/** Preserve the shared response-acknowledged unified login contract. */
+const loginAsStaff = staffLogin;
 
 test("approved administrator login acknowledgement is not resubmitted while the landing route loads", async ({page}) => {
   // Real login response and real destination, with only navigation latency held.
@@ -128,23 +65,23 @@ test("approved administrator login acknowledgement is not resubmitted while the 
   const held=new Promise<void>(resolve=>{release=resolve;});
   let accepted=0, timer:ReturnType<typeof setTimeout>|undefined;
   page.on('response', response=>{
-    if(response.request().method()==='POST' && new URL(response.url()).pathname==='/api/v1/auth/staff/login' && response.ok()) {
+    if(response.request().method()==='POST' && new URL(response.url()).pathname==='/api/v1/auth/challenge/totp' && response.ok()) {
       accepted+=1;
       if(accepted===1) timer=setTimeout(release,6500);
     }
   });
-  await page.route('**/teacher/reviews**',async route=>{await held;await route.continue();});
+  await page.route('**/admin**',async route=>{if(new URL(route.request().url()).pathname==='/admin')await held;await route.continue();});
   try {
     await loginAsStaff(page,ADMIN!,ADMIN_TOTP_SECRET!);
     expect(accepted,'A successful login must not be submitted again while its landing route loads').toBe(1);
-    await expect(page).not.toHaveURL(/\/staff\/login/);
+    await expect(page).not.toHaveURL(/\/login/);
   } finally {
     release();if(timer)clearTimeout(timer);await page.unrouteAll({behavior:'wait'});
   }
 });
 
 test.describe("admin workspace privilege navigation (plan step 1)", () => {
-  test("a teacher opening /admin/whitelist gets guidance and ZERO admin API calls", async ({
+  test("a teacher opening /admin/approvals gets guidance and ZERO admin API calls", async ({
     page,
   }) => {
     await loginAsStaff(page, TEACHER!, TEACHER_TOTP_SECRET!);
@@ -159,7 +96,7 @@ test.describe("admin workspace privilege navigation (plan step 1)", () => {
       }
     });
 
-    await page.goto(`${BASE_URL}/admin/whitelist`);
+    await page.goto(`${BASE_URL}/admin/approvals`);
     await expect(page.getByText("管理后台仅对管理员开放，当前账号是教师账号")).toBeVisible();
     await expect(page.getByRole("link", { name: "返回教师工作台" })).toBeVisible();
     // No admin data rendered and no admin API call fired.
@@ -169,7 +106,7 @@ test.describe("admin workspace privilege navigation (plan step 1)", () => {
   });
 });
 
-test.describe("admin workspace operations (brief: whitelist / users / redemptions / settings)", () => {
+test.describe("admin workspace operations (brief: users / redemptions / settings)", () => {
   // This serial workflow exercises operations, not nine independent logins.
   // Carry only the latest real rotating cookies between fresh contexts; the
   // production ten-attempt staff limit remains enabled for every request.
@@ -178,7 +115,7 @@ test.describe("admin workspace operations (brief: whitelist / users / redemption
   const authenticatedContexts = new WeakSet<BrowserContext>();
   test.beforeEach(async ({ page }) => {
     page.on("response", (response) => {
-      if (new URL(response.url()).pathname === "/api/v1/auth/staff/login" && response.ok()) successfulLogins += 1;
+      if (new URL(response.url()).pathname === "/api/v1/auth/challenge/totp" && response.ok()) successfulLogins += 1;
     });
     if (adminCookies) {
       await page.context().addCookies(adminCookies);
@@ -819,33 +756,13 @@ test.describe("admin workspace operations (brief: whitelist / users / redemption
     expect(writes).toEqual([]);
   });
 
-  test("whitelist import: preview classifies rows, confirm writes the importable set", async ({
+  // Owner report (2026-10-15): an admin login used to land on the
+  // teacher review queue. The beforeEach just logged in — the page's
+  // CURRENT url IS the landing verdict.
+  test("an admin login lands on the admin workspace, not the teacher cockpit", async ({
     page,
   }) => {
-    await page.goto(`${BASE_URL}/admin/whitelist`);
-
-    const stamp = String(Date.now()).slice(-8);
-    const content = `${stamp}1\n${stamp}1\n${stamp}２\n${stamp}223456789012345`;
-    await page.getByLabel("导入内容").fill(content);
-    await page.getByRole("button", { name: "预览导入" }).click();
-
-    // Preview: counts line + per-row decisions (in-file duplicate,
-    // full-width digits, invalid length).
-    await expect(page.getByText(/共 4 行：可导入 1 行/)).toBeVisible();
-    await expect(page.getByText("文件内重复").first()).toBeVisible();
-    await expect(page.getByText("全角数字").first()).toBeVisible();
-    await expect(page.getByText("长度不合法").first()).toBeVisible();
-
-    await page.getByRole("button", { name: /确认导入 1 行/ }).click();
-    await expect(page.getByText(/已成功导入 1 个学号/)).toBeVisible();
-
-    // The import section and the entries listing are independent: the
-    // listing loads once on mount and does not auto-refresh on confirm
-    // (the toggle path's own refresh contract) — reload to read the
-    // durable row back.
-    await page.reload();
-    // The new entry appears in the listing with the 启用 badge.
-    await expect(page.locator("tr", { hasText: `${stamp}1` }).getByText("启用")).toBeVisible();
+    await expect(page).toHaveURL(/\/admin$/);
   });
 
   test("user suspend blocks on a blank reason, then applies with one", async ({ page }) => {
@@ -876,7 +793,14 @@ test.describe("admin workspace operations (brief: whitelist / users / redemption
   test("redemption decisions: reject demands a reason; approve then fulfill", async ({ page }) => {
     await page.goto(`${BASE_URL}/admin/redemptions`);
 
-    const firstRow = page.locator(".review-item").first();
+    // Business-key location (the cross-run pollution post-mortem,
+    // 2026-10-09): the queue's FIRST row is the OLDEST pending
+    // request — with a residue world's redemption parked there, a
+    // positional .first() pick would decide a STRANGER's request. The
+    // seeded item's name is run-derived (端到端奖励卡 + RUN[:6]), so
+    // the row is located by THAT key, never by queue position.
+    const itemName = `端到端奖励卡${RUN!.slice(0, 6)}`;
+    const firstRow = page.locator(".review-item", { hasText: itemName });
     await expect(firstRow).toBeVisible();
     await firstRow.click();
 
@@ -892,7 +816,7 @@ test.describe("admin workspace operations (brief: whitelist / users / redemption
     // becomes available on the server verdict.
     await page.getByRole("button", { name: "通过并扣减积分" }).click();
     const approve = page.getByRole("dialog", { name: "通过兑换申请" });
-    await expect(approve.getByText(/将扣减积分并进入待发放状态/)).toBeVisible();
+    await expect(approve.getByText(/将扣减积分进入待发放/)).toBeVisible();
     await approve.getByRole("button", { name: "确认通过" }).click();
     // .first(): after approval the badge renders on BOTH the queue row
     // and the selected detail — the strict-mode ambiguity would fail

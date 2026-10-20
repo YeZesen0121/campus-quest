@@ -6,8 +6,8 @@
  * `points/admin_router.py` and the points review-queue routes).
  *
  * Every shape comes from the GENERATED OpenAPI snapshot in
- * `lib/api/schema` (already regenerated on this branch — no hand-written
- * DTOs). Wire-shape pins live in `src/__tests__/admin-api.test.ts`.
+ * `lib/api/schema` (regenerated in the same PR as the API change —
+ * no hand-written DTOs). Wire-shape pins live in `src/__tests__/admin-api.test.ts`.
  *
  * Guard posture (backend `require_admin_actor` + the store-backed
  * management-network dependency): these paths answer 403 for non-admin
@@ -35,13 +35,6 @@ export type AdminUserDto = Schemas["AdminUserResponse"];
 export type AdminUserPageDto = Schemas["AdminUserListResponse"];
 export type AccountStatusDto = Schemas["AccountStatusResponse"];
 
-export type WhitelistEntryDto = Schemas["WhitelistEntryResponse"];
-export type WhitelistPageDto = Schemas["WhitelistListResponse"];
-export type WhitelistPreviewDto = Schemas["WhitelistPreviewResponse"];
-export type WhitelistRowDecisionDto = Schemas["WhitelistRowDecisionResponse"];
-export type WhitelistCountsDto = Schemas["WhitelistCountsResponse"];
-export type WhitelistConfirmDto = Schemas["WhitelistConfirmResponse"];
-export type WhitelistToggleDto = Schemas["WhitelistToggleResponse"];
 
 /** The student-view catalogue row the admin listing reads (see module note). */
 export type RewardCatalogueDto = Schemas["RewardItemResponse"];
@@ -152,57 +145,24 @@ export function reactivateAdminUser(
   );
 }
 
-// --- whitelist (spec §5.1) -----------------------------------------------------------------
+// --- staff invitations (spec §5.8) ----------------------------------------------------------
 
-/** The whitelist page, student-number ordered (GET /admin/whitelist). */
-export function listWhitelist(query: PageQuery = {}): Promise<WhitelistPageDto> {
-  return apiRequest<WhitelistPageDto>(
-    `/api/v1/admin/whitelist${pagination(query)}`,
-    { signal: query.signal },
-  );
-}
+export type StaffInvitationCreateBody = Schemas["StaffInvitationCreateRequest"];
+export type StaffInvitationDto = Schemas["StaffInvitationResponse"];
 
 /**
- * Classify every non-blank line, zero writes (POST /admin/whitelist/preview).
- * The body is the RAW import TEXT as JSON `{content}` — the service owns
- * decode, trimming, and every row verdict; the digest binds the confirm.
+ * Issue one one-shot staff invitation (POST /staff/invitations). The
+ * plaintext token returns HERE AND ONLY HERE — the row stores its hash,
+ * and no listing endpoint re-exposes it — so the page renders the link
+ * exactly once and never refetches it.
  */
-export function previewWhitelistImport(content: string): Promise<WhitelistPreviewDto> {
-  return apiRequest<WhitelistPreviewDto>("/api/v1/admin/whitelist/preview", {
+export function createStaffInvitation(
+  body: StaffInvitationCreateBody,
+): Promise<StaffInvitationDto> {
+  return apiRequest<StaffInvitationDto>("/api/v1/staff/invitations", {
     method: "POST",
-    body: { content },
+    body,
   });
-}
-
-/**
- * Insert exactly the previewed set, all-or-nothing (POST
- * /admin/whitelist/confirm). A digest mismatch or DB collision is the
- * typed 409 `CONFLICT` (details carry the colliding `student_numbers`).
- */
-export function confirmWhitelistImport(payload: {
-  confirm_token: string;
-  enable: boolean;
-  student_numbers: string[];
-}): Promise<WhitelistConfirmDto> {
-  return apiRequest<WhitelistConfirmDto>("/api/v1/admin/whitelist/confirm", {
-    method: "POST",
-    body: payload,
-  });
-}
-
-/**
- * Flip one entry (PATCH /admin/whitelist/{student_number}). The reason is
- * transport-OPTIONAL (it rides the per-entry audit rows when present);
- * an unknown number is the typed 400 with the missing list.
- */
-export function toggleWhitelistEntry(
-  studentNumber: string,
-  payload: { enabled: boolean; reason?: string | null },
-): Promise<WhitelistToggleDto> {
-  return apiRequest<WhitelistToggleDto>(
-    `/api/v1/admin/whitelist/${encodeId(studentNumber)}`,
-    { method: "PATCH", body: payload },
-  );
 }
 
 // --- reward catalogue + review grants (spec §16) -------------------------------------------

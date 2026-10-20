@@ -42,7 +42,125 @@ _RATCHET_PATH = _BACKEND_ROOT / "coverage-ratchet.json"
 #: can only SOMETIMES meet is broken by construction — floors are the
 #: CI-reproducible minimum, and single-module drift on identical code
 #: is a coverage flake to hunt, never a reason to widen epsilon.
+#: Cross-environment MARGIN convention (reviewer ruling 2026-10-17, the
+#: first post-B-item CI measurement): community measured 97.3 local vs
+#: 96.9 CI on identical code — every OTHER module matched to the digit,
+#: the PR #36 single-module coverage-flake signature (an order-sensitive
+#: branch CI's random order only sometimes exercises). A flake that
+#: exceeds epsilon is NOT hunted under a red main: the floor drops to
+#: min(local, CI) - epsilon (97.3/96.9 -> 96.7) in the same PR, the
+#: flake-hunt itself is a separate item, and the floor re-tightens to
+#: the deterministic value once that hunt lands.
 _EPSILON = 0.15
+
+#: Researched residuals waived from the cross-talk guard (rental-style,
+#: like the import-linter waivers): the exact out-of-range endpoint set
+#: of a KNOWN coverage-limitation fingerprint. Cross-talk is inherently
+#: MISFILED: the same fingerprint landed in upload_service.py locally
+#: and validation_service.py on CI (#101, 2026-10-17) — the waiver
+#: matches the arc fingerprint on ANY host file (the recorded host is
+#: provenance, not a match key). Any drift (one new arc, a different
+#: line) falls through and fails the gate again, so the list cannot
+#: silently rot into a global pass.
+#:
+#: WAIVER POLICY (owner-approved 2026-10-17, the saga's closing ruling):
+#: the greenlet cross-talk is a timing-shaped defect in coverage's own
+#: greenlet patch — sysmon/ctrace both reproduce it and 7.16.2 is the
+#: latest release, so the configuration layer has no fix (the
+#: three-way falsification lives in the B-item report). The waivers ARE
+#: the long-term defense: a NEW signature fails the gate red, gets its
+#: fingerprint registered here with provenance, and the CI artifact
+#: (coverage-diagnosis.bin, uploaded always) carries the arcs for the
+#: analysis. REVALIDATION CLAUSE: every coverage version bump (lock
+#: update) re-checks both registered signatures — if one stops
+#: appearing, retire its waiver entry and file the upstream report with
+#: the material already collected (the PR trail holds the six-shape
+#: reproduction matrix and the arc anatomy).
+_CROSSTALK_WAIVERS: tuple[dict[str, object], ...] = (
+    {
+        "beyond": frozenset({1910, 1971, 1988}),
+        "seen_in": (
+            "app/modules/submissions/upload_service.py",
+            "app/modules/submissions/validation_service.py",
+        ),
+        "reason": (
+            "coverage's greenlet patch still leaks this three-arc "
+            "signature in full-suite combination runs even with "
+            "concurrency declared (B item, 2026-10-17; resurfaced on a "
+            "different host in #101 CI) — the anchor line stays "
+            "covered, the cost is at most one partial branch"
+        ),
+    },
+    {
+        # The second signature, a WORKERS-job host (main 4ecd77d CI,
+        # 2026-10-17): three hosts/two signatures = a widening surface,
+        # so the root fix (the eager worker-test execution shape x the
+        # tracer's thread/greenlet bookkeeping) is pulled FORWARD from
+        # the backlog into its own PR — this waiver unblocks main and
+        # retires with that fix.
+        "beyond": frozenset({465, 623, 651, 683, 684}),
+        "seen_in": ("app/workers/jobs/validate_submission.py",),
+        "reason": (
+            "the workers-job host of the greenlet cross-talk: the "
+            "eager-mode worker tests' execution shape (suspected "
+            "thread-pool job runs) leaks a five-arc signature; root "
+            "fix in flight (reviewer directive 2026-10-17)"
+        ),
+    },
+)
+
+
+def _waived(beyond: set[int]) -> bool:
+    return any(
+        beyond == set(waiver["beyond"])  # type: ignore[arg-type]
+        for waiver in _CROSSTALK_WAIVERS
+    )
+
+
+def _undeclared_concurrency_signatures(data_file: str | None = None) -> list[str]:
+    """Out-of-range arc endpoints in the raw data — cross-talk evidence.
+
+    When a concurrency library rides outside the tracer's model (the B
+    item, 2026-10-17: SQLAlchemy AsyncSession's greenlet bridge with
+    ``concurrency`` undeclared), arcs land in this file's data carrying
+    line numbers of a DIFFERENT file — endpoints beyond this file's line
+    count. The report layer drops those arcs silently and the lost lines
+    come back "missing"; this check surfaces the fingerprint so the gate
+    fails loudly instead of measuring garbage. Empty result = the data
+    is fit to compare against floors.
+    """
+    from coverage import CoverageData
+
+    data = CoverageData(data_file or str(_BACKEND_ROOT / ".coverage"))
+    data.read()
+    hits: list[str] = []
+    for measured in data.measured_files():
+        arcs = data.arcs(measured) or []
+        try:
+            with open(measured, encoding="utf-8") as handle:
+                # An empty module still executes its (empty) code object,
+                # whose implicit line 1 is legitimate — floor at 1.
+                total_lines = max(1, sum(1 for _ in handle))
+        except OSError:
+            continue  # source gone (branch switched mid-run) — not evidence
+        beyond = sorted(
+            {
+                endpoint
+                for arc in arcs
+                for endpoint in (abs(arc[0]), abs(arc[1]))
+                if endpoint > total_lines
+            }
+        )
+        if beyond and _waived(set(beyond)):
+            print(f"WAIVED cross-talk residual: {measured} {beyond}")
+            continue
+        if beyond:
+            hits.append(
+                f"{measured}: arc endpoints beyond EOF {beyond[:5]} — an "
+                "undeclared concurrency library is corrupting the trace "
+                "(pyproject [tool.coverage.run] concurrency)"
+            )
+    return hits
 
 
 def _coverage_json() -> dict:
@@ -113,6 +231,21 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args()
 
     report = _coverage_json()
+
+    # Guard (B item): refuse to measure — or rewrite floors from — data
+    # carrying the cross-talk fingerprint. Measuring a corrupted trace
+    # is how four phantom-miss incidents shipped (2026-10-17).
+    signatures = _undeclared_concurrency_signatures()
+    if signatures:
+        for signature in signatures[:10]:
+            print(f"CROSS-TALK: {signature}")
+        print(
+            f"\n{len(signatures)} file(s) show arcs beyond EOF — fix the "
+            "tracer setup (declared concurrency) and re-run the suites; "
+            "this data will not be compared or written to floors."
+        )
+        return 1
+
     current = {
         module: _percent(stats) for module, stats in _current_by_module(report).items()
     }

@@ -7,9 +7,11 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from app.core import rbac
+from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.observability import RequestIDMiddleware
 from app.core.readiness import ReadinessRegistry, get_readiness_registry
+from app.integrations import rate_limit
 from app.modules.audit import router as audit_router
 from app.modules.community import router as community_router
 from app.modules.identity import (
@@ -80,8 +82,9 @@ from app.workers.celery_app import get_celery_app
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Bind the shared Celery app in the API process: nothing else here
-    # constructs one, so without this call `shared_task` proxies (future
-    # modules enqueue deadline/validation jobs from request handlers) would
+    # constructs one, so without this call `shared_task` proxies (modules
+    # enqueue deadline/validation jobs from request handlers — the
+    # submissions router's validation dispatch is the live example) would
     # resolve to Celery's fallback default app and its amqp://guest@
     # localhost broker instead of the settings-configured Redis URL.
     # Construction makes it the current app; get_celery_app also sets it
@@ -91,7 +94,25 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CampusQuest API", lifespan=_lifespan)
+    # Interactive API docs are a development convenience (hardening D-3):
+    # /docs, /redoc, and /openapi.json hand an attacker a complete route
+    # map of the deployment (spec §33.1 posture), so environment=
+    # production mounts none of them; development keeps the defaults.
+    settings = get_settings()
+    # e2e battery only (CQ_E2E_LOGIN_RATELIMIT): raise the login family
+    # buckets to battery scale at assembly. Default deployments skip
+    # this entirely — byte-identical limits (the relief's own tests pin
+    # the default shape).
+    if settings.e2e_login_ratelimit:
+        rate_limit.apply_e2e_login_relief()
+    docs_disabled = settings.environment == "production"
+    app = FastAPI(
+        title="CampusQuest API",
+        lifespan=_lifespan,
+        docs_url=None if docs_disabled else "/docs",
+        redoc_url=None if docs_disabled else "/redoc",
+        openapi_url=None if docs_disabled else "/openapi.json",
+    )
     app.add_middleware(RequestIDMiddleware)
     app.add_middleware(InnovationPrivacyMiddleware)
     register_exception_handlers(app)

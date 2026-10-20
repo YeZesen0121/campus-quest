@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from http import cookies as http_cookies
 from typing import Annotated
 from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
 import httpx
 import pyotp
@@ -205,10 +206,11 @@ async def _seed_student(db: AsyncSession, username: str = _STUDENT) -> User:
 
 async def _login(client: httpx.AsyncClient, username: str = _STUDENT) -> dict:
     response = await client.post(
-        "/api/v1/auth/login", json={"username": username, "password": _PASSWORD}
+        "/api/v1/auth/login", json={"identifier": username, "password": _PASSWORD}
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    # The unified identifier form: tokens ride the union's nested pair.
+    return response.json()["tokens"]
 
 
 def _bearer(tokens: dict) -> dict[str, str]:
@@ -263,23 +265,32 @@ async def test_student_flow_whitelist_otp_register_login_me(
         },
     )
     assert registered.status_code == 201, registered.text
-    assert registered.json() == {
-        "id": registered.json()["id"],
+    # The register surface is the login-in envelope (V1.1 login iteration
+    # item 4): the UserPublic view (no created_at — the owner-only figure
+    # rides /me; the #17 amendment is MePublic's) beside a TokenPairResponse
+    # minted on the spot.
+    body = registered.json()
+    assert set(body) == {"user", "tokens"}
+    assert body["user"] == {
+        "id": body["user"]["id"],
         "username": _STUDENT,
         "nickname": _NICKNAME,  # normalized by the service
         "role": "STUDENT",
-        "status": "ACTIVE",
+        "status": "PENDING_APPROVAL",
         # spec amendment D4: the avatar capability flag (never the key).
         "has_avatar": False,
     }
+    assert set(body["tokens"]) == {"access_token", "csrf_token", "token_type"}
 
     logged_in = await client.post(
         "/api/v1/auth/login",
         # §5.2: outer whitespace is stripped at the login boundary.
-        json={"username": f"  {_STUDENT}  ", "password": _PASSWORD},
+        json={"identifier": f"  {_STUDENT}  ", "password": _PASSWORD},
     )
     assert logged_in.status_code == 200, logged_in.text
-    session = logged_in.json()
+    body = logged_in.json()
+    assert body["status"] == "authenticated"
+    session = body["tokens"]
     # PR review fix: the long-lived refresh token is cookie-only V1 — the
     # body carries the short-lived access token, the CSRF echo material,
     # and the token type, nothing else.
@@ -304,6 +315,9 @@ async def test_student_flow_whitelist_otp_register_login_me(
     assert me.json()["username"] == _STUDENT
     assert me.json()["phone_e164"] == _PHONE_E164
     assert me.json()["nickname"] == _NICKNAME
+    # #17: the registration date rides /me as ISO-8601 UTC (parseable;
+    # the exact instant is the database's).
+    datetime.fromisoformat(me.json()["created_at"])
 
     # No response anywhere in the flow carries secret material: the Argon2id
     # verifier, the OTP code, the refresh-token digest, or a TOTP secret —
@@ -335,7 +349,7 @@ async def test_business_and_validation_errors_use_the_envelope(
     await _seed_student(db_session)
 
     wrong_password = await client.post(
-        "/api/v1/auth/login", json={"username": _STUDENT, "password": "wrong-horse!"}
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": "wrong-horse!"}
     )
     assert wrong_password.status_code == 401
     error = _envelope(wrong_password)
@@ -347,7 +361,9 @@ async def test_business_and_validation_errors_use_the_envelope(
     assert missing_fields.status_code == 422
     validation = _envelope(missing_fields)
     assert validation["code"] == "VALIDATION_ERROR"
-    assert set(validation["details"]) == {"username", "password"}
+    # PR-3 (2026-10-19 spec §3.2): the unified identifier form is the
+    # only shape — an empty body misses the identifier and the password.
+    assert set(validation["details"]) == {"identifier", "password"}
 
 
 @pytest.mark.integration
@@ -389,10 +405,10 @@ async def test_cookie_refresh_requires_csrf_and_accepts_a_valid_token(
 ) -> None:
     await _seed_student(db_session)
     login_response = await client.post(
-        "/api/v1/auth/login", json={"username": _STUDENT, "password": _PASSWORD}
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
     )
     assert login_response.status_code == 200
-    session = login_response.json()
+    session = login_response.json()["tokens"]
     auth_cookies = {
         REFRESH_COOKIE_NAME: _cookie_value(login_response, REFRESH_COOKIE_NAME),
         CSRF_COOKIE_NAME: session["csrf_token"],
@@ -429,7 +445,7 @@ async def test_body_refresh_token_needs_no_csrf(
     # request body.
     await _seed_student(db_session)
     login_response = await client.post(
-        "/api/v1/auth/login", json={"username": _STUDENT, "password": _PASSWORD}
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
     )
     assert login_response.status_code == 200, login_response.text
     refresh_token = _cookie_value(login_response, REFRESH_COOKIE_NAME)
@@ -438,7 +454,10 @@ async def test_body_refresh_token_needs_no_csrf(
         "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
     )
     assert refreshed.status_code == 200, refreshed.text
-    assert refreshed.json()["access_token"] != login_response.json()["access_token"]
+    assert (
+        refreshed.json()["access_token"]
+        != login_response.json()["tokens"]["access_token"]
+    )
     # Rotation responses are cookie-only too.
     assert set(refreshed.json()) == {"access_token", "csrf_token", "token_type"}
 
@@ -450,9 +469,9 @@ async def test_logout_revokes_the_presented_session(
 ) -> None:
     await _seed_student(db_session)
     login_response = await client.post(
-        "/api/v1/auth/login", json={"username": _STUDENT, "password": _PASSWORD}
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
     )
-    session = login_response.json()
+    session = login_response.json()["tokens"]
     refresh_token = _cookie_value(login_response, REFRESH_COOKIE_NAME)
 
     logged_out = await client.post(
@@ -491,7 +510,11 @@ def _staff_service(api_clock, api_redis: aioredis.Redis) -> StaffService:
     )
 
 
-async def _seed_staff_invitation(db: AsyncSession, api_clock, api_redis) -> str:
+async def _seed_staff_invitation(
+    db: AsyncSession, api_clock, api_redis, *, email=None, role=None
+) -> str:
+    invitee_email = email if email is not None else _STAFF_EMAIL
+    invitee_role = role if role is not None else Role.TEACHER
     admin = User(
         username=_ADMIN_EMAIL,
         password_hash=hash_password(_PASSWORD),
@@ -504,7 +527,7 @@ async def _seed_staff_invitation(db: AsyncSession, api_clock, api_redis) -> str:
     db.add(admin)
     await db.flush()
     issued = await _staff_service(api_clock, api_redis).create_staff_invitation(
-        db, Actor(user_id=admin.id, role=Role.ADMIN), _STAFF_EMAIL, Role.TEACHER
+        db, Actor(user_id=admin.id, role=Role.ADMIN), invitee_email, invitee_role
     )
     return issued.token
 
@@ -525,24 +548,24 @@ async def test_staff_onboarding_until_management_access(
     assert accepted.status_code == 200, accepted.text
     pending = accepted.json()
 
-    # Pending staff is authenticated but NOT a management actor: the real
-    # guard answers with the distinct setup-forcing code (§5.8 step 3).
+    # V1.1 §2.3: the invited teacher is immediately usable; the ADMIN
+    # setup-forcing gate is exercised separately below.
     gated = await client.post("/api/v1/test/manage-probe", headers=_bearer(pending))
-    assert gated.status_code == 403
-    assert _envelope(gated)["code"] == "TOTP_SETUP_REQUIRED"
+    assert gated.status_code == 200, gated.text
+    assert gated.json()["role"] == Role.TEACHER.value
 
-    # The separate staff endpoint enforces the same gate at login — even
-    # with the CORRECT password, before 2FA is confirmed.
+    # A TEACHER never owes a second factor (V1.1 §2.3): the unified
+    # password leg completes directly — the old staff door's
+    # setup-required 403 was an artifact of demanding a factor teachers
+    # by design do not have. The §5.8 setup gate for ADMINs has its own
+    # pin below (totp_required at the password leg, TOTP_SETUP_REQUIRED
+    # at the totp leg until confirmed).
     premature = await client.post(
-        "/api/v1/auth/staff/login",
-        json={
-            "email": _STAFF_EMAIL,
-            "password": _STAFF_PASSWORD,
-            "totp_code": "123456",
-        },
+        "/api/v1/auth/login",
+        json={"identifier": _STAFF_EMAIL, "password": _STAFF_PASSWORD},
     )
-    assert premature.status_code == 403
-    assert _envelope(premature)["code"] == "TOTP_SETUP_REQUIRED"
+    assert premature.status_code == 200, premature.text
+    assert premature.json()["status"] == "authenticated"
 
     begun = await client.post("/api/v1/staff/totp/begin", headers=_bearer(pending))
     assert begun.status_code == 200, begun.text
@@ -567,19 +590,18 @@ async def test_staff_onboarding_until_management_access(
     assert len(recovery_codes) == 8
     assert all(len(code) == _RECOVERY_CODE_LENGTH for code in recovery_codes)
 
-    staff_session = await client.post(
-        "/api/v1/auth/staff/login",
-        json={
-            "email": _STAFF_EMAIL,
-            "password": _STAFF_PASSWORD,
-            "totp_code": totp_code,
-        },
+    staff_password_leg = await client.post(
+        "/api/v1/auth/login",
+        json={"identifier": _STAFF_EMAIL, "password": _STAFF_PASSWORD},
     )
-    assert staff_session.status_code == 200, staff_session.text
-    staff = staff_session.json()
+    assert staff_password_leg.status_code == 200, staff_password_leg.text
+    # A CONFIRMED TEACHER still owes no second factor (§2.3): the
+    # password is the whole auth on the unified form.
+    assert staff_password_leg.json()["status"] == "authenticated"
+    staff = staff_password_leg.json()["tokens"]
     # Nothing about the credential ever rides along on a login response.
     for material in ("password_hash", "$argon2", secret):
-        assert material not in staff_session.text
+        assert material not in staff_password_leg.text
 
     allowed = await client.post("/api/v1/test/manage-probe", headers=_bearer(staff))
     assert allowed.status_code == 200
@@ -599,6 +621,51 @@ async def test_student_cannot_reach_staff_totp_setup(
     denied = await client.post("/api/v1/staff/totp/begin", headers=_bearer(session))
     assert denied.status_code == 403
     assert _envelope(denied)["code"] == "PERMISSION_DENIED"
+
+
+@pytest.mark.integration
+async def test_admin_onboarding_totp_gate_lives_on_the_unified_legs(
+    db_session: AsyncSession,
+    client: httpx.AsyncClient,
+    api_clock: FrozenClock,
+    api_redis,
+) -> None:
+    """The §5.8 step-3 gate, at the unified doors (PR-3): an accepted
+    ADMIN owes TOTP — the password leg answers the totp_required
+    mid-state (never a session), and the totp leg carries the distinct
+    setup-forcing code until the credential is confirmed."""
+    admin_mail = f"gate-admin-{uuid4().hex[:8]}@pku.edu.cn"
+    seeded = await _seed_staff_invitation(
+        db_session, api_clock, api_redis, email=admin_mail, role=Role.ADMIN
+    )
+    accepted = await client.post(
+        "/api/v1/auth/staff/invitations/accept",
+        json={"token": seeded, "password": _STAFF_PASSWORD},
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    password_leg = await client.post(
+        "/api/v1/auth/login",
+        json={"identifier": admin_mail, "password": _STAFF_PASSWORD},
+    )
+    assert password_leg.status_code == 200, password_leg.text
+    assert password_leg.json()["status"] == "totp_required"
+
+    forced = await client.post(
+        "/api/v1/auth/challenge/totp",
+        json={
+            "pending_token": password_leg.json()["pending_token"],
+            "totp_code": "123456",
+        },
+    )
+    # The mobile pending domain folds the unconfirmed credential into
+    # its uniform single-code answer (the frozen unified contract); the
+    # setup-forcing SIGNAL for a mid-onboarding ADMIN lives at the
+    # management gate (TOTP_SETUP_REQUIRED) and the email-code arm —
+    # the pending is consumed either way, the client restarts from
+    # verify.
+    assert forced.status_code == 400
+    assert _envelope(forced)["code"] == "CHALLENGE_CODE_INVALID"
 
 
 @pytest.mark.integration
@@ -659,19 +726,15 @@ async def test_rate_limiter_receives_normalized_identifiers(
 
     await client.post(
         "/api/v1/auth/login",
-        json={"username": f"  {_STUDENT}  ", "password": _PASSWORD},
+        json={"identifier": f"  {_STUDENT}  ", "password": _PASSWORD},
     )
     assert fake_limiter.checks_for("auth:login")[-1].identifier == _STUDENT
 
     await client.post(
-        "/api/v1/auth/staff/login",
-        json={
-            "email": f"  {_STAFF_EMAIL.upper()}  ",
-            "password": "irrelevant",
-            "totp_code": "123456",
-        },
+        "/api/v1/auth/challenge/request",
+        json={"identifier": f"  {_STAFF_EMAIL.upper()}  "},
     )
-    assert fake_limiter.checks_for("auth:staff-login")[-1].identifier == _STAFF_EMAIL
+    assert fake_limiter.checks_for("auth:challenge")[-1].identifier == _STAFF_EMAIL
 
     # A DIFFERENT number than the student's bound phone: the real OTP
     # cooldown (60s, FrozenClock-frozen) would 429 a second send to the
@@ -730,7 +793,70 @@ async def test_exhausted_rate_limit_renders_429_envelope(
     fake_limiter.fail_on("auth:login")
 
     throttled = await client.post(
-        "/api/v1/auth/login", json={"username": _STUDENT, "password": _PASSWORD}
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
+    )
+    assert throttled.status_code == 429
+    assert _envelope(throttled)["code"] == "RATE_LIMITED"
+
+
+@pytest.mark.integration
+async def test_login_family_checks_the_transport_ip_in_parallel(
+    db_session: AsyncSession,
+    client: httpx.AsyncClient,
+    fake_limiter: FakeRateLimiter,
+) -> None:
+    # Hardening A-1: the identifier buckets alone cannot stop one IP
+    # credential-stuffing MANY identifiers — every fresh identifier opens
+    # a fresh bucket. Each credential endpoint therefore runs a SECOND,
+    # IP-keyed check next to the identifier one; either layer refusing
+    # rejects the request. The ASGITransport peer (127.0.0.1) stands in
+    # for the client address the limiter must key on.
+    await _seed_student(db_session)
+
+    await client.post(
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
+    )
+    assert fake_limiter.checks_for("auth:login-ip")[-1].identifier == "127.0.0.1"
+
+    await client.post(
+        "/api/v1/auth/challenge/request", json={"identifier": _STAFF_EMAIL}
+    )
+    assert fake_limiter.checks_for("auth:challenge-ip")[-1].identifier == "127.0.0.1"
+
+    send = await client.post(
+        "/api/v1/auth/phone/challenges", json={"phone": "138 0013 8000"}
+    )
+    assert send.status_code == 200
+    assert fake_limiter.checks_for("auth:otp-send-ip")[-1].identifier == "127.0.0.1"
+
+    challenge_id = uuid4()
+    await client.post(
+        f"/api/v1/auth/phone/challenges/{challenge_id}/verify",
+        json={"code": "482913"},
+    )
+    # The verify endpoint's identifier layer keys the challenge id (the
+    # OTP service bounds code attempts per challenge; this layer
+    # anti-hammers the HTTP surface), plus the parallel IP layer.
+    assert fake_limiter.checks_for("auth:otp-verify")[-1].identifier == str(
+        challenge_id
+    )
+    assert fake_limiter.checks_for("auth:otp-verify-ip")[-1].identifier == "127.0.0.1"
+
+
+@pytest.mark.integration
+async def test_exhausted_ip_bucket_renders_429_envelope(
+    db_session: AsyncSession,
+    client: httpx.AsyncClient,
+    fake_limiter: FakeRateLimiter,
+) -> None:
+    # Either layer refusing is a rejection: an exhausted IP bucket 429s
+    # even though the identifier bucket still has headroom (the exact
+    # stuffing shape the IP layer exists for).
+    await _seed_student(db_session)
+    fake_limiter.fail_on("auth:login-ip")
+
+    throttled = await client.post(
+        "/api/v1/auth/login", json={"identifier": _STUDENT, "password": _PASSWORD}
     )
     assert throttled.status_code == 429
     assert _envelope(throttled)["code"] == "RATE_LIMITED"
@@ -764,6 +890,7 @@ async def test_nickname_patch_updates_and_returns_the_owner_view(
         "phone_e164",
         "email_normalized",
         "email_verified_at",
+        "created_at",
     }
 
 

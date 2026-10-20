@@ -13,9 +13,10 @@
  * - CQ_E2E_RUN / CQ_E2E_REGISTER_NUMBER / CQ_E2E_ADMIN_ID — the seeded
  *   world's contract (e2e/global-setup.ts + backend browser_world.py):
  *   a run-unique student number to register and the admin id used to
- *   mint the whitelist-import token.
+ *   recover the register-time SMS OTP.
  *
- * Plan 10 wiring: the whitelist is seeded through the REAL admin API
+ * Auth extension II wiring: registration needs no seeding (the
+ * whitelist gate is retired).
  * (preview -> confirm, a minted admin bearer — the two-step the admin
  * surface owns), and the SMS code is recovered from the REAL Redis OTP
  * challenge record (browser_world.py otp-code: the production service
@@ -23,13 +24,12 @@
  * 6-digit space with the same settings secret). No fixed dev code, no
  * fixture endpoint.
  */
-import { expect, request, test, type APIRequestContext } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { mintToken, recoverOtpCode } from "./fixtures";
+import { parseSeededAccount, recoverOtpCode } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
-const API_URL = process.env.CQ_E2E_API_URL ?? "http://localhost:8000/api/v1";
 const RUN = process.env.CQ_E2E_RUN;
 const ADMIN_ID = process.env.CQ_E2E_ADMIN_ID;
 
@@ -60,49 +60,14 @@ function freshStudentNumber(): string {
   return `9${String(Date.now()).slice(-9)}`;
 }
 
-/** Seed the registration whitelist through the REAL admin API. */
-async function seedWhitelist(api: APIRequestContext): Promise<void> {
-  const adminToken = mintToken(ADMIN_ID!);
-  const auth = { Authorization: `Bearer ${adminToken}` };
-  const preview = await api.post(`${API_URL}/admin/whitelist/preview`, {
-    headers: auth,
-    data: { content: `${STUDENT_NUMBER}\n` },
-  });
-  expect(
-    preview.ok(),
-    `whitelist preview failed (${preview.status()}): ${await preview.text()}`,
-  ).toBe(true);
-  const body = (await preview.json()) as { confirm_token: string };
-  const confirmed = await api.post(`${API_URL}/admin/whitelist/confirm`, {
-    headers: auth,
-    data: {
-      confirm_token: body.confirm_token,
-      enable: true,
-      student_numbers: [STUDENT_NUMBER],
-    },
-  });
-  expect(
-    confirmed.ok(),
-    `whitelist confirm failed (${confirmed.status()}): ${await confirmed.text()}`,
-  ).toBe(true);
-}
+// Auth extension II (2026-10-16): the whitelist gate is GONE — the
+// register API needs no seeding, and the seeded account lands in
+// PENDING_APPROVAL (browsable, frozen) instead of ACTIVE.
 
 test.describe("student registration and login", () => {
-  let api: APIRequestContext;
-
-  test.beforeAll(async () => {
-    // The module-level `request` factory (NOT the per-test fixture,
-    // which is already a context) — the E1-recorded fix for the old
-    // `test.request` misuse.
-    api = await request.newContext({ baseURL: BASE_URL });
-  });
-
-  test.afterAll(async () => {
-    await api.dispose();
-  });
-
-  test("registers with phone OTP and lands on home after login", async ({ page }) => {
-    await seedWhitelist(api);
+  test("registers (no password) and lands on home with the pending banner (auth II §1/§2)", async ({
+    page,
+  }) => {
     const phone = freshPhone();
 
     await page.goto(`${BASE_URL}/register`);
@@ -114,31 +79,34 @@ test.describe("student registration and login", () => {
     // The resend control enters its cooldown countdown (visible seconds).
     await expect(page.getByRole("button", { name: /重新发送（\d+ 秒）/ })).toBeVisible();
 
-    // The real OTP challenge is now in Redis; recover its code.
+    // The real OTP challenge is now in Redis; recover its code. The
+    // password field stays EMPTY — the mobile-code-only account shape.
     const code = recoverOtpCode(`+86${phone}`);
     await page.getByLabel("短信验证码").fill(code);
-    await page.getByLabel("密码").fill("e2e-correct-horse");
     await page.getByRole("button", { name: "注册", exact: true }).click();
 
-    // Success redirects to the login page with the registered note.
-    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/login\\?registered=1`));
-    await expect(page.getByText("注册成功，请使用学号登录。")).toBeVisible();
-
-    // Login with the fresh credentials -> student home.
-    await page.getByLabel("学号").fill(STUDENT_NUMBER);
-    await page.getByLabel("密码").fill("e2e-correct-horse");
-    await page.getByRole("button", { name: "登录", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/$`));
+    // ④ straight in (owner feedback 2026-10-17): the register
+    // response's {user, tokens} envelope IS the login — the landing is
+    // the home itself with the PENDING_APPROVAL banner (browsable,
+    // frozen — auth II §2), never a login-page round trip.
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL}/$`), { timeout: 15_000 });
+    await expect(page.getByText("账号待管理员审核。")).toBeVisible();
   });
 
   test("wrong password shows the stable failure copy, both fields resettable", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
-    await page.getByLabel("学号").fill(freshStudentNumber());
+    // The unified page's password expansion (the weak link); the
+    // student number rides the three-state identifier.
+    await page.getByRole("button", { name: "使用密码登录" }).click();
+    // This case proves a WRONG password for an existing student. An
+    // arbitrary numeric handle may instead be classified as a phone.
+    const student = parseSeededAccount(process.env.CQ_E2E_STUDENT, "CQ_E2E_STUDENT");
+    await page.getByLabel("账号", { exact: true }).fill(student.username);
     await page.getByLabel("密码").fill("wrong-password");
     await page.getByRole("button", { name: "登录", exact: true }).click();
 
     // (.first(): Next's route announcer also carries role=alert.)
-    await expect(page.getByRole("alert").first()).toContainText("学号或密码不正确");
+    await expect(page.getByRole("alert").first()).toContainText("账号或密码不正确");
   });
 
   test("client convenience validation blocks obviously invalid input without a request", async ({ page }) => {

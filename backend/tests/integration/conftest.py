@@ -11,6 +11,7 @@ between tests.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 
 import pytest
@@ -63,6 +64,51 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
     engine = create_db_engine(get_settings())
     yield engine
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _loop_local_process_wide_redis() -> AsyncIterator[None]:
+    """Give every test FRESH process-wide Redis clients — ALL of them.
+
+    Five providers cache their client with ``lru_cache`` for production
+    (one event loop per process): identity's ``get_identity_redis`` and
+    the four router-level ones (tasks/rankings/community/submissions).
+    pytest-asyncio gives every test its own loop, so the FIRST
+    zero-override test to await a given client binds it to that loop;
+    any later test on a new loop reusing the cache dies with "Future
+    attached to a different loop" -> "Event loop is closed" (the
+    composition smoke caught this twice: first via identity's client —
+    #95 wired guard.reset into the login path — then via the router
+    clients after that fix). Closing and re-caching every client around
+    each test keeps all bindings loop-local; production never runs two
+    loops, so the shared-cache design stands.
+    """
+
+    def _providers():
+        from app.modules.community.router import get_community_redis
+        from app.modules.identity.providers import get_identity_redis
+        from app.modules.rankings.router import get_rankings_redis
+        from app.modules.submissions.router import get_submissions_redis
+        from app.modules.tasks.router import get_tasks_redis
+
+        return (
+            get_community_redis,
+            get_identity_redis,
+            get_rankings_redis,
+            get_submissions_redis,
+            get_tasks_redis,
+        )
+
+    async def _reset():
+        for provider in _providers():
+            with contextlib.suppress(Exception):
+                # never created this process yet — nothing to close
+                await provider().aclose()
+            provider.cache_clear()
+
+    await _reset()
+    yield
+    await _reset()
 
 
 @pytest_asyncio.fixture

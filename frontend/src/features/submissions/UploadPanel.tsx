@@ -18,10 +18,10 @@
 import { useReducer, useRef, useState, useCallback, useEffect } from "react";
 
 import {
+  acceptAttributeFor,
   completeUpload,
   createUploadIntent,
   DEFAULT_MAX_UPLOAD_BYTES,
-  FILE_PICKER_ACCEPT,
   FILE_TYPES,
   FILE_TYPE_LABELS,
   formatFileSize,
@@ -41,6 +41,7 @@ import {
   type UploadFlowState,
 } from "./uploadFlow";
 import { ValidationReport } from "./ValidationReport";
+import { downloadSubmissionTemplate } from "./templateDownload";
 
 const BUSY_PHASES: ReadonlySet<UploadFlowState["phase"]> = new Set([
   "preparing",
@@ -67,15 +68,24 @@ import { Button } from "@/components/ui/button";
 
 export function UploadPanel({
   claimId,
+  taskId,
   onClaimChanged,
+  allowedTypes,
 }: {
   claimId: string;
+  /** The task the claim belongs to — the submission template rides it. */
+  taskId: string;
   /** Boundary hook: the parent refetches claim state after transitions. */
   onClaimChanged: () => void;
+  /** The task's upload gate (MyClaimResponse.allowed_file_types,
+   * defect #12): narrows the picker's accept set and adds a
+   * task-refusal pre-check branch. Absent/empty = the universe. */
+  allowedTypes?: readonly string[];
 }) {
   const [state, dispatch] = useReducer(uploadFlowReducer, initialUploadFlowState);
   const [preCheckMessage, setPreCheckMessage] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [templateBusy, setTemplateBusy] = useState(false);
 
   // The picked File (a browser object) stays OUT of the pure reducer; the
   // run controller below is the only consumer.
@@ -204,6 +214,35 @@ export function UploadPanel({
     [beginRun, claimId, finalize],
   );
 
+  /**
+   * The submission-template download: fetch the authenticated blob, hand
+   * the browser an object URL, revoke it after the click. A failure
+   * surfaces the shared upload copy (the template is an aid, never a
+   * blocker — the picker keeps working).
+   */
+  const onDownloadTemplate = useCallback(async () => {
+    if (templateBusy) {
+      return;
+    }
+    setTemplateBusy(true);
+    setPreCheckMessage(null);
+    try {
+      const download = await downloadSubmissionTemplate(taskId);
+      const url = URL.createObjectURL(download.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = download.filename;
+      anchor.rel = "noopener";
+      anchor.click();
+      // The browser has the blob once the click lands; the URL can go.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      setPreCheckMessage("模板下载失败，请稍后重试；不影响直接上传。");
+    } finally {
+      setTemplateBusy(false);
+    }
+  }, [taskId, templateBusy]);
+
   const onFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     // Keep the raw value so the picker re-arms (same file re-selectable).
@@ -211,7 +250,7 @@ export function UploadPanel({
     if (file === null) {
       return;
     }
-    const check = preCheckFile({ name: file.name, size: file.size });
+    const check = preCheckFile({ name: file.name, size: file.size }, undefined, allowedTypes);
     if (!check.ok) {
       runControllerRef.current?.abort();
       dispatch({ type: "reset" });
@@ -228,7 +267,7 @@ export function UploadPanel({
       fileSize: file.size,
       declaredType: check.declaredType,
     });
-  }, []);
+  }, [allowedTypes]);
 
   const onStartUpload = useCallback(() => {
     const file = fileRef.current;
@@ -286,14 +325,38 @@ export function UploadPanel({
   }, []);
 
   const busy = BUSY_PHASES.has(state.phase);
-  const allowedFormats = FILE_TYPES.map((type) => FILE_TYPE_LABELS[type]).join(" / ");
+  // The task's own gate names the formats when it carries one (defect
+  // #12's contract; §10.1: a document task then reads 支持格式：Word/PDF
+  // 文档 with no tabular wording); absent/empty keeps the universe.
+  const formatKeys =
+    allowedTypes !== undefined &&
+    allowedTypes.some((type) => (FILE_TYPES as readonly string[]).includes(type))
+      ? allowedTypes.filter((type) =>
+          (FILE_TYPES as readonly string[]).includes(type),
+        )
+      : FILE_TYPES;
+  const allowedFormats = formatKeys
+    .map((type) => FILE_TYPE_LABELS[type as FileTypeKey])
+    .join(" / ");
 
   return (
     <section className="section upload-panel" aria-label="提交数据文件">
       <h2 className="section-title">提交数据文件</h2>
       <p className="field-hint">
         支持格式：{allowedFormats}；单个文件最大 {formatFileSize(DEFAULT_MAX_UPLOAD_BYTES)}
-        （任务如有更严格的限制，以上传时的校验结果为准）。
+        （任务若限制更严，按校验提示来）
+      </p>
+
+      <p className="field-hint">
+        <Button
+          variant="ghost"
+          disabled={templateBusy}
+          aria-busy={templateBusy}
+          onClick={() => void onDownloadTemplate()}
+        >
+          {templateBusy ? <span className="spinner" aria-hidden="true" /> : null}
+          <span>下载本任务的提交模板（CSV）</span>
+        </Button>
       </p>
 
       <div className="field upload-area">
@@ -303,7 +366,7 @@ export function UploadPanel({
             id="submission-file"
             className="sr-only"
             type="file"
-            accept={FILE_PICKER_ACCEPT}
+            accept={acceptAttributeFor(allowedTypes)}
             value={inputValue}
             onChange={onFileChange}
             disabled={busy}
@@ -390,7 +453,7 @@ export function UploadPanel({
 
       {state.phase === "under-review" ? (
         <div className="alert alert-success" role="status">
-          <p>文件已通过校验，进入人工审核队列。</p>
+          <p>文件已通过校验，进入人工审核队列</p>
         </div>
       ) : null}
 

@@ -17,7 +17,7 @@
  */
 import { formatFileSize } from "@/features/submissions/api";
 import type { AuthErrorView } from "@/features/auth/errors";
-import { isApiError } from "@/lib/errors";
+import { COPY_GENERIC_FAIL, COPY_NETWORK_FAIL, isApiError } from "@/lib/errors";
 
 import type {
   ImportPreviewDto,
@@ -75,7 +75,7 @@ const PUBLISH_ACTION: LifecycleActionView = {
   confirmRequired: true,
   confirmTitle: "发布任务",
   confirmBody:
-    "发布后任务立即对学生可见并可领取；奖励积分、截止模式、文件策略等契约字段将从发布一刻起冻结，之后只能暂停或关闭。发布前请确认已导入任务单元并通过服务端校验。",
+    "发布后任务立即对学生可见，契约字段随之冻结。发布后不可修改，只能暂停或关闭。",
   confirmLabel: "确认发布",
 };
 
@@ -208,6 +208,48 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   notificationChannels: ["SMS", "EMAIL", "IN_APP"],
 };
 
+// --- default submission schemas (defect #22, QA 2026-10-03) -------------------
+//
+// The schema field rides in a collapsed 高级 section and starts from a
+// per-type template so the default teacher never has to author JSON:
+// pick the file types, get a legal starting point, adjust the column
+// names. The templates use the CANONICAL grammar (validation schema.py:
+// required_columns/source_selector) — never an ad-hoc shape.
+
+const DEFAULT_SCHEMA_TEMPLATES: Record<string, string> = {
+  CSV:
+    '{"required_columns":[{"name":"platform","type":"string"},{"name":"keyword","type":"string"}]}',
+  XLSX:
+    '{"source_selector":{"sheet_name":"Sheet1"},"required_columns":[{"name":"platform","type":"string"},{"name":"keyword","type":"string"}]}',
+  SQLITE:
+    '{"source_selector":{"table_name":"records"},"required_columns":[{"name":"url","type":"string","unique":true},{"name":"title","type":"string"}]}',
+};
+
+/** Selector-specificity order when several types are selected. */
+const TEMPLATE_PREFERENCE = ["SQLITE", "XLSX", "CSV"] as const;
+
+/** The default template for a type selection ("" when none applies). */
+export function defaultSchemaFor(types: readonly string[]): string {
+  for (const type of TEMPLATE_PREFERENCE) {
+    if (types.includes(type)) {
+      return DEFAULT_SCHEMA_TEMPLATES[type];
+    }
+  }
+  return "";
+}
+
+/**
+ * Auto-fill only touches a PRISTINE field: empty, or still holding one
+ * of the known templates (switching types swaps templates freely). A
+ * teacher's manual edit — any other content — is respected as-is.
+ */
+export function shouldAutoFillSchema(current: string): boolean {
+  return (
+    current.trim().length === 0 ||
+    Object.values(DEFAULT_SCHEMA_TEMPLATES).includes(current)
+  );
+}
+
 export type TaskFormField =
   | "title"
   | "description"
@@ -290,7 +332,7 @@ export function validateTaskForm(
   if (values.submissionSchema.trim().length > 0) {
     const parsed = parseSubmissionSchema(values.submissionSchema);
     if (parsed === null) {
-      errors.submissionSchema = "提交校验 schema 必须是非空 JSON 对象";
+      errors.submissionSchema = "提交校验规则必须是非空 JSON 对象";
     }
   }
 
@@ -631,8 +673,8 @@ const FROZEN_FIELD_LABELS: Record<string, string> = {
   fixed_deadline_at: "固定截止时间",
   duration_minutes: "提交时限",
   claim_cutoff_minutes: "领取截止",
-  submission_schema: "提交校验 schema",
-  submission_schema_version: "schema 版本",
+  submission_schema: "提交校验规则",
+  submission_schema_version: "校验规则版本",
   allowed_file_types: "允许的文件类型",
   max_file_size_bytes: "单文件上限",
 };
@@ -678,7 +720,7 @@ export function describeTaskMutationError(
   fallback: string,
 ): AuthErrorView {
   if (!isApiError(error)) {
-    return { summary: "网络异常，请检查连接后重试", fieldErrors: {}, requestId: null };
+    return { summary: COPY_NETWORK_FAIL, fieldErrors: {}, requestId: null };
   }
   return {
     summary: error.message || fallback,
@@ -695,7 +737,7 @@ export function describeEditError(error: unknown): AuthErrorView {
       isApiError(error) && error.requestId !== null ? error.requestId : null;
     return { summary: frozen, fieldErrors: {}, requestId };
   }
-  return describeTaskMutationError(error, "保存失败，请稍后重试");
+  return describeTaskMutationError(error, COPY_GENERIC_FAIL);
 }
 
 // --- assignment import preview (spec §7.1 steps 1-6) ----------------------------------
@@ -873,7 +915,7 @@ export function fileFactsText(item: {
  * is read first (design §9 Forms: help text explains consequences).
  */
 export const INVALIDATE_WARNING_TEXT =
-  "判无效将取消该学生当前锁定的奖励档位与积分，之后需要重新提交并重新核算；已记录的审计信息不可删除。请确认提交内容确属无效后再操作。";
+  "判无效会取消锁定的奖励与积分，学生需重新提交。审计记录不可删除。";
 
 /** Blank-after-trim mirror of the transport rule (the note/reason is mandatory). */
 export function reviewTextReady(text: string): boolean {
@@ -917,7 +959,9 @@ export function moderationRowView(
     deleted: comment.deleted,
     edited: comment.edited,
     hardHidden: comment.hard_hidden,
-    moderationKey: comment.moderation_key,
+    // generated type marks this optional (Pydantic default); the wire
+    // always carries it — normalize undefined to null at the boundary.
+    moderationKey: comment.moderation_key ?? null,
     createdAtMs: parseInstant(comment.created_at),
   };
 }
@@ -951,7 +995,7 @@ export const COLLABORATOR_PERMISSIONS: readonly {
   {
     value: "MANAGE_ASSIGNMENTS",
     label: "管理任务单元",
-    hint: "导入与管理 Assignment",
+    hint: "导入与管理任务单元",
   },
   {
     value: "REVIEW_SUBMISSIONS",

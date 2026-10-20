@@ -23,11 +23,14 @@ inbox and the staff failure query.
   precedent), a missing id NOT_FOUND.
 - **`GET /api/v1/admin/notification-failures`** — spec §25.4
   "后台可查询失败原因": FAILED deliveries with last_error +
-  attempts, newest first, behind `require_admin_actor` (Admin-only
-  until scoped delegation — PR #2 hardening ruling; Plan 08 builds the
-  full admin operations surface on this seam). Delivery data is
-  operational state, so it is exposed HERE — admin-guarded — and never
-  on the student inbox.
+  attempts, newest first, behind `require_admin_actor` (stayed
+  Admin-only under the delegation ruling — the points review family is
+  the widened one; PR #2 hardening ruling; Plan 08 builds the
+  full admin operations surface on this seam) AND the store-backed
+  management-network guard (hardening B-F1, mounted per-route — the
+  identity admin-router pattern adapted to a router that also serves
+  students). Delivery data is operational state, so it is exposed HERE
+  — admin-guarded — and never on the student inbox.
 
 Every typed exception these handlers raise subclasses BusinessError
 with its frozen code/status, so the core envelope handler renders them;
@@ -49,10 +52,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock
 from app.db.session import get_db_session
+from app.modules.identity.admin_router import require_management_network_from_store
 from app.modules.identity.dependencies import (
     get_business_clock,
-    require_active_student_actor,
     require_admin_actor,
+    require_browsing_student_actor,
 )
 from app.modules.identity.events import Actor
 from app.modules.notifications.inbox_service import InboxService
@@ -126,7 +130,7 @@ def get_inbox_service(
 
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
-StudentActor = Annotated[Actor, Depends(require_active_student_actor)]
+StudentActor = Annotated[Actor, Depends(require_browsing_student_actor)]
 AdminActor = Annotated[Actor, Depends(require_admin_actor)]
 InboxServiceDep = Annotated[InboxService, Depends(get_inbox_service)]
 PageLimit = Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)]
@@ -195,12 +199,17 @@ async def mark_notification_read(
     )
 
 
-# --- admin surface (spec §25.4; Plan 08 consumes) -----------------------------------
+# --- admin surface (spec §25.4; consumed below and by the admin router) ------------
 
 
 @router.get(
     "/admin/notification-failures",
     response_model=NotificationFailuresResponse,
+    # The store-backed management-network guard, mounted the identity
+    # admin-router way (hardening B-F1): route-level rather than
+    # router-level because this router also serves the student inbox —
+    # only the admin surface is management access.
+    dependencies=[Depends(require_management_network_from_store)],
 )
 async def list_notification_failures(
     actor: AdminActor,
@@ -210,8 +219,9 @@ async def list_notification_failures(
     offset: PageOffset = 0,
 ) -> NotificationFailuresResponse:
     """FAILED deliveries with last_error + attempts, newest first (the
-    spec §25.4 failure query). Admin-only until scoped delegation (PR
-    #2 hardening ruling): any ACTIVE+TOTP teacher reading every user's
+    spec §25.4 failure query). Stayed Admin-only under the delegation
+    ruling (the points review family is the widened one; PR #2
+    hardening ruling): any ACTIVE+TOTP teacher reading every user's
     delivery errors was judged too broad for V1."""
     deliveries, total = await service.list_failures(db, limit=limit, offset=offset)
     return NotificationFailuresResponse(

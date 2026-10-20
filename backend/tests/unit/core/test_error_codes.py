@@ -24,7 +24,6 @@ FROZEN_BUSINESS_CODES = (
     "AUTHENTICATION_REQUIRED",
     "PERMISSION_DENIED",
     "ACCOUNT_NOT_ACTIVE",
-    "STUDENT_NOT_WHITELISTED",
     "PHONE_ALREADY_BOUND",
     "USERNAME_ALREADY_EXISTS",
     "TASK_NOT_CLAIMABLE",
@@ -69,6 +68,16 @@ FROZEN_BUSINESS_CODES = (
     "PROJECT_DRAFT_VERSION_CONFLICT",
     "PROJECT_DRAFT_REQUEST_CONFLICT",
     "OWNER_PROFILE_VERSION_CONFLICT",
+    # V1.1 Wave 1 additions (registered in interfaces.md before this enum
+    # grew): staff email-code login — uniform wrong/expired/exhausted
+    # code, account lockout envelope, mail-provider failure.
+    "EMAIL_CODE_INVALID",
+    "ACCOUNT_LOCKED",
+    "EMAIL_DELIVERY_FAILED",
+    "MOBILE_CODE_INVALID",
+    "APPROVAL_PENDING",
+    # The unified login challenge family (2026-10-19 spec §3.4).
+    "CHALLENGE_CODE_INVALID",
 )
 
 FROZEN_SYSTEM_CODES = (

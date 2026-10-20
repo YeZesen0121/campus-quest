@@ -58,6 +58,7 @@ from app.modules.identity.enums import Role, UserStatus
 from app.modules.identity.events import InMemoryEventCollector
 from app.modules.identity.models import TotpCredential, User
 from app.modules.identity.session_service import SessionService
+from app.modules.submissions.models import Submission
 from app.modules.tasks.enums import (
     AssignmentAvailability,
     ClaimStatus,
@@ -230,7 +231,11 @@ async def swept_task_catalogue(db_session: AsyncSession) -> None:
     asserts on are global, so each test starts from a deterministic
     catalogue: the DELETEs ride the harness transaction and roll back at
     teardown, restoring the leftovers for the suites that own them.
+    Submissions delete first: committing suites (claim races, document
+    validation, the e2e world) leave submissions referencing claims, and
+    deleting the claims first dies on that FK.
     """
+    await db_session.execute(delete(Submission))
     await db_session.execute(delete(AssignmentClaim))
     await db_session.execute(delete(Assignment))
     await db_session.execute(delete(TaskCollaborator))
@@ -807,12 +812,22 @@ async def test_teacher_creates_publishes_imports_student_claims_and_abandons(
     assert my_claims["total"] == 1
     assert len(my_claims["items"]) == 1
     item = my_claims["items"][0]
-    assert set(item) == _CLAIM_FIELDS | {"task_title"}
+    # QA #15/#12 amendments: the claim item carries the latest
+    # submission handle and the task's upload gate beside the title.
+    assert set(item) == _CLAIM_FIELDS | {
+        "task_title",
+        "latest_submission_id",
+        "allowed_file_types",
+    }
     assert item["claim_id"] == claim["claim_id"]
     assert item["task_id"] == task_id
     assert item["task_title"] == "抖音学习打卡视频数据采集"
     assert item["platform"] == "xiaohongshu"
     assert item["keyword"] == claim["keyword"]
+    # Fresh claim, no finalize yet: the handle is null; the gate is the
+    # task's own list verbatim.
+    assert item["latest_submission_id"] is None
+    assert item["allowed_file_types"] == ["CSV"]
 
     # -- student: abandon releases the unit back to AVAILABLE -------------------
     abandoned = await client.post(
@@ -1058,6 +1073,40 @@ async def test_import_preview_reports_row_errors(
     )
     assert confirmed.status_code == 200
     assert confirmed.json()["inserted"] == 1
+
+
+@pytest.mark.integration
+async def test_import_preview_oversize_body_rejected_streaming(
+    db_session: AsyncSession,
+    api_clock: FrozenClock,
+    client: httpx.AsyncClient,
+    fake_limiter: FakeRateLimiter,
+) -> None:
+    """Security round F2: an import body over the byte cap is rejected
+    at the transport (400 FILE_TOO_LARGE) by the streaming-bounded
+    reader — never buffered whole first. Oversized uploads used to
+    ride ``request.body()`` into memory before the parser's cap ever
+    ran. The route is rate limited like claim/abandon (FakeRateLimiter
+    records the bucket)."""
+    teacher, teacher_tokens = await _seed_management_teacher(
+        db_session, api_clock, username=_TEACHER_EMAIL
+    )
+    task = _seed_task(teacher.id)
+    db_session.add(task)
+    await db_session.flush()
+
+    three_mib = b"x" * (3 * 1024 * 1024)
+    rejected = await client.post(
+        f"/api/v1/teacher/tasks/{task.id}/assignments/import/preview",
+        content=three_mib,
+        headers={**_bearer(teacher_tokens), "Content-Type": "text/csv"},
+    )
+    assert rejected.status_code == 400, rejected.text
+    error = _envelope(rejected)
+    assert error["code"] == "FILE_TOO_LARGE"
+    assert error["details"]["limit"] == 2 * 1024 * 1024
+
+    assert any(check.bucket == "tasks:import-preview" for check in fake_limiter.checks)
 
 
 # --- statistics surface ---------------------------------------------------------------

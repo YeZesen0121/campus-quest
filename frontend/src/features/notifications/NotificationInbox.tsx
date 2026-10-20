@@ -74,8 +74,8 @@ export function NotificationInbox({ filter }: NotificationInboxProps) {
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<unknown>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  // FOLD (T7 review): a failed load-more used to vanish silently; the
-  // inline message + retry below keep the failure observable.
+  // FOLD (T7 review): a failed load-more surfaces inline; the
+  // message + retry below keep the failure observable.
   const [moreError, setMoreError] = useState<unknown>(null);
   const [markErrors, setMarkErrors] = useState<Record<string, SectionErrorView>>(
     {},
@@ -260,7 +260,7 @@ export function NotificationInbox({ filter }: NotificationInboxProps) {
             ) : (
               <EmptyState
                 title="暂无通知"
-                hint="任务审核结果、截止提醒和兑换动态会出现在这里"
+                hint="审核结果与提醒都从这里查看"
               />
             )
           ) : (

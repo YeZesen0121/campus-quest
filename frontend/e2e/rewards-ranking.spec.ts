@@ -41,7 +41,7 @@ import { ensureStudentLogin, mintToken } from "./fixtures";
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 const API_URL = process.env.CQ_E2E_API_URL ?? "http://localhost:8000/api/v1";
-const STUDENT = process.env.CQ_E2E_STUDENT; // "20240001:correct-horse"
+const STUDENT = process.env.CQ_E2E_STUDENT; // "username:password" (factories' DEFAULT_PASSWORD)
 const RUN = process.env.CQ_E2E_RUN;
 const REWARD_ITEM_ID = process.env.CQ_E2E_REWARD_ITEM_ID;
 const ADMIN_ID = process.env.CQ_E2E_ADMIN_ID;
@@ -78,6 +78,7 @@ async function loginAs(
   }
   const [username, password] = credentials.split(":");
   await page.goto(`${BASE_URL}/login`);
+  await page.getByRole("button", { name: "密码登录" }).click();
   await page.getByLabel("学号").fill(username);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
@@ -89,13 +90,18 @@ test.describe("student rewards redemption", () => {
     await loginAs(page, STUDENT);
   });
 
-  test("wallet strip shows available / earned / spendable", async ({ page }) => {
+  test("wallet strip: spendable metric plus earned; available only when divergent (defect #10)", async ({ page }) => {
     await page.goto(`${BASE_URL}/rewards`);
 
     await expect(page.getByLabel("积分余额")).toBeVisible();
-    await expect(page.getByText("可用积分")).toBeVisible();
-    await expect(page.getByText("累计获得")).toBeVisible();
+    // The hero metric is the redemption-actionable balance.
     await expect(page.getByText("可花费")).toBeVisible();
+    await expect(page.getByText("累计获得")).toBeVisible();
+    // Defect #10 (QA 2026-10-03): 可用积分 equals 可花费 whenever
+    // nothing is frozen — the quiet line then omits it (the duplicate
+    // balance label the QA flagged). The seeded wallet has no frozen
+    // requests, so it must NOT render here.
+    await expect(page.getByText("可用积分")).toHaveCount(0);
   });
 
   test("redeem flow: confirm dialog -> pending state -> frozen spendability", async ({
@@ -140,7 +146,7 @@ test.describe("student rewards redemption", () => {
     // the 最近兑换 receipt carries the server's own figures (several
     // lines match /积分/ — the receipt's and the freeze hint's).
     const wallet = page.getByLabel("积分余额");
-    await expect(wallet.getByText(/冻结在兑换申请中/)).toBeVisible();
+    await expect(wallet.getByText(/冻结在审核中的兑换里/)).toBeVisible();
     const latest = page.getByLabel("最近兑换");
     await expect(latest.getByText(/积分/).first()).toBeVisible();
     await expect(latest.locator(".badge", { hasText: "待审核" })).toBeVisible();

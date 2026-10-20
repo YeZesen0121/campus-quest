@@ -28,7 +28,6 @@ class ErrorCode(StrEnum):
     AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
     PERMISSION_DENIED = "PERMISSION_DENIED"
     ACCOUNT_NOT_ACTIVE = "ACCOUNT_NOT_ACTIVE"
-    STUDENT_NOT_WHITELISTED = "STUDENT_NOT_WHITELISTED"
     PHONE_ALREADY_BOUND = "PHONE_ALREADY_BOUND"
     # Registered in interfaces.md (not a §29-listed code): a username/unique
     # violation means the account already exists — distinct from a whitelist
@@ -82,6 +81,22 @@ class ErrorCode(StrEnum):
     PROJECT_DRAFT_VERSION_CONFLICT = "PROJECT_DRAFT_VERSION_CONFLICT"
     PROJECT_DRAFT_REQUEST_CONFLICT = "PROJECT_DRAFT_REQUEST_CONFLICT"
     OWNER_PROFILE_VERSION_CONFLICT = "OWNER_PROFILE_VERSION_CONFLICT"
+    # Registered in interfaces.md (not a §29-listed name; V1.1 Wave 1):
+    # the staff email-code login channel (spec 2026-10-15 §2.1) — one
+    # uniform code for wrong/expired/exhausted codes (anti-enumeration),
+    # the account lockout envelope, and the mail-provider failure path.
+    EMAIL_CODE_INVALID = "EMAIL_CODE_INVALID"
+    ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
+    EMAIL_DELIVERY_FAILED = "EMAIL_DELIVERY_FAILED"
+    # V1.1 auth-extension II (spec 2026-10-16): the student mobile-code
+    # channel's uniform wrong/expired/exhausted answer, and the frozen-
+    # surface envelope for PENDING_APPROVAL accounts.
+    MOBILE_CODE_INVALID = "MOBILE_CODE_INVALID"
+    APPROVAL_PENDING = "APPROVAL_PENDING"
+    # The unified login challenge family (2026-10-19 spec §3.4): one
+    # code for wrong / expired / attempts-exhausted codes on the
+    # unified arms — the branch reason stays in server logs.
+    CHALLENGE_CODE_INVALID = "CHALLENGE_CODE_INVALID"
 
     # System / framework codes (interfaces.md "System / framework codes").
     # Not business codes; raised only by framework error handlers.

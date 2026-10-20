@@ -2,15 +2,9 @@
  * CampusQuest community e2e — Plan 09 Task 6 (comments, votes,
  * reactions, reports, ratings).
  *
- * STATUS: SPEC ONLY — NOT WIRED TO A RUNNER YET.
- *
- * Same guard pattern as `e2e/auth.spec.ts` / `e2e/task-claim.spec.ts`:
- * Playwright itself is installed by Plan 10 (no `@playwright/test`
- * dependency and no `test:e2e` script yet). Until then this file stays
- * invisible to the gates (tsconfig includes only `src/**`, eslint
- * globalIgnores lists `e2e/**`, `next build` never leaves `src/app`).
- * Once Plan 10 installs Playwright, remove the eslint ignore, add the
- * `test:e2e` script, and run with `CQ_E2E=1`.
+ * Gate discipline: every test is skipped unless CQ_E2E=1, so importing
+ * the file never depends on a live backend during ordinary development.
+ * ESLint covers e2e/**; tsc does not (tsconfig's include stops at src).
  *
  * Environment contract (defaults work against local dev servers):
  * - CQ_E2E=1                    enable the suite (required);
@@ -57,9 +51,9 @@ import { ensureStudentLogin, expect, test } from "./fixtures";
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 const LOGIN_URL = process.env.CQ_E2E_LOGIN_URL ?? `${BASE_URL}/login`;
-const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/staff/login`;
+const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/login`;
 const TASK_URL = process.env.CQ_E2E_TASK_URL;
-const STUDENT = process.env.CQ_E2E_STUDENT; // "20240002:correct-horse"
+const STUDENT = process.env.CQ_E2E_STUDENT; // "username:password" (factories' DEFAULT_PASSWORD)
 const AUTHOR_STUDENT = process.env.CQ_E2E_AUTHOR_STUDENT;
 const AUTHOR_SECRETS = (process.env.CQ_E2E_AUTHOR_SECRETS ?? "")
   .split(",")
@@ -72,7 +66,7 @@ const MODERATION_TASK_PATH = process.env.CQ_E2E_MODERATION_TASK_PATH;
 
 test.skip(
   !E2E_ENABLED,
-  "Playwright lands in Plan 10; set CQ_E2E=1 (and the CQ_E2E_* fixtures) to run this suite.",
+  "set CQ_E2E=1 (and the CQ_E2E_* fixtures) to run this suite.",
 );
 
 const flowsReady = TASK_URL !== undefined && STUDENT !== undefined;
@@ -88,7 +82,8 @@ async function loginAs(
 ): Promise<void> {
   const [username, password] = credentials.split(":");
   await page.goto(LOGIN_URL);
-  await page.getByLabel("学号").fill(username);
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  await page.getByLabel("账号", { exact: true }).fill(username);
   await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${BASE_URL}/$`));
@@ -138,13 +133,24 @@ async function loginAsStaff(
 ): Promise<void> {
   const [username, password] = credentials.split(":");
   await page.goto(STAFF_LOGIN_URL);
-  await page.getByLabel("邮箱").fill(username);
+  // The unified page: the weak link expands the password form; an
+  // ADMIN's password answers totp_required (the leg completes it).
+  await page.getByRole("button", { name: "使用密码登录" }).click();
+  await page.getByLabel("账号", { exact: true }).fill(username);
   await page.getByLabel("密码").fill(password);
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
     await page.getByRole("button", { name: "登录", exact: true }).click();
+    const legAppeared = await page
+      .getByTestId("unified-login-totp-leg")
+      .waitFor({ state: "visible", timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (legAppeared) {
+      await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
+      await page.getByRole("button", { name: "完成登录" }).click();
+    }
     try {
-      await expect(page).not.toHaveURL(/\/staff\/login/, { timeout: 5_000 });
+      await expect(page).not.toHaveURL(/\/login/, { timeout: 5_000 });
       return;
     } catch {
       // A slow hop can carry the submit across the step boundary —

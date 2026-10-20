@@ -1,7 +1,8 @@
 # CampusQuest V1 设计规格
 
-> 状态：Design Approved / Implementation Not Started  
-> 日期：2026-09-19  
+> 状态：Implemented — V1 已于 2026-10-05 上线；§10.1/§16.1/§42 修订已并入正文  
+> 历史状态：Design Approved / Implementation Not Started（2026-09-19）  
+> 日期：2026-09-19（初版）；修订随并入记录于对应小节  
 > 仓库：Penghuige/campus-quest  
 > 后端：FastAPI  
 > 本文是 CampusQuest V1 的产品与工程实现基准。后续实现 Agent 必须优先遵循本文中的 MUST / SHOULD / MAY 约束；若实现阶段发现本文内部矛盾，应先提出并修正规格，而不是在代码中静默选择一种解释。
@@ -283,6 +284,7 @@ Student 强制绑定手机号。
 - Web 端不得把长期 Refresh Token 放 localStorage。
 - 推荐 HttpOnly + Secure + SameSite Cookie。
 - 若使用 Cookie 认证，所有有副作用请求必须有 CSRF 防护。
+- Refresh 轮换的稳定后继者重放窗修订（PR #10，休眠能力，默认 `REFRESH_GRACE_SECONDS=0` 保持本节原语义）见 [2026-09-30-refresh-grace-amendment.md](2026-09-30-refresh-grace-amendment.md)。
 
 Teacher/Admin：
 
@@ -340,7 +342,7 @@ Task 表示“一个可由多人参与的任务”。
 - grace_period_minutes，V1 固定为 1440（24 小时）；V1 不提供按 Task 修改宽限期的产品入口
 - claim_cutoff_minutes，FIXED 模式默认 240
 - submission_schema JSONB
-- allowed_file_types
+- allowed_file_types（§10.1 两族互斥：结构化 {CSV,XLSX,SQLITE} 或文档 {DOCX,PDF}）
 - max_file_size_bytes
 - notify_24h
 - notify_4h
@@ -637,6 +639,7 @@ V1 奖励分段定义为：
 - CSV
 - XLSX
 - SQLite / DB，仅当确认为 SQLite
+- DOCX / PDF（文档型任务，见 §10.1）
 
 Task 可限制允许格式。
 
@@ -659,6 +662,32 @@ Task 可限制允许格式。
 - 不允许用户构造任意 object_key 读取他人文件。
 - 文件上限默认 200 MB，可按 Task 调整。
 - 解析器还需要独立的行数、列数、解压大小、CPU、内存和超时限制；不能认为 200 MB 原文件就是唯一资源上限。
+
+### 10.1 文档型任务（owner 批准 2026-10-09，QA #12 批次）
+
+`allowed_file_types` 的宇宙扩展为 `{CSV, XLSX, SQLITE, DOCX, PDF}`，并按
+任务模态分两族：
+
+- **结构化格式族**：CSV / XLSX / SQLite——机器校验走 §12 的 JSON
+  Schema DSL（列/类型/唯一性/行数）。
+- **文档格式族**：DOCX / PDF——机器校验只做**完整性检查**：魔数与格式
+  一致（DOCX 为 ZIP 本地头 + OOXML manifest 且与 XLSX 可区分——DOCX 的
+  manifest 含 `word/` 前缀成员；PDF 为 `%PDF-` 头与 `%%EOF` 尾）、可
+  解析（DOCX 能打开 zip 目录；PDF 能定位 trailer）、大小上限。**不跑
+  schema**：内容判断由教师人工审核承载（§14 流程不变）。
+
+约束：
+
+- **单任务内两族互斥**：`allowed_file_types` 只能属于一族——结构化任务
+  可同时开 CSV+XLSX+SQLite；文档任务可同时开 DOCX+PDF；混合（如
+  CSV+DOCX）在任务创建/更新时被 422 拒绝。`submission_schema` 对文档
+  型任务必须为空（无列约束可声明）。
+- 文档型 Submission 的机器校验报告为**单项完整性检查**（§12.4 同构 UX：
+  parser_version / file_type / row_count=null / errors 列表——通过则
+  空，失败则一项 FILE_CORRUPT 类错误）；VALIDATED 后照常进 UNDER_REVIEW
+  等人工审核。
+- 前端 picker 的 accept 按任务的 `allowed_file_types` 收窄（随
+  MyClaimResponse / TaskDetail 输出），预检类型化拒绝。
 
 ## 11. Submission
 
@@ -1681,6 +1710,22 @@ Teacher 不允许任意修改全局短信模板。
 - StudentWhitelist 重要变更。
 - 系统配置变更。
 - 手工修复 Claim/Assignment 状态。
+- Task 生命周期动作：publish / pause / resume / close / archive（owner 裁定
+  2026-10-11 扩列——状态流转即治理事件，行携带 before/after status 快照）。
+- Task 协作者授予/移除（同上裁定）。
+- Task Assignment 批量导入确认（同上裁定；行携带 inserted 计数）。
+- 邮箱验证码登录成功与 ADMIN 二腿分派（V1.1 2026-10-15 随 Wave 1 扩列）：
+  `EMAIL_LOGIN_SUCCEEDED`（含 channel=email_code / +device / +totp 快照）与
+  `EMAIL_LOGIN_TOTP_REQUIRED`——actor 即登录账号本人，行内不落邮箱（G11）。
+- 记住设备自助清退（V1.1 §2.2 随 Wave 1）：`OWN_DEVICES_REVOKED`，actor=清退
+  本人，after 快照携带 revoked 计数。
+- 注册审批裁决（V1.1 2026-10-16 认证扩展 II spec §2）：`USER_APPROVED`
+  （approved_at 快照）与 `USER_REJECTED`（rejected_reason 快照），actor=裁决
+  管理员，目标=学生账号；学生手机码登录成功 `MOBILE_LOGIN_SUCCEEDED`
+  （channel=mobile_code / +device 快照，行内不落手机号 G11）。
+- 平台注册表管理动作（V1.1 2026-10-16 spec §3 随平台注册表落地）：
+  `PLATFORM_CREATED`（after 快照=显示名/排序/启用）与 `PLATFORM_UPDATED`
+  （before/after 快照），actor=操作管理员，target=平台 code。
 
 AuditLog 不允许通过普通管理后台删除。
 
@@ -2275,6 +2320,11 @@ Task Card：
 
 领取后不暴露其他 Assignment 列表，只展示分配给本人的具体 platform/keyword。
 
+任务广场列表排序（owner 裁定 2026-10-10）：仍有可领 Assignment（AVAILABLE > 0）的
+任务排在已领完（AVAILABLE = 0，含全部 OCCUPIED/COMPLETED/RETIRED 与无 Assignment）
+的任务之前；两组内部保持发布时间新→旧。已领完的任务仍在列表中可见（卡片不因领完
+而隐藏），排序仅为可领优先展示。排序键由查询时聚合计算，不落存储列。
+
 逾期页面始终表达“当前仍可获得 X 积分”，不采用“你被扣了 X 分”的惩罚性文案。
 
 倒计时仅用于 UX；服务端时间是最终裁决。
@@ -2329,7 +2379,7 @@ V1 奖励曲线：
 6. 每人最多 3 个需行动 Claim，同 Task 同时最多 1 个。
 7. 主动放弃每日最多 2 次并正确释放。
 8. FIXED / RELATIVE DDL 均工作。
-9. CSV/XLSX/SQLite 安全上传和机器校验工作。
+9. CSV/XLSX/SQLite/DOCX/PDF 安全上传和机器校验工作（DOCX/PDF 为 §10.1 完整性检查）。
 10. 自动校验通过后进入人工验收。
 11. DDL 奖励 100/80/50/20 边界正确。
 12. Teacher 审核晚不会惩罚学生。

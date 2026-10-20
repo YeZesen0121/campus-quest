@@ -5,7 +5,9 @@
 # upgrade + `alembic check` proving migrations match the models.
 # Frontend: install, typecheck, lint, CSS integrity guard, unit tests,
 # production build.
-# Playwright is intentionally absent; it lands with the E2E plan (Plan 10).
+# Playwright runs here in the visual-regression job (pixel baselines +
+# the axe a11y gate); the full e2e battery runs locally via
+# `make release-gate` (playwright-e2e).
 #
 # Triggers: pushes to main, plus pull requests targeting main. Working
 # branches get CI through their PR (open the PR as a draft immediately);
@@ -87,6 +89,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Ratchet direction gate (2026-10-19): coverage floors are
+      # one-way — a lowered or removed floor fails the PR unless its
+      # body carries the [floor-adjust] marker (a deliberate,
+      # reviewer-visible lowering). Stdlib-only; runs before uv sync.
+      - name: Coverage floor direction gate
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          CQ_ALLOW_FLOOR_DECREASE: ${{ contains(github.event.pull_request.body || '', '[floor-adjust]') && '1' || '0' }}
+        run: |
+          git fetch --depth=1 origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+          python3 scripts/check_ratchet_direction.py
+
       - name: Install uv (Python 3.12)
         uses: astral-sh/setup-uv@v10.1.0
         with:
@@ -109,6 +124,27 @@ jobs:
       - name: mypy (strict app)
         working-directory: backend
         run: uv run mypy
+
+      # Architecture contract gate (owner-approved addition 2026-10-16):
+      # import-linter contracts in backend/pyproject.toml [tool.importlinter]
+      # enforce the layering rules (backend-engineering §1-§2, the
+      # identity directory-port rule in docs/architecture/interfaces.md).
+      - name: import-linter (architecture contracts)
+        working-directory: backend
+        run: uv run lint-imports
+
+      # Spec-test matrix coherence (G19, owner-approved 2026-10-07):
+      # existed only as backend/scripts/check_test_matrix.py with no
+      # CI entry before 2026-10-19 — covered rows must cite real test
+      # files, gap/mismatch rows must be registered.
+      - name: Spec-test matrix coherence (G19)
+        working-directory: backend
+        run: uv run python scripts/check_test_matrix.py
+
+      # Placeholder guard (G3): no executable placeholder ships in
+      # backend/app. Zero today; grep -c keeps it that way.
+      - name: Placeholder guard (G3)
+        run: '! grep -rn "raise NotImplementedError" backend/app --include="*.py"'
 
       # Contract-freshness gate, backend half (PR #4 review P1): the
       # committed openapi.snapshot.json must match what the CURRENT
@@ -151,7 +187,7 @@ jobs:
             --health-timeout 3s \
             --health-retries 12 \
             quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
-          for _ in $(seq 1 30); do
+          for _ in $(seq 1 90); do
             status=$(docker inspect -f '{{.State.Health.Status}}' minio-ci)
             if [ "$status" = "healthy" ]; then
               echo "MinIO is healthy"
@@ -185,6 +221,24 @@ jobs:
           uv run alembic upgrade head
           uv run alembic check
 
+      - name: Integration migration preservation and roundtrips (M1-M4)
+        working-directory: backend
+        env:
+          CQ_INTEGRATION_CI: "1"
+          CQ_INTEGRATION_PG_PORT: "15432"
+          CQ_INTEGRATION_DATABASE: campusquest_test
+        run: uv run python ../infra/integration/verify-migrations.py --ci
+
+      - name: Upload integration migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-migrations
+          path: infra/integration/.runtime/migrations/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
       # Dependency-vulnerability gate (owner-approved 2026-10-07):
       # pip-audit over the locked environment; accepted findings must
       # be rented in pip-audit-exemptions.json (reason + review date —
@@ -212,6 +266,23 @@ jobs:
       - name: Coverage ratchet
         working-directory: backend
         run: uv run python scripts/coverage_ratchet.py
+
+      # Cross-talk diagnosis (B-item root fix, 2026-10-17): the raw
+      # coverage data, uploaded on EVERY outcome so a failed ratchet
+      # hands us the exact arcs for analysis. The dot-file is copied to
+      # a plain name first — upload-artifact's glob skips hidden files.
+      # Retire with the root fix.
+      - name: Upload coverage data (cross-talk diagnosis)
+        if: always()
+        working-directory: backend
+        run: cp .coverage coverage-diagnosis.bin || true
+      - name: Upload coverage data artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data
+          path: backend/coverage-diagnosis.bin
+          retention-days: 7
 
   frontend:
     name: Frontend (Node 22)
@@ -247,6 +318,13 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Architecture contract gate, frontend half (owner-approved addition
+      # 2026-10-16): dependency-cruiser boundaries in
+      # .dependency-cruiser.cjs — errors fail the job; warn-level
+      # cross-feature imports stay visible without failing.
+      - name: dependency-cruiser (architecture boundaries)
+        run: npm run arch:lint
 
       - name: CSS integrity
         run: npm run check:css
@@ -316,6 +394,13 @@ jobs:
       CQ_E2E: "1"
       CQ_VISUAL: "1"
       CQ_E2E_FIXED_LABELS: "1"
+      # The login family's per-username bucket (10/5min) holds EIGHT
+      # admin logins per job — exactly the four pre-Wave-2a admin faces
+      # times the visual+a11y stages. Wave 2a's dashboard+detail pushed
+      # the job to TWELVE and the a11y tail (axe: admin-dashboard, then
+      # admin-user-detail) burned the bucket, timing out on the login
+      # page. Same e2e-battery relief flag the local battery runs with.
+      CQ_E2E_LOGIN_RATELIMIT: "1"
 
     steps:
       - uses: actions/checkout@v7
@@ -380,7 +465,7 @@ jobs:
             -v "$PWD/infra/e2e-certs/minio:/etc/minio/certs:ro" \
             quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z \
             server /data --certs-dir /etc/minio/certs --address :9000 --console-address :9001
-          for _ in $(seq 1 30); do
+          for _ in $(seq 1 90); do
             if curl -skf https://localhost:9002/minio/health/live >/dev/null; then
               echo "e2e MinIO is live over https"
               exit 0

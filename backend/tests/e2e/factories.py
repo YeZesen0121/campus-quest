@@ -18,22 +18,40 @@ machinery — the smoke test pins it anyway.
 (the cleanup-harness / composition-smoke precedent) scoped to THIS
 test's seeded ids, plus the honor-definition snapshot delta (the
 approve path lazily creates global ``honors`` rows — deleting only the
-delta never touches another suite's seeded definitions). Deferred to
-later task modules, deliberately: audit rows (no FKs, nothing blocks on
+delta never touches another suite's seeded definitions). Left to the
+owning task modules, deliberately: audit rows (no FKs, nothing blocks on
 them) and ``student_whitelist`` entries (flow-scoped, created through
 the public API with run-prefixed student numbers, not by these
 factories).
+
+**The mint clock (fixed-labels mode).** Under ``CQ_E2E_FIXED_LABELS=1``
+every timestamp this layer stamps at seed time rides
+``mint_now()`` — a FUTURE anchor plus one-minute steps per call —
+instead of the wall clock, so date text, review-queue stamps, and
+deadline snapshots are byte-stable between a pixel-baseline capture
+and a re-shoot (the walkthrough-measured drift: pinning the labels
+alone still left student-rewards ~173k / dashboard ~48k px moving).
+Future on purpose: the functional specs sharing this world submit
+against the seeded claims on the orchestrated app's REAL clock, so a
+past anchor would close every submission window — the pyjwt wall-clock
+lesson applied in reverse (pin the WORLD, never the app; token minting
+and login stay on the real clock). The steps keep sibling stamps
+distinct: one shared instant would tie every ``published_at`` and
+leave list order to the uuid tiebreak. The ONE exception is
+``seed_points_balance``'s ``ranking_effective_at`` (see there).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import os
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from itertools import count
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.security import hash_password
@@ -48,6 +66,7 @@ from app.modules.community.models import (
 from app.modules.identity.enums import Role, UserStatus
 from app.modules.identity.models import (
     RecoveryCode,
+    RememberedDevice,
     StaffInvitation,
     StudentWhitelist,
     TotpCredential,
@@ -145,6 +164,40 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+#: The fixed-labels world's mint anchor: every seed-time stamp derives
+#: from this instant (plus one-minute steps) instead of the wall clock,
+#: FUTURE-dated so the seeded claims stay on-time and windows stay open
+#: against the real clock the orchestrated app runs on. Pinned as an
+#: independent contract by test_browser_world_mint_clock (the
+#: contract-freeze discipline, per the test_declared_type_content_types
+#: precedent: the implementation must match the pinned value, not
+#: alias it).
+FIXED_MINT_ANCHOR = datetime(2030, 1, 1, tzinfo=UTC)
+
+_FIXED_MINT_STEP = timedelta(minutes=1)
+_fixed_mint_steps: Iterator[int] = count()
+
+
+def reset_mint_clock() -> None:
+    """Restart the stepped mint sequence (browser_world._seed calls
+    this at entry). The production seed path is a fresh process per
+    world, so this only matters for in-process double seeds (the pytest
+    label/mint tests) — resetting keeps their stamps byte-identical."""
+    global _fixed_mint_steps
+    _fixed_mint_steps = count()
+
+
+def mint_now() -> datetime:
+    """The seed-time ``now``: the anchor's stepped sequence under
+    ``CQ_E2E_FIXED_LABELS=1``, the real clock otherwise (the pre-flag
+    behavior every non-visual e2e module relies on). Read per call, not
+    at import, so pytest can toggle the flag with monkeypatch — the
+    same discipline as browser_world's label_run."""
+    if os.environ.get("CQ_E2E_FIXED_LABELS") == "1":
+        return FIXED_MINT_ANCHOR + _FIXED_MINT_STEP * next(_fixed_mint_steps)
+    return datetime.now(UTC)
+
+
 def _unique_phone(run: str) -> str:
     """A run-unique E.164 mobile number for the ACTIVE-student rule.
 
@@ -175,6 +228,7 @@ async def seed_student(
             phone_e164=_unique_phone(run),
             role=Role.STUDENT,
             status=UserStatus.ACTIVE,
+            created_at=mint_now(),
         )
         db.add(student)
         await db.commit()
@@ -200,6 +254,7 @@ async def seed_teacher_confirmed_totp(
             phone_e164=None,
             role=Role.TEACHER,
             status=UserStatus.ACTIVE,
+            created_at=mint_now(),
         )
         db.add(teacher)
         await db.flush()
@@ -207,7 +262,7 @@ async def seed_teacher_confirmed_totp(
             TotpCredential(
                 user_id=teacher.id,
                 secret_encrypted=f"e2e-totp-stand-in:{run}".encode(),
-                confirmed_at=_now(),
+                confirmed_at=mint_now(),
             )
         )
         await db.commit()
@@ -231,6 +286,7 @@ async def seed_admin(
             phone_e164=None,
             role=Role.ADMIN,
             status=UserStatus.ACTIVE,
+            created_at=mint_now(),
         )
         db.add(admin)
         await db.commit()
@@ -248,8 +304,10 @@ async def seed_task_with_assignments(
     run: str,
     assignment_count: int = 3,
     duration_minutes: int = 4320,
+    allowed: tuple[str, ...] = ("CSV",),
+    schema: Any | None = CSV_SUBMISSION_SCHEMA,
 ) -> TaskFixture:
-    """One PUBLISHED RELATIVE CSV Task owned by ``teacher_id`` with
+    """One PUBLISHED RELATIVE Task owned by ``teacher_id`` with
     ``assignment_count`` AVAILABLE Assignments, committed.
 
     The contract matches the composition smoke: ``duration_minutes`` (3
@@ -259,13 +317,18 @@ async def seed_task_with_assignments(
     flows (task 3) pass a shorter duration so a +2h/+7h late submit is a
     small clock step, not a multi-day one. Claim-time snapshots (deadline,
     reward policy) stay the claim service's job; nothing is pre-claimed
-    here."""
+    here.
+
+    §10.1 callers (the document-family world task) pass
+    ``allowed=("DOCX", "PDF")`` with ``schema=None`` — a document task
+    carries no schema by contract.
+    """
     if assignment_count < 1:
         raise ValueError("assignment_count must be >= 1")
     if duration_minutes <= 0:
         raise ValueError("duration_minutes must be positive")
     async with factory() as db:
-        now = _now()
+        now = mint_now()
         task = Task(
             owner_teacher_id=teacher_id,
             title=f"端到端数据采集任务{run[:6]}",
@@ -276,9 +339,9 @@ async def seed_task_with_assignments(
             status=TaskStatus.PUBLISHED,
             deadline_mode=DeadlineMode.RELATIVE,
             duration_minutes=duration_minutes,
-            submission_schema=CSV_SUBMISSION_SCHEMA,
-            submission_schema_version=1,
-            allowed_file_types=["CSV"],
+            submission_schema=schema,
+            submission_schema_version=1 if schema is not None else None,
+            allowed_file_types=list(allowed),
             max_file_size_bytes=10 * 1024 * 1024,
             notification_channels=["SMS"],
             published_at=now - timedelta(days=1),
@@ -346,6 +409,7 @@ async def seed_admin_confirmed_totp(
             phone_e164=None,
             role=Role.ADMIN,
             status=UserStatus.ACTIVE,
+            created_at=mint_now(),
         )
         db.add(admin)
         await db.flush()
@@ -353,7 +417,7 @@ async def seed_admin_confirmed_totp(
             TotpCredential(
                 user_id=admin.id,
                 secret_encrypted=f"e2e-totp-stand-in:{run}".encode(),
-                confirmed_at=_now(),
+                confirmed_at=mint_now(),
             )
         )
         await db.commit()
@@ -406,7 +470,7 @@ async def seed_claim(
         assert task_row is not None
         assignment = await db.get(Assignment, task.assignment_ids[0])
         assert assignment is not None
-        claimed_at = _now()
+        claimed_at = mint_now()
         deadlines = compute_claim_deadlines(task_row, claimed_at)
         claim = AssignmentClaim(
             assignment_id=assignment.id,
@@ -446,6 +510,13 @@ async def seed_points_balance(
     exact column shape: ``ASSIGNMENT_CLAIM`` source, balance+ranking
     effects, effective-at now). Returns the ranking_effective_at the
     caller should hand the ranking projection."""
+    # The ONE mint-clock exception, on purpose: ranking_effective_at is a
+    # STORAGE ADDRESS (the projection lands in business_day/month(effective)
+    # boards, and the live ranking reads derive the window from REAL now) —
+    # pinning it to the fixed anchor would empty the dashboard's monthly
+    # widget and the month-filtered wallet figures instead of freezing
+    # them. The projected VALUES are label-deterministic regardless; the
+    # cross-month re-shoot residual belongs to the frontend window masks.
     now = _now()
     async with factory() as db:
         db.add(
@@ -719,7 +790,24 @@ async def clean_world(
             )
             .values(reversal_of_id=None)
         )
-        await db.execute(delete(PointsLedger).where(PointsLedger.user_id.in_(users)))
+        # The ledger delete scope must cover BOTH FK fan-ins on users:
+        # rows the set's users OWN (user_id) and rows they OPERATED
+        # (operator_id — redemption approvals, admin adjustments,
+        # reversals). A row owned by an OUTSIDE user but operated by a
+        # set member is invisible to the user_id-only scope, and the
+        # user delete then dies on fk_points_ledger_users_operator_id —
+        # the 2026-10-09 e2e teardown abort (r3 forensics: an admin
+        # suite approving ANOTHER world's residue redemption through
+        # the queue's first row created exactly that shape). The same
+        # scope-vs-fan-in class as the PR #15 PointReservation fix.
+        await db.execute(
+            delete(PointsLedger).where(
+                or_(
+                    PointsLedger.user_id.in_(users),
+                    PointsLedger.operator_id.in_(users),
+                )
+            )
+        )
         await db.execute(delete(PointWallet).where(PointWallet.user_id.in_(users)))
 
         # Notifications: deliveries before the notifications they serve.
@@ -866,6 +954,13 @@ async def clean_world(
             delete(StaffInvitation).where(StaffInvitation.created_by.in_(users))
         )
         await db.execute(delete(UserSession).where(UserSession.user_id.in_(users)))
+        # V1.1's remembered-device rows (the email-code login spec arms
+        # one on the seeded admin) land BEFORE the users they name — the
+        # FK violation that aborted teardown and leaked whole worlds
+        # into the next battery (the two-suspended-students failure).
+        await db.execute(
+            delete(RememberedDevice).where(RememberedDevice.user_id.in_(users))
+        )
         await db.execute(
             delete(TotpCredential).where(TotpCredential.user_id.in_(users))
         )

@@ -265,3 +265,9 @@ Keep the bar for further custom skills: conditional/non-obvious workflows with r
 3. An API-surface change carries its generated contract artifacts (OpenAPI snapshot, generated client types) in the same PR.
 4. Files from a tree carry that tree's gates: a backend PR that ships frontend artifacts runs the frontend gates on the same head (and vice versa).
 5. Coverage must declare the actual concurrency model: SQLAlchemy async uses greenlet, so backend collection names both `greenlet` and `thread`. After changing collector configuration, discard earlier data and freshly collect every suite; never combine differently configured collectors. `tests/unit/core/test_coverage_greenlet.py` proves cross-file async bridge resumptions are attributed correctly.
+
+## 14. What to run before pushing
+
+- `make pre-push` is the fast local gate before every push (~2 min, no docker stack): coverage-floor direction (floors only move up), backend lint/format/typecheck, architecture lint (import-linter + dependency-cruiser), spec-test matrix coherence, the G3 placeholder guard, OpenAPI snapshot and frontend TS-type freshness, frontend typecheck/lint/CSS guard, and the frontend coverage ratchet — CI's highest-frequency failure points.
+- `.githooks/pre-push` runs it automatically; `git push --no-verify` is the escape hatch for a single push. hooksPath is per-clone local git config — after a fresh clone, run `git config core.hooksPath .githooks` once to wire the hook.
+- Backend coverage ratchet, integration, e2e, and pixel/axe are not in it — they need the compose stack and belong to `make release-gate` / CI. Reach for `make release-gate` when the change moves backend coverage, e2e flows, or pixel baselines, and always as the product-level acceptance run on merged main.

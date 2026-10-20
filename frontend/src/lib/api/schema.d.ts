@@ -39,6 +39,10 @@ export interface paths {
         /**
          * Verify Phone Challenge
          * @description Consume the challenge with its SMS code; mint the single-use proof.
+         *
+         *     Rate-limited per challenge id AND per transport peer (hardening A-1):
+         *     the OTP service already bounds wrong-code attempts per challenge, so
+         *     these buckets anti-hammer the HTTP surface itself.
          */
         post: operations["verify_phone_challenge_api_v1_auth_phone_challenges__challenge_id__verify_post"];
         delete?: never;
@@ -56,8 +60,37 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register Student */
+        /**
+         * Register Student
+         * @description Register one student — and land LOGGED IN (V1.1 login iteration
+         *     item 4): the freshly proved phone makes an immediate re-login (and
+         *     its 60s SMS cooldown) pure friction. The response pairs the account
+         *     view with the same session body/cookie set the login path answers
+         *     (PENDING_APPROVAL accounts browse the frozen home per #96).
+         */
         post: operations["register_student_api_v1_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mobile-code/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register By Mobile Code
+         * @description Trade the entry proof for a PENDING_APPROVAL account with the
+         *     phone bound — and land LOGGED IN (the register-ends-logged-in
+         *     semantics, the {user, tokens} envelope the classic door answers).
+         */
+        post: operations["register_by_mobile_code_api_v1_auth_mobile_code_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -73,8 +106,117 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login */
+        /**
+         * Login
+         * @description Student or staff password login — BOTH forms (2026-10-19 §3.2).
+         *
+         *     Legacy: {username, password} answers the flat TokenPairResponse
+         *     (unchanged bytes; the retirement PR removes it). Unified:
+         *     {identifier, password, remember_device?} answers the discriminated
+         *     union — a phone/student-number reaches the student flow (phone
+         *     first), an email reaches the staff flow with the remembered-cookie
+         *     honoring preserved; an ADMIN without one answers totp_required and
+         *     the totp leg completes at /auth/challenge/totp.
+         *
+         *     PR-3 (2026-10-19 spec §3.2/§3.3): the legacy {username, password}
+         *     form is RETIRED — the unified identifier form is the only shape.
+         */
         post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/challenge/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unified Challenge Request
+         * @description One code request, routed by identifier shape (2026-10-19 §3.1):
+         *     email → the staff email-code service; phone by the users row → the
+         *     student mobile-code service (unregistered phones included — the
+         *     entry flow) or the staff one. Always the arm's own 202; a student
+         *     number is a format-layer 422 with no account query.
+         */
+        post: operations["unified_challenge_request_api_v1_auth_challenge_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/challenge/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unified Challenge Verify
+         * @description The code leg (or, with BOTH fields empty, the remembered-cookie
+         *     single-factor leg): the discriminated union answers authenticated /
+         *     totp_required / unregistered — ``status`` is the only judgment
+         *     member. Wrong or expired or exhausted codes answer the single
+         *     CHALLENGE_CODE_INVALID.
+         */
+        post: operations["unified_challenge_verify_api_v1_auth_challenge_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/challenge/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unified Challenge Totp
+         * @description The ADMIN second factor — ONE endpoint over BOTH pending domains
+         *     (email-login and staff-mobile; a wrong-domain probe burns nothing).
+         *     Transport-peer rate-limited (interfaces.md: the 6-digit factor under
+         *     online brute force is the login limiter's job; the per-credential
+         *     caps stay underneath).
+         */
+        post: operations["unified_challenge_totp_api_v1_auth_challenge_totp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/challenge/remembered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unified Remembered Probe
+         * @description Is a remembered device alive for the login banner? The §3.1
+         *     remembered read, the mobile-code probe's contract: 200
+         *     {phone_masked} only for the banner's audience (a cookie-bound
+         *     STUDENT), the same empty 204 for every other shape.
+         */
+        get: operations["unified_remembered_probe_api_v1_auth_challenge_remembered_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -169,6 +311,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password/reset-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spend Admin Reset Token
+         * @description Spend the admin-issued one-time reset link (Wave 2a §3.2): the
+         *     token IS the authorization — this endpoint is public. Sets the new
+         *     password, revokes every live session, writes CONSUMED; the
+         *     credential dies with the GETDEL (a replay answers the uniform
+         *     invalid).
+         */
+        post: operations["spend_admin_reset_token_api_v1_auth_password_reset_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/password/reset": {
         parameters: {
             query?: never;
@@ -181,6 +347,39 @@ export interface paths {
         /** Confirm Password Reset */
         post: operations["confirm_password_reset_api_v1_auth_password_reset_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Own Devices
+         * @description The caller's remembered login devices (V1.1 §2.2 self-service).
+         *
+         *     Staff-only on purpose: the credential exists solely on the staff
+         *     email-code channel, and a student's answer would imply a capability
+         *     that does not exist. Rows map to the explicit DTO — hashes stay
+         *     server-side.
+         */
+        get: operations["list_own_devices_api_v1_me_devices_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Own Devices
+         * @description Drop every remembered device of the caller (V1.1 §2.2).
+         *
+         *     The stolen-cookie answer: after this, a login presenting a formerly
+         *     remembered device falls back to the full TOTP leg. The
+         *     ``OWN_DEVICES_REVOKED`` audit row joins the same transaction.
+         */
+        delete: operations["revoke_own_devices_api_v1_me_devices_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -292,6 +491,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/phone/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Phone Bind
+         * @description Staff first-bind: OTP-challenge the phone being adopted (V1.1
+         *     login iteration item 1). Staff-only surface — students keep the
+         *     change flow (their registration phone is structural).
+         */
+        post: operations["request_phone_bind_api_v1_me_phone_bind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/phone/bind/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Phone Bind
+         * @description Consume the PHONE_BIND proof; the audit row (masked snapshot)
+         *     rides the same transaction.
+         */
+        post: operations["confirm_phone_bind_api_v1_me_phone_bind_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/email": {
         parameters: {
             query?: never;
@@ -386,30 +628,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/staff/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Staff Login
-         * @description Staff login: verified email + password + TOTP-or-recovery (§5.8).
-         *
-         *     A correct password without a confirmed TOTP raises the typed setup
-         *     error, rendered as 403 ``TOTP_SETUP_REQUIRED`` — the client's signal to
-         *     finish ``/staff/totp/*`` first.
-         */
-        post: operations["staff_login_api_v1_auth_staff_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/staff/invitations/accept": {
         parameters: {
             query?: never;
@@ -421,12 +639,15 @@ export interface paths {
         put?: never;
         /**
          * Accept Staff Invitation
-         * @description Trade the single-use invitation token for a pending staff session.
+         * @description Trade the single-use invitation token for a staff session.
          *
-         *     The returned tokens are a real session confined to finishing TOTP
-         *     setup (§5.8); management endpoints stay closed until 2FA is confirmed.
-         *     The accept writes its durable audit row inside the service's
-         *     transaction, carrying this request's correlation pair (§30).
+         *     V1.1 §2.3: a TEACHER acceptance is a COMPLETE login (optional
+         *     password, no TOTP onboarding — ``totp_required: false``); an ADMIN
+         *     acceptance is the V1 pending-TOTP onboarding session
+         *     (``totp_required: true``; management endpoints stay closed until 2FA
+         *     is confirmed). The accept writes its durable audit row inside the
+         *     service's transaction, carrying this request's correlation pair
+         *     (§30).
          */
         post: operations["accept_staff_invitation_api_v1_auth_staff_invitations_accept_post"];
         delete?: never;
@@ -2162,6 +2383,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Platforms
+         * @description The platform dictionary (V1.1 spec 2026-10-16 §3): every ACTIVE
+         *     role may read it; enabled entries only, ordered for the student
+         *     picker. This is the surface the claim button and task cards render
+         *     display_name from.
+         */
+        get: operations["list_platforms_api_v1_platforms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Admin Platforms
+         * @description The console list: every row including disabled ones.
+         */
+        get: operations["list_admin_platforms_api_v1_admin_platforms_get"];
+        put?: never;
+        /**
+         * Create Platform
+         * @description Register a platform (spec §3): code+display_name+sort_order; the
+         *     code is immutable after this. PLATFORM_CREATED rides the same
+         *     transaction.
+         */
+        post: operations["create_platform_api_v1_admin_platforms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/platforms/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Platform
+         * @description Patch display_name/sort_order/enabled (spec §3); the code in the
+         *     path names the row and is never writable. PLATFORM_UPDATED carries
+         *     the before/after snapshot.
+         */
+        patch: operations["patch_platform_api_v1_admin_platforms__code__patch"];
+        trace?: never;
+    };
     "/api/v1/tasks": {
         parameters: {
             query?: never;
@@ -2175,6 +2467,31 @@ export interface paths {
          *     facts only — the Assignment list never rides along.
          */
         get: operations["list_tasks_api_v1_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/submission-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Submission Template
+         * @description The CSV submission template (V1.1 spec §5): header-only, BOM
+         *     first, columns in the schema's declared order (required then
+         *     optional) — a student's filled-in file passes the validator's header
+         *     check on the first try. CSV-family tasks only; any other family
+         *     (document tasks carry no schema by §10.1) answers the typed 404.
+         *     Browsing-grade: every ACTIVE role may download it.
+         */
+        get: operations["download_submission_template_api_v1_tasks__task_id__submission_template_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2423,10 +2740,14 @@ export interface paths {
         put?: never;
         /**
          * Preview Assignment Import
-         * @description Parse and pre-check a CSV upload (spec §7.1 steps 1-4).
+         * @description Parse and pre-check an import upload (spec §7.1 steps 1-4).
          *
-         *     The file is the raw request body (``text/csv``); the importer's byte
-         *     cap rejects oversize payloads before any parsing work.
+         *     The file (CSV or XLSX) is the raw request body; the format is
+         *     decided by content sniffing — never by the wire ``Content-Type``.
+         *     Security round F2: the body is read streaming-bounded (reject the
+         *     moment the running total crosses the import byte cap — no
+         *     unbounded buffering before any check) and the route is rate
+         *     limited like claim/abandon.
          */
         post: operations["preview_assignment_import_api_v1_teacher_tasks__task_id__assignments_import_preview_post"];
         delete?: never;
@@ -3341,8 +3662,9 @@ export interface paths {
         /**
          * List Notification Failures
          * @description FAILED deliveries with last_error + attempts, newest first (the
-         *     spec §25.4 failure query). Admin-only until scoped delegation (PR
-         *     #2 hardening ruling): any ACTIVE+TOTP teacher reading every user's
+         *     spec §25.4 failure query). Stayed Admin-only under the delegation
+         *     ruling (the points review family is the widened one; PR #2
+         *     hardening ruling): any ACTIVE+TOTP teacher reading every user's
          *     delivery errors was judged too broad for V1.
          */
         get: operations["list_notification_failures_api_v1_admin_notification_failures_get"];
@@ -3563,91 +3885,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/whitelist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Whitelist
-         * @description The whitelist page, ordered by student number (read-only listing
-         *     built inline — the community-router listing precedent).
-         */
-        get: operations["list_whitelist_api_v1_admin_whitelist_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/whitelist/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Whitelist Import
-         * @description Classify every non-blank line; zero writes (preview-then-confirm,
-         *     plan Global Constraints). The digest binds the confirm payload.
-         */
-        post: operations["preview_whitelist_import_api_v1_admin_whitelist_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/whitelist/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm Whitelist Import
-         * @description Insert exactly the previewed set, all-or-nothing; a digest
-         *     mismatch or a DB collision is the typed 409 ``CONFLICT``.
-         */
-        post: operations["confirm_whitelist_import_api_v1_admin_whitelist_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/whitelist/{student_number}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Toggle Whitelist Entry
-         * @description Flip one entry to enabled/disabled; an unknown number is the
-         *     typed 400 with the missing list, an idempotent flip changes
-         *     nothing.
-         */
-        patch: operations["toggle_whitelist_entry_api_v1_admin_whitelist__student_number__patch"];
-        trace?: never;
-    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -3661,6 +3898,140 @@ export interface paths {
          *     ordering; read-only listing built inline).
          */
         get: operations["list_users_api_v1_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read User Panorama
+         * @description The §3.1 account panorama: governance row, wallet balance, the
+         *     ten most recent submissions, and the live credential counts.
+         */
+        get: operations["read_user_panorama_api_v1_admin_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read User Sessions
+         * @description The §3.3 read side: the account's live credential counts.
+         */
+        get: operations["read_user_sessions_api_v1_admin_users__user_id__sessions_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Kick User
+         * @description The §3.3 stolen-account emergency stop: every live refresh
+         *     session revoked, every remembered-device credential dropped, one
+         *     ADMIN_SESSIONS_REVOKED audit row in the same commit.
+         */
+        delete: operations["kick_user_api_v1_admin_users__user_id__sessions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change User Role
+         * @description The §3.4 TEACHER<->ADMIN flip: not on oneself, not on students,
+         *     never leaving zero ACTIVE ADMINs (service check + DB trigger).
+         */
+        patch: operations["change_user_role_api_v1_admin_users__user_id__role_patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Password Reset Link
+         * @description The §3.2 one-time reset link for ANOTHER staff account: the
+         *     urlsafe32 plaintext shows exactly once (only its SHA-256 is kept,
+         *     48h TTL), ISSUED rides the same commit. Self-service and student
+         *     targets are refused — students recover through their phone OTP.
+         */
+        post: operations["issue_password_reset_link_api_v1_admin_users__user_id__password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Status Action
+         * @description The §3.5 batch: one status action, up to 100 ids, one audited
+         *     transition per row — per-row outcomes, a failing row never breaks
+         *     its neighbours, the actor's own row is refused.
+         */
+        post: operations["batch_status_action_api_v1_admin_users_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Overview
+         * @description The §4.1 console aggregate: fixed key sets (zero counts carry),
+         *     governance facts only.
+         */
+        get: operations["read_overview_api_v1_admin_overview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3730,6 +4101,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{user_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Student
+         * @description PENDING_APPROVAL -> ACTIVE (V1.1 spec 2026-10-16 §2): approve a
+         *     student registration; USER_APPROVED rides the same transaction.
+         */
+        post: operations["approve_student_api_v1_admin_users__user_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{user_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Student
+         * @description PENDING_APPROVAL -> BANNED with the optional reason (spec §2);
+         *     USER_REJECTED rides the same transaction.
+         */
+        post: operations["reject_student_api_v1_admin_users__user_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -3747,6 +4160,75 @@ export interface paths {
          *     exactly once.
          */
         post: operations["create_staff_invitation_api_v1_staff_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/staff/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Staff Invitations
+         * @description The §4.2 lifecycle list: derived states (PENDING/ACCEPTED/
+         *     EXPIRED/REVOKED) against the business clock, the invited email
+         *     masked (G11), the issuer by id and nickname.
+         */
+        get: operations["list_staff_invitations_api_v1_admin_staff_invitations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/staff/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Staff Invitation
+         * @description §4.2: revoke an un-accepted invitation — its token stops
+         *     resolving the moment this commits (the accept path rejects revoked
+         *     rows). Accepted or already-revoked rows refuse (409); unknown ids
+         *     answer 404.
+         */
+        delete: operations["revoke_staff_invitation_api_v1_admin_staff_invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/staff/invitations/{invitation_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Staff Invitation
+         * @description §4.2: re-sign an un-accepted invitation — a fresh one-time token
+         *     (the old one dies), the expiry window restarts, and a revoked row
+         *     revives. Accepted rows refuse (409). The fresh token returns
+         *     exactly once, the create contract, under the create-side
+         *     per-admin rate bucket (it mints the same capability).
+         */
+        post: operations["resend_staff_invitation_api_v1_admin_staff_invitations__invitation_id__resend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4167,6 +4649,87 @@ export interface components {
             has_unpublished_changes: boolean;
         };
         /**
+         * AdminBatchRequest
+         * @description The §3.5 batch: one action, up to 100 ids.
+         */
+        AdminBatchRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "suspend" | "reactivate";
+            /** User Ids */
+            user_ids: string[];
+        };
+        /** AdminBatchResponse */
+        AdminBatchResponse: {
+            /** Results */
+            results: components["schemas"]["AdminBatchRowResult"][];
+        };
+        /**
+         * AdminBatchRowResult
+         * @description One row's outcome; ``reason`` is a stable error code string.
+         */
+        AdminBatchRowResult: {
+            /** User Id */
+            user_id: string;
+            /** Ok */
+            ok: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** AdminInvitationListResponse */
+        AdminInvitationListResponse: {
+            /** Items */
+            items: components["schemas"]["AdminInvitationRow"][];
+        };
+        /**
+         * AdminInvitationRow
+         * @description One invitation on the §4.2 lifecycle list. ``email`` arrives
+         *     MASKED from the service (G11: the plaintext rests on the row);
+         *     ``status`` is derived at read time against the business clock.
+         */
+        AdminInvitationRow: {
+            /** Id */
+            id: string;
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Accepted At */
+            accepted_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Created By */
+            created_by: string;
+            /** Issuer Nickname */
+            issuer_nickname: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminKickResponse
+         * @description The §3.3 stop: what one kick took out.
+         */
+        AdminKickResponse: {
+            /** Revoked Sessions */
+            revoked_sessions: number;
+            /** Revoked Devices */
+            revoked_devices: number;
+        };
+        /**
          * AdminNotificationTemplateListResponse
          * @description Offset-paginated template page, (event_type, channel)-ordered,
          *     disabled rows INCLUDED — the administration view.
@@ -4197,6 +4760,71 @@ export interface components {
             enabled: boolean;
             /** Version */
             version: number;
+        };
+        /** AdminOverviewResponse */
+        AdminOverviewResponse: {
+            users: components["schemas"]["AdminOverviewUsers"];
+            tasks: components["schemas"]["AdminOverviewTasks"];
+            /** Pending Submissions */
+            pending_submissions: number;
+            /** Pending Redemptions */
+            pending_redemptions: number;
+            today: components["schemas"]["AdminOverviewToday"];
+        };
+        /** AdminOverviewTasks */
+        AdminOverviewTasks: {
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+        };
+        /** AdminOverviewToday */
+        AdminOverviewToday: {
+            /** New Users */
+            new_users: number;
+            /** Active Users */
+            active_users: number;
+        };
+        /** AdminOverviewUsers */
+        AdminOverviewUsers: {
+            /** Total */
+            total: number;
+            /** By Role */
+            by_role: {
+                [key: string]: number;
+            };
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * AdminPasswordResetLinkResponse
+         * @description The one-time reset link, shown exactly once (Wave 2a §3.2).
+         */
+        AdminPasswordResetLinkResponse: {
+            /** Reset Token */
+            reset_token: string;
+        };
+        /**
+         * AdminRecentSubmission
+         * @description One row of the panorama's recent-submissions strip (Wave 2a §3.1):
+         *     submission facts only — no content, no URLs, no storage keys.
+         */
+        AdminRecentSubmission: {
+            /** Id */
+            id: string;
+            /** Task Title */
+            task_title: string;
+            /** Validation Status */
+            validation_status: string;
+            /** Review Status */
+            review_status: string;
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
         };
         /**
          * AdminRewardItemListResponse
@@ -4244,6 +4872,13 @@ export interface components {
             /** Fulfillment Instructions */
             fulfillment_instructions: string | null;
         };
+        /**
+         * AdminRoleChangeRequest
+         * @description The §3.4 TEACHER<->ADMIN flip request.
+         */
+        AdminRoleChangeRequest: {
+            role: components["schemas"]["Role"];
+        };
         /** AdminUserListResponse */
         AdminUserListResponse: {
             /** Items */
@@ -4256,9 +4891,27 @@ export interface components {
             offset: number;
         };
         /**
+         * AdminUserPanoramaResponse
+         * @description The §3.1 detail view: the governance row plus the cross-module
+         *     facts the console renders on one account page.
+         */
+        AdminUserPanoramaResponse: {
+            user: components["schemas"]["AdminUserResponse"];
+            /** Wallet Balance */
+            wallet_balance: number;
+            /** Recent Submissions */
+            recent_submissions: components["schemas"]["AdminRecentSubmission"][];
+            /** Active Session Count */
+            active_session_count: number;
+            /** Remembered Device Count */
+            remembered_device_count: number;
+        };
+        /**
          * AdminUserResponse
          * @description One account row for the governance listing (G11: governance
-         *     facts only — contact fields stay behind their own surfaces).
+         *     facts plus the MASKED phone — the approval queue's identifying
+         *     contact fact, minimal-necessary form; the raw number stays behind
+         *     its own surfaces).
          */
         AdminUserResponse: {
             /** Id */
@@ -4269,11 +4922,51 @@ export interface components {
             nickname: string;
             role: components["schemas"]["Role"];
             status: components["schemas"]["UserStatus"];
+            /** Phone Masked */
+            phone_masked: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AdminUserRoleResponse
+         * @description The §3.4 flip's result row.
+         */
+        AdminUserRoleResponse: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            role: components["schemas"]["Role"];
+            status: components["schemas"]["UserStatus"];
+        };
+        /**
+         * AdminUserSessionsResponse
+         * @description The §3.3 read: how many live refresh sessions and remembered
+         *     devices the account currently holds.
+         */
+        AdminUserSessionsResponse: {
+            /** Active Session Count */
+            active_session_count: number;
+            /** Remembered Device Count */
+            remembered_device_count: number;
+        };
+        /**
+         * ApprovalVerdictResponse
+         * @description The registration verdict's result row (V1.1 spec 2026-10-16 §2).
+         */
+        ApprovalVerdictResponse: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            status: components["schemas"]["UserStatus"];
+            /** Approved At */
+            approved_at?: string | null;
+            /** Rejected Reason */
+            rejected_reason?: string | null;
         };
         /**
          * ApproveResponse
@@ -4902,13 +5595,16 @@ export interface components {
         };
         /**
          * FileType
-         * @description The closed upload file-type universe (spec §10/§12).
+         * @description The closed upload file-type universe (spec §10/§12 + §10.1).
          *
          *     Mirrors the `tasks.allowed_file_types` CHECK member set; a Task may
-         *     restrict to a subset but never beyond it.
+         *     restrict to a subset but never beyond it. §10.1's two families:
+         *     {CSV, XLSX, SQLITE} are structured (schema-validated), {DOCX, PDF}
+         *     are documents (integrity-only machine check; content judgment rides
+         *     the teacher review).
          * @enum {string}
          */
-        FileType: "CSV" | "XLSX" | "SQLITE";
+        FileType: "CSV" | "XLSX" | "SQLITE" | "DOCX" | "PDF";
         /** ForceFailDeliveryRequest */
         ForceFailDeliveryRequest: {
             /**
@@ -5159,13 +5855,21 @@ export interface components {
         };
         /**
          * LoginRequest
-         * @description Password login: account identifier + password; route fixes the role.
+         * @description The /auth/login body — the unified identifier form only
+         *     (2026-10-19 spec §3.2; PR-3 retired the legacy {username} shape):
+         *     {identifier, password, remember_device?} with the identifier a
+         *     phone / email / student number.
          */
         LoginRequest: {
-            /** Username */
-            username: string;
+            /** Identifier */
+            identifier: string;
             /** Password */
             password: string;
+            /**
+             * Remember Device
+             * @default false
+             */
+            remember_device: boolean;
         };
         /**
          * LogoutRequest
@@ -5229,6 +5933,11 @@ export interface components {
             email_normalized: string | null;
             /** Email Verified At */
             email_verified_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** MentorActionResult */
         MentorActionResult: {
@@ -5360,6 +6069,16 @@ export interface components {
             project_types: string;
             /** Contacts */
             contacts?: components["schemas"]["ContactInput"][];
+        };
+        /**
+         * MentorLoginRequest
+         * @description Dedicated R5 mentor credentials; not the unified staff/student channel.
+         */
+        MentorLoginRequest: {
+            /** Username */
+            username: string;
+            /** Password */
+            password: string;
         };
         /** MentorOperationsListResponse */
         MentorOperationsListResponse: {
@@ -5498,6 +6217,21 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * MobileCodeRegisterRequest
+         * @description Trade the entry proof (a code-checked, accountless phone's
+         *     5-minute single-use token) for a PENDING_APPROVAL account.
+         */
+        MobileCodeRegisterRequest: {
+            /** Register Token */
+            register_token: string;
+            /** Student Number */
+            student_number: string;
+            /** Nickname */
+            nickname?: string | null;
+            /** Password */
+            password?: string | null;
+        };
         /** ModerationCommentListResponse */
         ModerationCommentListResponse: {
             /** Items */
@@ -5570,7 +6304,9 @@ export interface components {
         /**
          * MyClaimResponse
          * @description A /me/claims item: the claim view plus the task's title (the list is
-         *     cross-task, so the card context travels with the claim).
+         *     cross-task, so the card context travels with the claim), the claim's
+         *     CURRENT latest submission (QA #15: the cold-load report handle), and
+         *     the task's upload gate (QA #12: the picker's task-scoped accept).
          */
         MyClaimResponse: {
             /**
@@ -5608,6 +6344,10 @@ export interface components {
             base_reward_points_snapshot: number;
             /** Task Title */
             task_title: string;
+            /** Latest Submission Id */
+            latest_submission_id: string | null;
+            /** Allowed File Types */
+            allowed_file_types: string[];
         };
         /**
          * MyClaimsResponse
@@ -5776,6 +6516,14 @@ export interface components {
             reason: string;
         };
         /**
+         * OwnDevicesRevokedResponse
+         * @description DELETE /me/devices result: how many credentials were dropped.
+         */
+        OwnDevicesRevokedResponse: {
+            /** Revoked */
+            revoked: number;
+        };
+        /**
          * OwnedHonorResponse
          * @description One honor the caller owns (the §19 已获得荣誉 row).
          */
@@ -5870,6 +6618,17 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * PasswordResetTokenSpendRequest
+         * @description Spend the admin-issued reset link: the token IS the
+         *     authorization (the endpoint is public).
+         */
+        PasswordResetTokenSpendRequest: {
+            /** Reset Token */
+            reset_token: string;
+            /** New Password */
+            new_password: string;
+        };
         /** PersonalProjectListResponse */
         PersonalProjectListResponse: {
             /** Items */
@@ -5911,6 +6670,28 @@ export interface components {
             can_publish_recruitment: boolean;
             /** Can Open Public */
             can_open_public: boolean;
+        };
+        /**
+         * PhoneBindConfirmRequest
+         * @description Confirm a staff phone bind with the phone's OTP code.
+         */
+        PhoneBindConfirmRequest: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            /** Code */
+            code: string;
+        };
+        /**
+         * PhoneBindRequest
+         * @description Staff first-bind (V1.1 login iteration item 1): the phone the
+         *     ACTIVE staff account is adopting. Students use the change flow.
+         */
+        PhoneBindRequest: {
+            /** Phone */
+            phone: string;
         };
         /**
          * PhoneChallengeRequest
@@ -5963,6 +6744,72 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /**
+         * PlatformAdminPublic
+         * @description The admin list/create/patch row (spec §3): the public fields plus
+         *     the lifecycle ones the console manages.
+         */
+        PlatformAdminPublic: {
+            /** Code */
+            code: string;
+            /** Display Name */
+            display_name: string;
+            /** Sort Order */
+            sort_order: number;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * PlatformCreateRequest
+         * @description POST /admin/platforms: code is immutable after creation.
+         *
+         *     Validation lives HERE (friendly-before-constraint, engineering §6):
+         *     the ASCII stable-code band and column lengths, so a paste error is
+         *     a 400 — never the 500 the DB truncation would answer.
+         */
+        PlatformCreateRequest: {
+            /** Code */
+            code: string;
+            /** Display Name */
+            display_name: string;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /**
+         * PlatformPatchRequest
+         * @description PATCH /admin/platforms/{code}: every field optional; code is not
+         *     representable here (immutable by construction). The name band
+         *     matches the create side (a blank-after-strip patch is the service's
+         *     400 — see update_platform).
+         */
+        PlatformPatchRequest: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /**
+         * PlatformPublic
+         * @description The student-facing platform dictionary entry (spec §3).
+         *
+         *     Deliberately code/display_name/sort_order only — no lifecycle or
+         *     admin fields on the public surface.
+         */
+        PlatformPublic: {
+            /** Code */
+            code: string;
+            /** Display Name */
+            display_name: string;
+            /** Sort Order */
+            sort_order: number;
         };
         /**
          * PointsAdjustmentRequest
@@ -7029,12 +7876,32 @@ export interface components {
         RegisterRequest: {
             /** Student Number */
             student_number: string;
-            /** Nickname */
-            nickname: string;
             /** Phone Token */
             phone_token: string;
+            /** Nickname */
+            nickname?: string | null;
             /** Password */
-            password: string;
+            password?: string | null;
+        };
+        /**
+         * RegisterResponse
+         * @description Registration ends logged in (V1.1 login iteration item 4): the
+         *     account view beside the freshly minted session — the same body the
+         *     login path answers, so the client lands directly in the frozen-home
+         *     browsing mode instead of bouncing through a second login (and the
+         *     60s SMS cooldown) right after proving the phone.
+         */
+        RegisterResponse: {
+            user: components["schemas"]["UserPublic"];
+            tokens: components["schemas"]["TokenPairResponse"];
+        };
+        /**
+         * RejectRequest
+         * @description reason is optional; ≤255 chars (the column bound).
+         */
+        RejectRequest: {
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * ReleaseOccupiedAssignmentRequest
@@ -7058,6 +7925,31 @@ export interface components {
             task_id: string;
             /** Availability Status */
             availability_status: string;
+        };
+        /**
+         * RememberedDevicePublic
+         * @description One remembered device of the caller (V1.1 §2.2 self-service).
+         *
+         *     Explicitly enumerated fields: the stored token hash is unrepresentable.
+         */
+        RememberedDevicePublic: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /**
          * ReportClosureResponse
@@ -7574,12 +8466,16 @@ export interface components {
         /**
          * StaffInvitationAcceptRequest
          * @description Trade the single-use invitation token for a staff account (§5.8).
+         *
+         *     ``password`` is OPTIONAL for TEACHER (V1.1 §2.3: blank = an
+         *     email-code-only account) and effectively mandatory for ADMIN (the
+         *     service rejects a blank one after the invitation lookup).
          */
         StaffInvitationAcceptRequest: {
             /** Token */
             token: string;
             /** Password */
-            password: string;
+            password?: string | null;
         };
         /**
          * StaffInvitationCreateRequest
@@ -7618,16 +8514,20 @@ export interface components {
             created_at: string;
         };
         /**
-         * StaffLoginRequest
-         * @description Staff login: verified email + password + TOTP/recovery code (§5.8).
+         * StaffSessionResponse
+         * @description A staff session plus the onboarding branch flag (V1.1 §2.3).
+         *
+         *     ``totp_required`` tells the client which screen follows: the ADMIN
+         *     pending-TOTP onboarding (True — the tokens are a real session
+         *     confined to finishing 2FA setup) or a complete login (False).
          */
-        StaffLoginRequest: {
-            /** Email */
-            email: string;
-            /** Password */
-            password: string;
-            /** Totp Code */
-            totp_code: string;
+        StaffSessionResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Csrf Token */
+            csrf_token: string;
+            /** Totp Required */
+            totp_required: boolean;
         };
         /**
          * SubmissionPublic
@@ -8677,6 +9577,50 @@ export interface components {
             introduction_revision?: number | null;
         };
         /**
+         * UnifiedChallengeRequest
+         * @description Ask for one login code by identifier (spec §3.1) — always 202
+         *     from the routed service; a student number is a format-layer 422.
+         */
+        UnifiedChallengeRequest: {
+            /** Identifier */
+            identifier: string;
+        };
+        /**
+         * UnifiedChallengeTotpRequest
+         * @description Finish the ADMIN second factor (spec §3.1). The field is
+         *     ``totp_code`` — the spec's own name; the legacy family's ``code``
+         *     spelling retires with PR-3.
+         */
+        UnifiedChallengeTotpRequest: {
+            /** Pending Token */
+            pending_token: string;
+            /** Totp Code */
+            totp_code: string;
+            /**
+             * Remember Device
+             * @default false
+             */
+            remember_device: boolean;
+        };
+        /**
+         * UnifiedChallengeVerifyRequest
+         * @description Trade the code for the discriminated-union answer (spec §3.1).
+         *
+         *     ``identifier``+``code`` is the code leg; BOTH omitted is the
+         *     remembered-cookie single-factor leg (the empty-body verify).
+         */
+        UnifiedChallengeVerifyRequest: {
+            /** Identifier */
+            identifier?: string | null;
+            /** Code */
+            code?: string | null;
+            /**
+             * Remember Device
+             * @default false
+             */
+            remember_device: boolean;
+        };
+        /**
          * UploadCompleteRequest
          * @description Notify the backend that the presigned PUT landed (spec §10 step 5).
          *
@@ -8778,7 +9722,7 @@ export interface components {
          * UserStatus
          * @enum {string}
          */
-        UserStatus: "PENDING_PHONE" | "ACTIVE" | "SUSPENDED" | "BANNED";
+        UserStatus: "PENDING_PHONE" | "ACTIVE" | "SUSPENDED" | "BANNED" | "PENDING_APPROVAL";
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -8823,7 +9767,7 @@ export interface components {
             /** File Type */
             file_type: string;
             /** Row Count */
-            row_count: number;
+            row_count: number | null;
             /** Detected Columns */
             detected_columns: string[];
             /** Missing Required Columns */
@@ -8889,130 +9833,6 @@ export interface components {
             spendable_points: number;
             /** Point Debt */
             point_debt: number;
-        };
-        /**
-         * WhitelistConfirmRequest
-         * @description The previewed importable set plus its digest (all-or-nothing).
-         */
-        WhitelistConfirmRequest: {
-            /** Confirm Token */
-            confirm_token: string;
-            /**
-             * Enable
-             * @default true
-             */
-            enable: boolean;
-            /** Student Numbers */
-            student_numbers: string[];
-        };
-        /** WhitelistConfirmResponse */
-        WhitelistConfirmResponse: {
-            /** Created */
-            created: number;
-            /** Enable */
-            enable: boolean;
-        };
-        /** WhitelistCountsResponse */
-        WhitelistCountsResponse: {
-            /** Total Rows */
-            total_rows: number;
-            /** Importable */
-            importable: number;
-            /** Duplicate In File */
-            duplicate_in_file: number;
-            /** Duplicate In Db */
-            duplicate_in_db: number;
-            /** Full Width Digits */
-            full_width_digits: number;
-            /** Invalid Characters */
-            invalid_characters: number;
-            /** Invalid Length */
-            invalid_length: number;
-        };
-        /**
-         * WhitelistEntryResponse
-         * @description One whitelist row: the number plus its enabled state.
-         */
-        WhitelistEntryResponse: {
-            /** Id */
-            id: string;
-            /** Student Number */
-            student_number: string;
-            /** Enabled */
-            enabled: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Disabled At */
-            disabled_at: string | null;
-        };
-        /**
-         * WhitelistListResponse
-         * @description Offset-paginated whitelist page, number-ordered.
-         */
-        WhitelistListResponse: {
-            /** Items */
-            items: components["schemas"]["WhitelistEntryResponse"][];
-            /** Total */
-            total: number;
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-        };
-        /**
-         * WhitelistPreviewRequest
-         * @description The raw import text (one student number per line; the service
-         *     owns decode, trimming, and every row verdict).
-         */
-        WhitelistPreviewRequest: {
-            /** Content */
-            content: string;
-        };
-        /**
-         * WhitelistPreviewResponse
-         * @description The preview verdict: per-row decisions, counts, and the digest
-         *     the confirm payload must carry back verbatim.
-         */
-        WhitelistPreviewResponse: {
-            /** Total Rows */
-            total_rows: number;
-            /** Decisions */
-            decisions: components["schemas"]["WhitelistRowDecisionResponse"][];
-            counts: components["schemas"]["WhitelistCountsResponse"];
-            /** Importable */
-            importable: string[];
-            /** Confirm Token */
-            confirm_token: string;
-        };
-        /** WhitelistRowDecisionResponse */
-        WhitelistRowDecisionResponse: {
-            /** Row Number */
-            row_number: number;
-            /** Code */
-            code: string;
-            /** Student Number */
-            student_number: string | null;
-        };
-        /**
-         * WhitelistToggleRequest
-         * @description Flip one entry (enable or disable); the free-text why rides the
-         *     per-entry audit rows.
-         */
-        WhitelistToggleRequest: {
-            /** Enabled */
-            enabled: boolean;
-            /** Reason */
-            reason?: string | null;
-        };
-        /** WhitelistToggleResponse */
-        WhitelistToggleResponse: {
-            /** Student Number */
-            student_number: string;
-            /** Toggled */
-            toggled: boolean;
         };
         /** WithdrawCommand */
         WithdrawCommand: {
@@ -9166,7 +9986,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserPublic"];
+                    "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_by_mobile_code_api_v1_auth_mobile_code_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobileCodeRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9199,7 +10052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenPairResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -9213,6 +10066,125 @@ export interface operations {
             };
         };
     };
+    unified_challenge_request_api_v1_auth_challenge_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnifiedChallengeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unified_challenge_verify_api_v1_auth_challenge_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnifiedChallengeVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unified_challenge_totp_api_v1_auth_challenge_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnifiedChallengeTotpRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unified_remembered_probe_api_v1_auth_challenge_remembered_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     login_mentor_api_v1_auth_mentor_login_post: {
         parameters: {
             query?: never;
@@ -9222,7 +10194,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoginRequest"];
+                "application/json": components["schemas"]["MentorLoginRequest"];
             };
         };
         responses: {
@@ -9343,6 +10315,37 @@ export interface operations {
             };
         };
     };
+    spend_admin_reset_token_api_v1_auth_password_reset_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetTokenSpendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_password_reset_api_v1_auth_password_reset_post: {
         parameters: {
             query?: never;
@@ -9370,6 +10373,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_own_devices_api_v1_me_devices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RememberedDevicePublic"][];
+                };
+            };
+        };
+    };
+    revoke_own_devices_api_v1_me_devices_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnDevicesRevokedResponse"];
                 };
             };
         };
@@ -9510,6 +10553,72 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PhoneChangeConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MePublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_phone_bind_api_v1_me_phone_bind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneBindRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChallengeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_phone_bind_api_v1_me_phone_bind_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneBindConfirmRequest"];
             };
         };
         responses: {
@@ -9692,39 +10801,6 @@ export interface operations {
             };
         };
     };
-    staff_login_api_v1_auth_staff_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StaffLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenPairResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     accept_staff_invitation_api_v1_auth_staff_invitations_accept_post: {
         parameters: {
             query?: never;
@@ -9744,7 +10820,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenPairResponse"];
+                    "application/json": components["schemas"]["StaffSessionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -13724,6 +14800,114 @@ export interface operations {
             };
         };
     };
+    list_platforms_api_v1_platforms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformPublic"][];
+                };
+            };
+        };
+    };
+    list_admin_platforms_api_v1_admin_platforms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminPublic"][];
+                };
+            };
+        };
+    };
+    create_platform_api_v1_admin_platforms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_platform_api_v1_admin_platforms__code__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminPublic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_tasks_api_v1_tasks_get: {
         parameters: {
             query?: {
@@ -13743,6 +14927,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_submission_template_api_v1_tasks__task_id__submission_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -15865,139 +17080,6 @@ export interface operations {
             };
         };
     };
-    list_whitelist_api_v1_admin_whitelist_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhitelistListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_whitelist_import_api_v1_admin_whitelist_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WhitelistPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhitelistPreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_whitelist_import_api_v1_admin_whitelist_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WhitelistConfirmRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhitelistConfirmResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    toggle_whitelist_entry_api_v1_admin_whitelist__student_number__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_number: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WhitelistToggleRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhitelistToggleResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: {
@@ -16028,6 +17110,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_user_panorama_api_v1_admin_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserPanoramaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_user_sessions_api_v1_admin_users__user_id__sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserSessionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kick_user_api_v1_admin_users__user_id__sessions_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminKickResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_user_role_api_v1_admin_users__user_id__role_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminRoleChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRoleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_password_reset_link_api_v1_admin_users__user_id__password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPasswordResetLinkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_status_action_api_v1_admin_users_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_overview_api_v1_admin_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverviewResponse"];
                 };
             };
         };
@@ -16137,6 +17431,72 @@ export interface operations {
             };
         };
     };
+    approve_student_api_v1_admin_users__user_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalVerdictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_student_api_v1_admin_users__user_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalVerdictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_staff_invitation_api_v1_staff_invitations_post: {
         parameters: {
             query?: never;
@@ -16149,6 +17509,98 @@ export interface operations {
                 "application/json": components["schemas"]["StaffInvitationCreateRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffInvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_staff_invitations_api_v1_admin_staff_invitations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInvitationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_staff_invitation_api_v1_admin_staff_invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_staff_invitation_api_v1_admin_staff_invitations__invitation_id__resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

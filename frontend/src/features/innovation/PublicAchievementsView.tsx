@@ -11,7 +11,7 @@ import { BUSINESS_TIME_CONFIG, formatPublicationDateTime, parseServerInstant } f
 import { validWorkLink } from "./achievementForm";
 import { getPublicAchievement, listPublicAchievements, type PublicAchievementDto } from "./reviewApi";
 import { publicReviewText } from "./reviewPresentation";
-export { CampusShell as CampusAchievementShell } from './CampusShell';
+
 export function PublicAchievementsView({ id, compact = false }: { id?: string; compact?: boolean }) {
   const { state } = useSession();
   if (state.status !== "authenticated" || state.me.status !== "ACTIVE") return null;

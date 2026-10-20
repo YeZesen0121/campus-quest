@@ -13,6 +13,11 @@ dist/
 build/
 *.egg-info/
 
+# Coverage data (the ratchet runs leave COVERAGE_FILE variants behind;
+# .coverage was committed once by accident — untracked in this change)
+.coverage
+.coverage.*
+
 # Node
 node_modules/
 .next/
@@ -28,7 +33,8 @@ test-results/
 playwright-report/
 blob-report/
 
-# Environment / secrets
+# Environment / secrets (one block: rules were duplicated verbatim at
+# the file tail; the template lives at backend/.env.example)
 .env
 .env.*
 !.env.example
@@ -52,3 +58,5 @@ infra/e2e-certs/
 
 # Local implementation and verification logs; never product data.
 .local/
+# architecture visual artifacts (make arch-city; derived, not committed)
+build/

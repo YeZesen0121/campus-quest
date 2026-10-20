@@ -25,12 +25,15 @@ import type {
   ModerationCommentDto,
   TeacherTaskDto,
 } from "../features/admin/teacherApi";
+import type { TaskFormValues } from "../features/admin/teacherView";
 import {
   capRowErrors,
   COLLABORATOR_PERMISSIONS,
+  defaultSchemaFor,
   describeEditError,
   envelopeFields,
   EMPTY_TASK_FORM,
+  fileFactsText,
   frozenFieldText,
   importPreviewView,
   INVALIDATE_WARNING_TEXT,
@@ -38,6 +41,7 @@ import {
   lockedTierText,
   moderationRowView,
   parseSubmissionSchema,
+  shouldAutoFillSchema,
   permissionLabels,
   reportStatusView,
   reviewStatusView,
@@ -154,6 +158,49 @@ describe("task edit surface (spec §6.2 V1 edit rule)", () => {
     assert.deepEqual(result.body, {});
   });
 
+  test("DRAFT: every editable field diff rides the PATCH (spec §6.2 edit surface)", () => {
+    // One comprehensive draft edit — the whole editable band (reward,
+    // deadline mode + bound, cutoff, file types, size cap) changes, so
+    // each diff branch is pinned at once: the body carries EXACTLY the
+    // changed server fields, rekeyed and retyped for the wire.
+    const values: TaskFormValues = {
+      ...taskFormFromTask(draftTask()),
+      baseRewardPoints: "200",
+      deadlineMode: "RELATIVE",
+      durationMinutes: "4320",
+      claimCutoffMinutes: "120",
+      fileTypes: ["CSV", "XLSX"],
+      maxFileSizeMb: "20",
+    };
+    const result = taskFormToUpdateBody(values, draftTask(), NOW);
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.body, {
+      base_reward_points: 200,
+      deadline_mode: "RELATIVE",
+      duration_minutes: 4320,
+      claim_cutoff_minutes: 120,
+      allowed_file_types: ["CSV", "XLSX"],
+      max_file_size_bytes: 20 * 1024 * 1024,
+      // FIXED -> RELATIVE: the stale fixed bound must NOT ride the body.
+    });
+    assert.ok(!("fixed_deadline_at" in result.body!));
+  });
+
+  test("DRAFT: a changed FIXED deadline rides as a UTC instant", () => {
+    const values = {
+      ...taskFormFromTask(draftTask()),
+      fixedDeadlineLocal: "2026-11-15T09:00",
+    };
+    const result = taskFormToUpdateBody(values, draftTask(), NOW);
+    assert.equal(result.ok, true);
+    // The local wall time re-parses to the same instant the input
+    // round-trip pinned in taskFormFromTask — zone-independent.
+    assert.equal(
+      result.body!.fixed_deadline_at,
+      new Date("2026-11-15T09:00").toISOString(),
+    );
+  });
+
   test("PUBLISHED: contract diffs are EXCLUDED — an unchanged value must not ride either", () => {
     const task = draftTask({ status: "PUBLISHED", published_at: "2026-09-21T00:00:00Z" });
     const values = {
@@ -192,7 +239,7 @@ describe("task edit surface (spec §6.2 V1 edit rule)", () => {
     assert.equal(result.ok, false);
     assert.equal(
       result.errors.submissionSchema,
-      "提交校验 schema 必须是非空 JSON 对象",
+      "提交校验规则必须是非空 JSON 对象",
     );
   });
 
@@ -424,6 +471,11 @@ describe("create-form band mirrors (server authoritative)", () => {
     assert.equal(missing.deadline, "固定截止模式必须设置截止时间");
     const past = validateTaskForm(form({ fixedDeadlineLocal: "2020-01-01T10:00" }), NOW);
     assert.equal(past.deadline, "截止时间必须晚于当前时间");
+    const malformed = validateTaskForm(
+      form({ fixedDeadlineLocal: "not-a-date" }),
+      NOW,
+    );
+    assert.equal(malformed.deadline, "截止时间格式不正确");
     const relative = validateTaskForm(
       form({ deadlineMode: "RELATIVE", durationMinutes: "0" }),
       NOW,
@@ -444,7 +496,7 @@ describe("create-form band mirrors (server authoritative)", () => {
     assert.match(errors.claimCutoffMinutes ?? "", /不小于 0/);
     assert.equal(errors.fileTypes, "请至少选择一种允许的文件类型");
     assert.match(errors.maxFileSizeMb ?? "", /200 MB/);
-    assert.equal(errors.submissionSchema, "提交校验 schema 必须是非空 JSON 对象");
+    assert.equal(errors.submissionSchema, "提交校验规则必须是非空 JSON 对象");
   });
 
   test("schema parser accepts non-empty objects, rejects empties/arrays/scalars", () => {
@@ -549,8 +601,9 @@ describe("review-queue copy", () => {
 
   test("the invalidate warning is prominent AND names the consequences", () => {
     assert.match(INVALIDATE_WARNING_TEXT, /取消/);
-    assert.match(INVALIDATE_WARNING_TEXT, /奖励档位与积分/);
-    assert.match(INVALIDATE_WARNING_TEXT, /审计信息不可删除/);
+    assert.match(INVALIDATE_WARNING_TEXT, /奖励与积分/);
+    assert.match(INVALIDATE_WARNING_TEXT, /重新提交/);
+    assert.match(INVALIDATE_WARNING_TEXT, /审计记录不可删除/);
   });
 
   test("note/reason blank mirror: whitespace-only text is not ready", () => {
@@ -661,4 +714,65 @@ describe("task reminder form preserves supported notification policy", () => {
       assert.deepEqual(taskFormToUpdateBody(reordered, task, NOW).body, {});
     });
   }
+});
+
+describe("default submission schema per structured type (defect #22)", () => {
+  test("each structured type has a default template that parses as a JSON object", () => {
+    for (const type of ["CSV", "XLSX", "SQLITE"] as const) {
+      const parsed = parseSubmissionSchema(defaultSchemaFor([type]));
+      assert.notEqual(parsed, null, `${type} template must parse`);
+    }
+  });
+
+  test("templates carry the canonical required_columns shape, not an ad-hoc one", () => {
+    const parsed = parseSubmissionSchema(defaultSchemaFor(["CSV"]));
+    assert.ok(Array.isArray((parsed as Record<string, unknown>)["required_columns"]));
+  });
+
+  test("XLSX defaults to a sheet selector; SQLITE to a table selector", () => {
+    assert.deepEqual(
+      (parseSubmissionSchema(defaultSchemaFor(["XLSX"])) as Record<string, unknown>)["source_selector"],
+      { sheet_name: "Sheet1" },
+    );
+    assert.deepEqual(
+      (parseSubmissionSchema(defaultSchemaFor(["SQLITE"])) as Record<string, unknown>)["source_selector"],
+      { table_name: "records" },
+    );
+  });
+
+  test("a multi-type selection resolves by selector specificity: SQLITE > XLSX > CSV; none -> empty", () => {
+    assert.match(defaultSchemaFor(["CSV", "SQLITE"]), /table_name/);
+    assert.match(defaultSchemaFor(["CSV", "XLSX"]), /sheet_name/);
+    assert.equal(defaultSchemaFor([]), "");
+  });
+
+  test("auto-fill only touches a pristine field: empty or a known template", () => {
+    assert.equal(shouldAutoFillSchema(""), true);
+    assert.equal(shouldAutoFillSchema(defaultSchemaFor(["CSV"])), true);
+    assert.equal(shouldAutoFillSchema(defaultSchemaFor(["SQLITE"])), true);
+    assert.equal(shouldAutoFillSchema('{"required_columns":[]}'), false);
+  });
+});
+
+describe("file facts line (detail head)", () => {
+  test("detected type wins; a null detection falls back to the declared type", () => {
+    assert.equal(
+      fileFactsText({
+        original_filename: "采集.xlsx",
+        declared_type: "XLSX",
+        detected_type: "XLSX",
+        file_size: 2048,
+      }),
+      "采集.xlsx · XLSX · 2.0 KB",
+    );
+    assert.equal(
+      fileFactsText({
+        original_filename: "重命名.bin",
+        declared_type: "CSV",
+        detected_type: null,
+        file_size: 1048576,
+      }),
+      "重命名.bin · CSV · 1.0 MB",
+    );
+  });
 });

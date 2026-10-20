@@ -18,7 +18,7 @@ import {
 } from "../lib/accessToken";
 import { apiRequest } from "../lib/api";
 import { isApiError } from "../lib/errors";
-import { loginStudent, logout } from "../features/auth/api";
+import { loginWithPassword, logout } from "../features/auth/api";
 
 type RecordedRequest = { url: string; headers: Headers };
 
@@ -36,6 +36,11 @@ function route(responses: Record<string, Array<() => Response | Promise<Response
 
 function json(body: unknown, status = 200): () => Response {
   return () => new Response(JSON.stringify(body), { status });
+}
+
+/** The unified login family's authenticated envelope (spec §3.1). */
+function authEnvelope(access: string, role = "STUDENT"): unknown {
+  return { status: "authenticated", role, tokens: tokenPair(access) };
 }
 
 function tokenPair(access: string): unknown {
@@ -158,22 +163,22 @@ describe("auth-transition serialization (final re-review P0)", () => {
     const refreshStarted = Promise.withResolvers<void>();
     route({
       [REFRESH]: [() => { refreshStarted.resolve(); return refreshA.promise; }],
-      [LOGIN]: [json(tokenPair("token-B"))],
+      [LOGIN]: [json(authEnvelope("token-B"))],
     });
 
     const refreshOutcome = refreshAccessToken();
     await refreshStarted.promise;
-    const login = loginStudent("student-b", "correct-horse");
+    const login = loginWithPassword("student-b", "correct-horse", false);
     await Promise.resolve();
     assert.ok(!urls().includes(LOGIN), "login must wait for the refresh drain");
 
     refreshA.resolve(new Response(JSON.stringify(tokenPair("token-A2")), { status: 200 }));
     assert.equal(await refreshOutcome, false); // A2 write fenced
 
-    const tokens = await login;
+    const outcome = await login;
     assert.equal(urls().filter((url) => url === REFRESH).length, 1);
     assert.ok(urls().indexOf(LOGIN) > urls().indexOf(REFRESH));
-    assert.equal(tokens.access_token, "token-B");
+    assert.deepEqual(outcome, { kind: "authenticated", role: "STUDENT" });
     assert.equal(getAccessToken(), "token-B"); // old A2 never overwrote B
   });
 
@@ -201,7 +206,7 @@ describe("auth-transition serialization (final re-review P0)", () => {
     });
 
     // A login is in progress (transition window open)...
-    const loggingIn = loginStudent("student-b", "correct-horse");
+    const loggingIn = loginWithPassword("student-b", "correct-horse", false);
     await Promise.resolve(); // transition began; request pending
 
     // An unrelated protected request 401s during the window: its
@@ -212,7 +217,7 @@ describe("auth-transition serialization (final re-review P0)", () => {
     );
     assert.equal(urls().filter((url) => url === REFRESH).length, 0);
 
-    login.resolve(new Response(JSON.stringify(tokenPair("token-B")), { status: 200 }));
+    login.resolve(new Response(JSON.stringify(authEnvelope("token-B")), { status: 200 }));
     await loggingIn;
     assert.equal(getAccessToken(), "token-B");
   });

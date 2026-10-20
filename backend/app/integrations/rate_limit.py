@@ -83,21 +83,126 @@ class RateLimitRule:
 # limit) and moderation-queue flooding (spec §23) are the abuse surfaces —
 # while edit/vote/reaction windows only anti-hammer toggles the services
 # already keep idempotent.
+# --- parallel IP-keyed caps (hardening A-1) ---------------------------------------
+#
+# Every per-identifier cap above is defeated by one source address
+# rotating through MANY identifiers (credential stuffing): each fresh
+# username/email/phone opens a fresh bucket, so the attacker's aggregate
+# volume stays unlimited. The login-family endpoints therefore carry a
+# SECOND, IP-keyed rule named ``<identifier-bucket>-ip`` (the pairing
+# convention `routing_common._enforce_rate_limit` resolves), enforced
+# next to the identifier check — either layer refusing rejects the
+# request.
+#
+# ``IP_HOURLY_LIMIT`` mirrors the OTP service's per-IP hourly default
+# (``otp_ip_hourly_request_limit`` = 50, spec §33.2): the same
+# "tens per hour per address" budget the OTP side already accepts for
+# shared campus NAT egress, so a login burst from one lab address lands
+# in the same order as its OTP traffic instead of behind an unrelated
+# stricter/looser knob. Tunable here in one place.
+IP_HOURLY_LIMIT = 50
+HOURLY_WINDOW_SECONDS = 3600
+# The verify endpoint's per-challenge identifier layer: the OTP service
+# already bounds code attempts per challenge (5 wrong codes consume it),
+# so 30/hour never binds a human retrying a mistyped code — it only
+# anti-hammers the HTTP surface itself.
+OTP_VERIFY_CHALLENGE_HOURLY_LIMIT = 30
+
 RATE_LIMIT_RULES: dict[str, RateLimitRule] = {
     rule.bucket: rule
     for rule in (
         RateLimitRule(bucket="auth:login", limit=10, window_seconds=300),
+        RateLimitRule(
+            bucket="auth:login-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
         RateLimitRule(bucket="auth:staff-login", limit=10, window_seconds=300),
+        RateLimitRule(
+            bucket="auth:staff-login-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        # The staff email-code channel (V1.1 §2.1: 邮箱+IP 双桶): every
+        # request mails a code for a staff mailbox, so the per-email cap
+        # matches the OTP-send posture (5/hour) — the 60s resend cooldown
+        # inside the service is the finer throttle, this is the bound.
+        RateLimitRule(bucket="auth:staff-email-code", limit=5, window_seconds=3600),
+        RateLimitRule(
+            bucket="auth:staff-email-code-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        # The student mobile-code channel (V1.1 2026-10-16 §3): every
+        # request SMSes a code for a student phone, so the caps mirror
+        # the OTP-send posture; the 60s cooldown inside the service is
+        # the finer throttle.
+        RateLimitRule(bucket="auth:mobile-code", limit=5, window_seconds=3600),
+        RateLimitRule(
+            bucket="auth:mobile-code-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        # The unified challenge facade (2026-10-19 spec §3.1): the
+        # per-identifier caps mirror the OTP-send posture the routed
+        # services own (their internal cooldowns stay the finer
+        # throttle); the totp leg is ip-keyd only — its identifier is
+        # a single-use opaque token, useless as a bucket key, and the
+        # 6-digit factor under online brute force is exactly the login
+        # limiter's job (interfaces.md).
+        RateLimitRule(bucket="auth:challenge", limit=5, window_seconds=3600),
+        RateLimitRule(
+            bucket="auth:challenge-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        RateLimitRule(bucket="auth:challenge-totp", limit=10, window_seconds=300),
+        RateLimitRule(
+            bucket="auth:challenge-totp-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
         RateLimitRule(bucket="auth:register", limit=5, window_seconds=3600),
         RateLimitRule(bucket="auth:otp-send", limit=5, window_seconds=3600),
+        RateLimitRule(
+            bucket="auth:otp-send-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        RateLimitRule(
+            bucket="auth:otp-verify",
+            limit=OTP_VERIFY_CHALLENGE_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        RateLimitRule(
+            bucket="auth:otp-verify-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
         RateLimitRule(bucket="auth:password-reset", limit=5, window_seconds=3600),
         RateLimitRule(bucket="me:email-verify", limit=5, window_seconds=3600),
         RateLimitRule(bucket="me:phone-change", limit=5, window_seconds=3600),
+        # The staff mobile-code channel (V1.1 login iteration item 1):
+        # the SMS-send posture mirrored — the 60s service cooldown is
+        # the finer throttle.
+        RateLimitRule(bucket="auth:staff-mobile-code", limit=5, window_seconds=3600),
+        RateLimitRule(
+            bucket="auth:staff-mobile-code-ip",
+            limit=IP_HOURLY_LIMIT,
+            window_seconds=HOURLY_WINDOW_SECONDS,
+        ),
+        # Staff first-bind (item 1): the OTP-send posture, same as the
+        # student change flow beside it.
+        RateLimitRule(bucket="me:phone-bind", limit=5, window_seconds=3600),
         # The avatar write (spec amendment D2): per authenticated user
         # id — bytes land on the API, so this is the anti-abuse bound.
         RateLimitRule(bucket="me:avatar-upload", limit=1, window_seconds=600),
         RateLimitRule(bucket="tasks:claim", limit=20, window_seconds=60),
         RateLimitRule(bucket="claims:abandon", limit=10, window_seconds=60),
+        # Import preview (security round F2): per staff actor. The body
+        # rides the API streaming-bounded, so this is the anti-abuse
+        # bound on repeated parse work, not a size control.
+        RateLimitRule(bucket="tasks:import-preview", limit=10, window_seconds=60),
         # The presigned-upload grant: per authenticated user id. Each
         # intent issues a short-lived presigned URL against the object
         # store, so hammering it burns provider signing quota; the
@@ -185,3 +290,50 @@ def _masked_identifier(identifier: str) -> str:
     if identifier.isdigit():
         return mask_student_number(identifier)
     return identifier
+
+
+# --- e2e battery relief (CQ_E2E_LOGIN_RATELIMIT; opt-in per deployment) ------
+
+#: The login family the relief raises: both doors' identifier and IP
+#: buckets, including the email-code channel (the battery logs in staff
+#: per test; retry loops fed the IP bucket past 50/h — structural, not
+#: flaky). Anything NOT in this tuple is untouched by the relief.
+LOGIN_FAMILY_BUCKETS: tuple[str, ...] = (
+    "auth:login",
+    "auth:login-ip",
+    "auth:staff-login",
+    "auth:staff-login-ip",
+    "auth:staff-email-code",
+    "auth:staff-email-code-ip",
+    "auth:challenge",
+    "auth:challenge-ip",
+    "auth:challenge-totp",
+    "auth:challenge-totp-ip",
+)
+_E2E_LOGIN_LIMIT = 1000
+_E2E_LOGIN_WINDOW_SECONDS = 3600
+_DEFAULT_LOGIN_RULES: dict[str, RateLimitRule] = {
+    bucket: RATE_LIMIT_RULES[bucket] for bucket in LOGIN_FAMILY_BUCKETS
+}
+
+
+def apply_e2e_login_relief() -> None:
+    """Raise the login family to battery scale (idempotent).
+
+    Applied once at app assembly when Settings.e2e_login_ratelimit is
+    on — the local e2e orchestration stack only. Production and every
+    default deployment never call this: their limits stay
+    byte-identical (the default-shape pin lives in
+    tests/unit/integrations/test_e2e_login_relief.py).
+    """
+    for bucket in LOGIN_FAMILY_BUCKETS:
+        RATE_LIMIT_RULES[bucket] = RateLimitRule(
+            bucket=bucket,
+            limit=_E2E_LOGIN_LIMIT,
+            window_seconds=_E2E_LOGIN_WINDOW_SECONDS,
+        )
+
+
+def restore_default_login_rules() -> None:
+    """Return the login family to its shipped defaults (test hygiene)."""
+    RATE_LIMIT_RULES.update(_DEFAULT_LOGIN_RULES)

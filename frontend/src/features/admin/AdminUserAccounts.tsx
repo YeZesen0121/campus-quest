@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
 import { getAuthEpoch } from "@/lib/accessToken";
+import Link from "next/link";
 
 import {
   Dialog,
@@ -28,6 +29,8 @@ import {
   SectionSkeleton,
 } from "@/components/ui/sectionStates";
 import { hasMorePages, mergeOffsetPage } from "@/lib/offsetPages";
+
+import { batchAccountAction } from "./adminPowersApi";
 import { formatDeadlineDateTime, parseServerInstant } from "@/lib/time";
 
 import {
@@ -50,6 +53,7 @@ import {
   type AccountActionKind,
 } from "./adminView";
 import { Button, type ButtonVariant } from "@/components/ui/button";
+import { COPY_GENERIC_FAIL } from "@/lib/errors";
 
 const PAGE_LIMIT = 20;
 
@@ -58,11 +62,13 @@ const ROLE_FILTERS: readonly { value: RoleDto | ""; label: string }[] = [
   { value: "STUDENT", label: "学生" },
   { value: "TEACHER", label: "教师" },
   { value: "ADMIN", label: "管理员" },
+  { value: "MENTOR", label: "导师" },
 ];
 
 const STATUS_FILTERS: readonly { value: UserStatusDto | ""; label: string }[] = [
   { value: "", label: "全部状态" },
   { value: "PENDING_PHONE", label: "待验证" },
+  { value: "PENDING_APPROVAL", label: "待审批" },
   { value: "ACTIVE", label: "正常" },
   { value: "SUSPENDED", label: "已停用" },
   { value: "BANNED", label: "已封禁" },
@@ -70,7 +76,7 @@ const STATUS_FILTERS: readonly { value: UserStatusDto | ""; label: string }[] = 
 
 type Filters = { role: RoleDto | ""; status: UserStatusDto | "" };
 
-/** adminView's literal class unions -> Button variant props (C2 map). */
+/** adminView's literal class unions -> Button variant props. */
 const BUTTON_VARIANT: Record<"btn-primary" | "btn-secondary" | "btn-danger", ButtonVariant> = {
   "btn-primary": "primary",
   "btn-secondary": "secondary",
@@ -89,6 +95,11 @@ export function AdminUserAccounts() {
   const [acting, setActing] = useState<{ kind: AccountActionKind; user: AdminUserDto } | null>(
     null,
   );
+  // Wave 2a (spec §3.5): the multi-select batch verbs.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [batchConfirm, setBatchConfirm] = useState<"suspend" | "reactivate" | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchNote, setBatchNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,6 +158,66 @@ export function AdminUserAccounts() {
       ),
     );
   }, []);
+
+  // --- the batch verbs (spec §3.5): selection is bounded by the
+  // contract's 100-per-call ceiling; ok rows flip from the action's
+  // deterministic meaning (the batch verdict carries no row payload),
+  // refused rows render their STABLE code through the copy map.
+  const BATCH_LIMIT = 100;
+
+  function toggleSelected(id: string) {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < BATCH_LIMIT) {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function onBatchConfirm() {
+    const action = batchConfirm;
+    if (action === null || batchBusy) {
+      return;
+    }
+    const ids = [...selected];
+    if (ids.length === 0) {
+      return;
+    }
+    setBatchBusy(true);
+    setBatchNote(null);
+    void (async () => {
+      try {
+        const { results } = await batchAccountAction(action, ids);
+        const nextStatus = action === "suspend" ? "SUSPENDED" : "ACTIVE";
+        const done = new Set(
+          results.filter((row) => row.ok).map((row) => row.user_id),
+        );
+        setItems((previous) =>
+          previous.map((row) =>
+            done.has(row.id) ? { ...row, status: nextStatus } : row,
+          ),
+        );
+        const refused = results.filter((row) => !row.ok);
+        const okCount = results.length - refused.length;
+        setBatchNote(
+          refused.length === 0
+            ? `批量操作完成：${okCount} 项成功。`
+            : `批量操作完成：${okCount} 项成功，${refused.length} 项被跳过（${refused
+                .map((row) => `${row.user_id}：${batchReasonCopy(row.reason ?? undefined)}`)
+                .join("；")}）。`,
+        );
+        setSelected(new Set());
+        setBatchConfirm(null);
+      } catch {
+        setBatchNote("批量操作失败，请稍后重试。");
+      } finally {
+        setBatchBusy(false);
+      }
+    })();
+  }
 
   return (
     <section className="section" aria-label="账号目录" data-admin-return="users" tabIndex={-1}>
@@ -234,10 +305,42 @@ export function AdminUserAccounts() {
         <EmptyState title="没有符合条件的账号" hint="调整筛选条件后重试" />
       ) : (
         <>
+          <div className="row-actions" aria-label="批量操作">
+            <span className="field-hint">
+              已选 {selected.size} 项{selected.size >= BATCH_LIMIT ? `（上限 ${BATCH_LIMIT}）` : ""}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => setBatchConfirm("suspend")}
+              disabled={selected.size === 0 || batchBusy}
+            >
+              批量停用
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setBatchConfirm("reactivate")}
+              disabled={selected.size === 0 || batchBusy}
+            >
+              批量恢复
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0 || batchBusy}
+            >
+              清空选择
+            </Button>
+          </div>
+          {batchNote !== null ? (
+            <p className="field-hint" role="status">
+              {batchNote}
+            </p>
+          ) : null}
           <div className="table-scroll">
             <table className="staff-table" aria-label="账号列表">
               <thead>
                 <tr>
+                  <th scope="col">选择</th>
                   <th scope="col">学号 / 用户名</th>
                   <th scope="col">昵称</th>
                   <th scope="col">角色</th>
@@ -249,7 +352,13 @@ export function AdminUserAccounts() {
               </thead>
               <tbody>
                 {items.map((user) => (
-                  <UserRow key={user.id} user={user} onAct={(kind) => setActing({ kind, user })} />
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    selected={selected.has(user.id)}
+                    onToggleSelect={() => toggleSelected(user.id)}
+                    onAct={(kind) => setActing({ kind, user })}
+                  />
                 ))}
               </tbody>
             </table>
@@ -276,7 +385,36 @@ export function AdminUserAccounts() {
         </>
       )}
 
-      <p className="field-hint">停用、封禁和恢复均需填写原因，并记入审计日志；账号处理与注册白名单分别管理。</p>
+      {batchConfirm !== null ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !batchBusy) {
+              setBatchConfirm(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogTitle>
+              {batchConfirm === "suspend" ? "批量停用" : "批量恢复"} {selected.size} 个账号？
+            </DialogTitle>
+            <p className="field-hint">
+              将对已选的 {selected.size} 个账号执行
+              {batchConfirm === "suspend" ? "停用" : "恢复"}操作，逐行写入审计日志；
+              状态不允许的行会被跳过并说明原因。
+            </p>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setBatchConfirm(null)} disabled={batchBusy}>
+                取消
+              </Button>
+              <Button variant="primary" onClick={onBatchConfirm} disabled={batchBusy}>
+                {batchBusy ? <span className="spinner" aria-hidden="true" /> : null}
+                <span>确认执行</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       {acting !== null ? (
         <AccountStatusDialog
@@ -292,18 +430,35 @@ export function AdminUserAccounts() {
 
 function UserRow({
   user,
+  selected,
+  onToggleSelect,
   onAct,
 }: {
   user: AdminUserDto;
+  selected: boolean;
+  onToggleSelect: () => void;
   onAct: (kind: AccountActionKind) => void;
 }) {
   const status = userStatusView(user.status);
   return (
     <tr>
-      <td className="staff-cell-title mono" data-label="学号 / 用户名">{user.username}</td>
+      <td>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label={`选择 ${user.username}`}
+        />
+      </td>
+      <td className="staff-cell-title mono" data-label="学号 / 用户名">
+        {/* Wave 2a (spec §3.1): the row's entry into the detail page. */}
+        <Link className="link" href={`/admin/users/${encodeURIComponent(user.id)}`}>
+          {user.username}
+        </Link>
+      </td>
       <td data-label="昵称">{user.nickname}</td>
-      <td data-label="角色">{user.role === "MENTOR" ? "导师" : roleLabel(user.role)}</td>
-      <td className="cq-status-cell" data-label="状态">
+      <td data-label="角色">{roleLabel(user.role)}</td>
+      <td>
         <span className={`badge badge-${status.tone}`}>{status.label}</span>
       </td>
       <td data-label="注册时间">
@@ -381,7 +536,7 @@ function AccountStatusDialog({
 
   const errorView =
     error !== null
-      ? describeAdminMutationError(error, "操作失败，请稍后重试")
+      ? describeAdminMutationError(error, COPY_GENERIC_FAIL)
       : null;
 
   return (
@@ -397,7 +552,7 @@ function AccountStatusDialog({
         asChild
         aria-labelledby="account-status-title"
         onPointerDownOutside={(event) => {
-          // The legacy dialog had no backdrop-click close.
+          // Deliberate: no backdrop-click close.
           event.preventDefault();
         }} className="campus-admin-dialog" {...dialogFocus}
       >
@@ -454,4 +609,17 @@ function AccountStatusDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** The batch verdict's stable-code copy map (spec §3.5's frozen answer:
+ * reasons are BusinessError-domain codes, never free text). */
+function batchReasonCopy(reason: string | undefined): string {
+  switch (reason) {
+    case "NOT_FOUND":
+      return "账号不存在";
+    case "ACCOUNT_TRANSITION_INVALID":
+      return "当前状态不允许该操作";
+    default:
+      return reason ?? "未知原因";
+  }
 }

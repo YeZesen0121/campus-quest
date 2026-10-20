@@ -20,6 +20,7 @@
  *    (registry drift) degrade to a safe generic line plus the request id.
  */
 import { isKnownErrorCode, isSystemErrorCode, type ApiError } from "../../lib/errors";
+import { COPY_GENERIC_FAIL, COPY_NETWORK_FAIL, COPY_SERVICE_FAIL } from "@/lib/errors";
 
 /** Form field keys an auth form can render errors for. */
 export type AuthFieldName =
@@ -52,17 +53,17 @@ export interface AuthErrorView {
 
 /** Stable zh-CN copy per auth-relevant envelope code. */
 export const AUTH_ERROR_TEXT: Partial<Record<string, string>> = {
-  AUTHENTICATION_REQUIRED: "学号或密码不正确",
+  AUTHENTICATION_REQUIRED: "账号或密码不正确",
   ACCOUNT_NOT_ACTIVE: "该账号当前无法登录，请联系管理员",
   STUDENT_NOT_WHITELISTED: "该学号不在注册白名单中，无法注册",
   USERNAME_ALREADY_EXISTS: "该学号已注册，请直接登录",
   PHONE_ALREADY_BOUND: "该手机号已绑定其他账号",
   OTP_CODE_INVALID: "验证码不正确",
   OTP_TOO_MANY_ATTEMPTS: "验证码尝试次数过多，请重新获取",
-  OTP_CHALLENGE_EXPIRED: "验证码已过期，请重新获取",
+  OTP_CHALLENGE_EXPIRED: "验证码已失效，请重新获取",
   OTP_CHALLENGE_CONSUMED: "验证码已使用，请重新获取",
   OTP_CHALLENGE_INVALID: "验证码已失效，请重新获取",
-  OTP_TOKEN_INVALID: "手机验证已失效，请重新获取验证码",
+  OTP_TOKEN_INVALID: "验证码已失效，请重新获取",
   OTP_RESEND_COOLDOWN: "验证码发送过于频繁，请稍后再试",
   // Account-settings codes (T5): email binding + the re-auth failures
   // the profile endpoints answer (spec §5.5/§5.6).
@@ -71,8 +72,8 @@ export const AUTH_ERROR_TEXT: Partial<Record<string, string>> = {
   RATE_LIMITED: "操作过于频繁，请稍后再试",
 };
 
-const SYSTEM_ERROR_TEXT = "服务暂时不可用，请稍后重试";
-const GENERIC_ERROR_TEXT = "操作失败，请稍后重试";
+const SYSTEM_ERROR_TEXT = COPY_SERVICE_FAIL;
+const GENERIC_ERROR_TEXT = COPY_GENERIC_FAIL;
 const VALIDATION_SUMMARY_TEXT = "请检查表单填写后重试";
 
 /**
@@ -267,7 +268,7 @@ export function resendButtonLabel(
 }
 
 /** Network/transport failure text for non-`ApiError` rejections. */
-export const NETWORK_ERROR_TEXT = "网络异常，请检查连接后重试";
+export const NETWORK_ERROR_TEXT = COPY_NETWORK_FAIL;
 
 /**
  * Presentation helper for forms that render BOTH a summary region and field

@@ -1,13 +1,13 @@
 "use client";
 /**
  * Assignment import (spec §7.1 steps 1-6; design §9 File upload):
- * upload a CSV -> the server parses and pre-checks -> a preview with
- * total/valid/error counts and per-row errors -> an EXPLICIT confirm ->
- * the all-or-nothing result summary.
+ * upload a CSV/XLSX file -> the server parses and pre-checks -> a
+ * preview with total/valid/error counts and per-row errors -> an
+ * EXPLICIT confirm -> the all-or-nothing result summary.
  *
  * Contract notes that shape this UI:
- * - the file rides the request as the RAW BODY (`Content-Type:
- *   text/csv`, ≤2 MB, ≤5000 rows, header exactly `platform,keyword`);
+ * - the file rides the request as the RAW BODY (≤2 MB, ≤5000 rows;
+ *   CSV header exactly `platform,keyword`);
  * - the preview echoes COUNTS + errors only — the valid rows stay
  *   server-side, named by the single-use `preview_token` that expires
  *   (15 min); confirm inserts EXACTLY the previewed rows in one
@@ -35,6 +35,13 @@ import { capRowErrors, importPreviewView } from "./teacherView";
 /** Mirrors of the backend importer caps (Settings defaults). */
 export const IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const IMPORT_MAX_ROWS = 5000;
+/**
+ * The static CSV template (QA #19): two header cells + one example row,
+ * served as a build asset — the import contract's source of truth is
+ * the server's header check; this file only bootstraps the teacher's
+ * spreadsheet.
+ */
+export const IMPORT_TEMPLATE_URL = "/import-template.csv";
 
 export interface AssignmentImportProps {
   taskId: string;
@@ -45,6 +52,9 @@ export interface AssignmentImportProps {
   onImported?: (result: ImportConfirmDto) => void;
 }
 import { Button } from "@/components/ui/button";
+import { usePlatformNames } from "@/features/platforms/platformDictionary";
+import { platformDisplayName } from "@/features/platforms/platformView";
+
 
 type ImportPhase =
   | { kind: "idle" }
@@ -120,9 +130,17 @@ export function AssignmentImport({ taskId, onImported }: AssignmentImportProps) 
       </div>
 
       <p className="field-hint">
-        CSV 文件（UTF-8，表头为 platform,keyword 两列），不超过{" "}
+        CSV 或 XLSX 文件（UTF-8；表头为 platform,keyword 两列），不超过{" "}
         {formatFileSize(IMPORT_MAX_FILE_BYTES)}、{IMPORT_MAX_ROWS} 行。导入前会先给出
-        校验预览，确认后才写入。
+        校验预览，确认后才写入。也可
+        <a
+          className="link"
+          href={IMPORT_TEMPLATE_URL}
+          download="assignment-import-template.csv"
+        >
+          下载 CSV 模板
+        </a>
+        后填写。
       </p>
 
       {phase.kind === "idle" || phase.kind === "uploading" ? (
@@ -132,7 +150,7 @@ export function AssignmentImport({ taskId, onImported }: AssignmentImportProps) 
             id="assignment-import-file"
             className="input"
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={(event) => void onFileChosen(event)}
             disabled={phase.kind === "uploading"}
           />
@@ -187,6 +205,7 @@ function ImportPreviewTable({
   confirming: boolean;
   onConfirm: () => void;
 }) {
+  const platformNames = usePlatformNames();
   const view = importPreviewView(preview);
   // Render cap (F4): a multi-thousand-row error list must not freeze the
   // page on table layout; the full list stays in `view.rowErrors`.
@@ -234,7 +253,7 @@ function ImportPreviewTable({
                 {capped.visible.map((row) => (
                   <tr key={row.key}>
                     <td>{row.where}</td>
-                    <td className="mono">{row.platform ?? "—"}</td>
+                    <td className="mono">{row.platform === null ? "—" : platformDisplayName(row.platform, platformNames)}</td>
                     <td className="mono">{row.keyword ?? "—"}</td>
                     <td>{row.message}</td>
                   </tr>
@@ -245,7 +264,7 @@ function ImportPreviewTable({
           {capped.hiddenCount > 0 ? (
             <p className="report-preview-note">
               表格仅显示前 {capped.visible.length} 行，另有 {capped.hiddenCount}{" "}
-              行问题未展开（总数以上方统计为准）。
+              行问题未展开，总数见上方统计。
             </p>
           ) : null}
         </>

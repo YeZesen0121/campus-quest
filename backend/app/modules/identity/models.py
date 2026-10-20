@@ -76,7 +76,9 @@ class User(Base):
             name="role",
         ),
         CheckConstraint(
-            "status IN ('PENDING_PHONE', 'ACTIVE', 'SUSPENDED', 'BANNED')",
+            "status IN ("
+            "'PENDING_PHONE', 'ACTIVE', 'SUSPENDED', 'BANNED', "
+            "'PENDING_APPROVAL')",
             name="status",
         ),
         Index(
@@ -97,7 +99,12 @@ class User(Base):
         server_default=text("gen_random_uuid()"), primary_key=True
     )
     username: Mapped[str] = mapped_column(String(64), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # Nullable since migration 0028 (V1.1 §2.3): a TEACHER accepting an
+    # invitation may set no password — the email code is then the only
+    # login channel. The ORM annotation MUST track the column or the
+    # next autogenerate would emit a "drift fix" back to NOT NULL
+    # (final review F3).
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     nickname: Mapped[str] = mapped_column(String(255))
     # The avatar's object-storage key (spec amendment D1), or NULL when
     # the account shows the frontend's generated-initial default. The
@@ -109,6 +116,11 @@ class User(Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     role: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16))
+    # The admin verdict on a PENDING_APPROVAL account (V1.1 spec
+    # 2026-10-16 §2): set on approve/reject, NULL before and for every
+    # pre-approval-era row.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejected_reason: Mapped[str | None] = mapped_column(String(255))
     # The user's chosen display honor (spec §18; the honors table is
     # rankings-owned, migration 0008). Plain nullable pointer; ownership
     # is set_display_honor's service rule — see the module docstring.
@@ -198,6 +210,10 @@ class StaffInvitation(Base):
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # §4.2: set by the admin revoke action; NULL on a fresh row and
+    # cleared again by resend (a revoked invitation can come back to
+    # life with a new token). The accept path rejects revoked rows.
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
@@ -237,3 +253,79 @@ class RecoveryCode(Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     code_hash: Mapped[str] = mapped_column(String(128))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LoginEmailChallenge(Base):
+    """Hashed 6-digit staff login code, emailed on request (V1.1 §2.1).
+
+    Deliberately its own table, not a shape of the Redis-backed phone
+    OTP challenge: the email-code lifecycle is keyed by the normalized
+    email (one live challenge per mailbox — verify loads the newest
+    row), verified against the shared keyed digest
+    (``hmac_challenge_code``, the SMS OTP's own primitive — a database
+    dump must not be brute-forceable over the 10^6 code space), and
+    capped at 5 verify attempts by the ``attempts`` counter. Only the
+    digest rests here; the plaintext code exists in the send call and
+    the recipient's mailbox only.
+    """
+
+    __tablename__ = "login_email_challenges"
+
+    id: Mapped[UUID] = mapped_column(
+        server_default=text("gen_random_uuid()"), primary_key=True
+    )
+    email_normalized: Mapped[str] = mapped_column(String(320), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class RememberedDevice(Base):
+    """A 30-day remembered-login device cookie (V1.1 §2.2).
+
+    The cookie VALUE is ``secrets.token_urlsafe(32)`` and travels only
+    in the response; this row stores its SHA-256 digest, so a database
+    leak cannot be replayed into a login. Independent of refresh
+    tokens: revoking sessions (kick, password change) deletes these
+    rows too — the device credential must not outlive the account's
+    other credentials.
+    """
+
+    __tablename__ = "remembered_devices"
+
+    id: Mapped[UUID] = mapped_column(
+        server_default=text("gen_random_uuid()"), primary_key=True
+    )
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )
+
+
+class LoginMobileChallenge(Base):
+    """Hashed 6-digit student login code, SMSed on request (V1.1 §3).
+
+    The exact mirror of LoginEmailChallenge — keyed digest
+    (hmac_challenge_code), one live row per phone (verify loads the
+    newest), 5-attempt cap — with the mailbox swapped for the E.164
+    phone.
+    """
+
+    __tablename__ = "login_mobile_challenges"
+
+    id: Mapped[UUID] = mapped_column(
+        server_default=text("gen_random_uuid()"), primary_key=True
+    )
+    phone_e164: Mapped[str] = mapped_column(String(32), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()")
+    )

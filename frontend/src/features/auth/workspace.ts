@@ -14,16 +14,19 @@ type Role = components["schemas"]["Role"];
 /** Where a successful STUDENT login lands (the student home). */
 export const STUDENT_LANDING_PATH = "/";
 
-/** Where a successful STAFF (teacher/admin) login lands: the review queue. */
+/** Where a successful TEACHER login lands: the review queue. */
 export const TEACHER_LANDING_PATH = "/teacher/reviews";
 
 /** Mentor-only accounts manage their own profile without task capabilities. */
+export const ADMIN_LANDING_PATH = "/admin";
+
 export const MENTOR_LANDING_PATH = "/innovation/mentors/me";
 
 /** Landing path by the session's role (login-success redirect target). */
 export function landingPathForRole(role: Role): string {
   if (role === "STUDENT") return STUDENT_LANDING_PATH;
-  if (role === "TEACHER" || role === "ADMIN") return TEACHER_LANDING_PATH;
+  if (role === "ADMIN") return ADMIN_LANDING_PATH;
+  if (role === "TEACHER") return TEACHER_LANDING_PATH;
   return MENTOR_LANDING_PATH;
 }
 
@@ -44,7 +47,7 @@ export function studentWorkspaceGate(role: Role): StudentWorkspaceGate {
     return { kind: "student" };
   }
   if (role === "TEACHER" || role === "ADMIN") {
-    return { kind: "staff-guidance", workspacePath: TEACHER_LANDING_PATH };
+    return { kind: "staff-guidance", workspacePath: landingPathForRole(role) };
   }
   return { kind: "mentor-guidance", workspacePath: MENTOR_LANDING_PATH };
 }
@@ -55,6 +58,11 @@ export function studentWorkspaceGate(role: Role): StudentWorkspaceGate {
  * guidance, not a page of 403ing sections). ACTIVE-account and
  * confirmed-TOTP enforcement stays with the backend's staff guard — a
  * 403 surfaces through each section's error state.
+ *
+ * Deliberate boundary (owner report 2026-10-15): admins KEEP access to
+ * the teacher workspace — the fix changed only the DEFAULT LANDING
+ * (`landingPathForRole`), never this gate. An admin browsing
+ * /teacher/* is a legitimate cross-cockpit visit, not a misroute.
  */
 export type TeacherWorkspaceGate =
   | { kind: "staff" }
@@ -91,7 +99,7 @@ export function adminWorkspaceGate(role: Role): AdminWorkspaceGate {
     return { kind: "admin" };
   }
   if (role === "TEACHER") {
-    return { kind: "staff-guidance", workspacePath: TEACHER_LANDING_PATH };
+    return { kind: "staff-guidance", workspacePath: landingPathForRole(role) };
   }
   if (role === "STUDENT") {
     return { kind: "student-guidance", workspacePath: STUDENT_LANDING_PATH };

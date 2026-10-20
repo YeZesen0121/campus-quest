@@ -20,7 +20,7 @@ import {
 } from "@/components/shell/navIcons";
 
 import type { TaskCardDto } from "./api";
-import { availabilityText, deadlineView, ratingText, rarityView } from "./display";
+import { cardAvailabilityMeta, deadlineView, ratingText, rarityView } from "./display";
 
 /** One distinct shape per tier (defect #5) — shape separable without color. */
 const RARITY_GLYPHS = {
@@ -49,8 +49,13 @@ export function TaskCard({ card, nowMs, headingLevel = 3 }: TaskCardProps) {
   const rarity = rarityView(card.rarity);
   const deadline = deadlineView(card, nowMs);
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
+  const depleted = card.assignments_available === 0;
   return (
-    <article className="task-card" data-rarity={rarity.rarity}>
+    <article
+      className="task-card"
+      data-rarity={rarity.rarity}
+      data-depleted={depleted ? "true" : undefined}
+    >
       <div className="task-card-head">
         <Heading className="task-card-title">
           <Link href={`/tasks/${card.id}`}>{card.title}</Link>
@@ -65,11 +70,11 @@ export function TaskCard({ card, nowMs, headingLevel = 3 }: TaskCardProps) {
       </p>
 
       <div className="task-card-meta">
-        <span className="task-card-meta-item" suppressHydrationWarning>
+        <span className="task-card-meta-item meta-deadline" suppressHydrationWarning>
           {deadline.line}
         </span>
         <span className="task-card-meta-item meta-num">
-          {availabilityText(card.assignments_available)}
+          {cardAvailabilityMeta(card.assignments_available)}
         </span>
       </div>
       <p className="task-card-rating">{ratingText(card.rating)}</p>
@@ -79,6 +84,14 @@ export function TaskCard({ card, nowMs, headingLevel = 3 }: TaskCardProps) {
       ) : null}
       {deadline.urgency === "closed" ? (
         <span className="badge badge-danger">已截止</span>
+      ) : null}
+      {/* Defect #20 (QA 2026-10-03): a fully-claimed task stays
+          browsable on the square but carries an explicit depleted MARK
+          — a text badge (never a color-only cue), sibling of the
+          deadline badges. Batch ④ (2026-10-10): data-depleted drives
+          the restrained recede treatment in CSS. */}
+      {card.assignments_available === 0 ? (
+        <span className="badge badge-muted">已被领完</span>
       ) : null}
     </article>
   );

@@ -19,6 +19,8 @@ import {
 } from "./teacherApi";
 import {
   DEADLINE_MODE_OPTIONS,
+  defaultSchemaFor,
+  shouldAutoFillSchema,
   TASK_RARITY_OPTIONS,
   TASK_NOTIFICATION_CHANNEL_OPTIONS,
   type TaskFormErrors,
@@ -52,12 +54,15 @@ export function TaskFormFields({
 
   function toggleFileType(type: string) {
     const cast = type as TaskFormValues["fileTypes"][number];
-    setField(
-      "fileTypes",
-      values.fileTypes.includes(cast)
-        ? values.fileTypes.filter((item) => item !== cast)
-        : [...values.fileTypes, cast],
-    );
+    const next = values.fileTypes.includes(cast)
+      ? values.fileTypes.filter((item) => item !== cast)
+      : [...values.fileTypes, cast];
+    setField("fileTypes", next);
+    // Defect #22: a pristine schema follows the type selection —
+    // switching types swaps the default template; a manual edit stays.
+    if (shouldAutoFillSchema(values.submissionSchema)) {
+      setField("submissionSchema", defaultSchemaFor(next));
+    }
   }
 
   return (
@@ -285,7 +290,7 @@ export function TaskFormFields({
           </div>
           <div className="field">
             <label className="field-label" htmlFor="task-schema-version">
-              schema 版本
+              校验规则版本
             </label>
             <input
               id="task-schema-version"
@@ -303,9 +308,12 @@ export function TaskFormFields({
             ) : null}
           </div>
         </div>
+        <details className="form-advanced">
+          <summary>高级：提交校验规则（已按所选类型自动填入默认模板）</summary>
+          <p className="field-hint">校验规则决定列名、类型等要求。默认模板可直接发布，请先把列名改成任务实际需要的列。</p>
         <div className="field">
           <label className="field-label" htmlFor="task-schema">
-            提交校验 schema（JSON，发布前必填）
+            提交校验规则（JSON，发布前必填）
           </label>
           <textarea
             id="task-schema"
@@ -324,6 +332,7 @@ export function TaskFormFields({
             <p className="field-error">{fieldErrors.submissionSchema}</p>
           ) : null}
         </div>
+        </details>
       </section>
       <section className="campus-staff-section">
         <h3>截止提醒</h3>

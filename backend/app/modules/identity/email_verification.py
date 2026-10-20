@@ -54,6 +54,7 @@ identity typed-exception table, following `otp.py` /
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -199,7 +200,11 @@ class EmailVerificationService:
             ),
             ex=int(self._ttl.total_seconds()) + _REDIS_TTL_GRACE_SECONDS,
         )
-        self._email_sender.send(
+        # The SMTP adapter's socket work is synchronous (stdlib
+        # smtplib): ride a worker thread so the request handler's event
+        # loop never blocks on the relay (the otp.py to_thread seam).
+        await asyncio.to_thread(
+            self._email_sender.send,
             to=email,
             template=_EMAIL_TEMPLATE,
             variables={
@@ -288,10 +293,16 @@ class EmailVerificationService:
     @staticmethod
     def _require_current_password(user: User, password: str) -> None:
         """Re-auth before unbinding (the SessionService discipline)."""
-        try:
-            matched = verify_password(password, user.password_hash)
-        except ValueError:
+        if user.password_hash is None:
+            # A passwordless staff account (V1.1 §2.3) has no old
+            # password to re-authenticate with: the uniform failure,
+            # never the hasher's None-type crash (final review F2).
             matched = False
+        else:
+            try:
+                matched = verify_password(password, user.password_hash)
+            except ValueError:
+                matched = False
         if not matched:
             raise EmailVerificationService._authentication_required()
 

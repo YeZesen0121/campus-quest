@@ -47,21 +47,25 @@ for (const m of compiledCss.matchAll(
 }
 
 // --- used classes: static string literals inside className={...} ---
-// Enumerate matching tracked .tsx files in the working tree, skipping
-// deleted files, without shell quoting; NUL separators preserve paths.
+// Discover from cwd; ignore ambient hook plumbing. The isolated runner may
+// explicitly provide its private index because the host worktree uses Windows paths.
+const gitEnv = { ...process.env };
+for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"]) delete gitEnv[key];
+if (process.env.CQ_INTEGRATION_ID === "cq-integration-20261020" && process.cwd() === "/workspace/frontend") {
+  gitEnv.GIT_DIR = "/tmp/campusquest-integration-git/current";
+  gitEnv.GIT_WORK_TREE = "/workspace";
+  gitEnv.GIT_INDEX_FILE = `${gitEnv.GIT_DIR}/index`;
+}
 const files = execFileSync(
-  "git",
-  ["grep", "-l", "-z", "", "--", "src/*.tsx"],
-  { encoding: "utf8" },
+  "git", ["grep", "-l", "-z", "", "--", "src/*.tsx"],
+  { encoding: "utf8", env: gitEnv },
 ).split("\0").filter((file) => file && !file.includes("__tests__"));
 const used = new Map(); // class -> [file]
 for (const f of files) {
   const text = readFileSync(f, "utf8");
   for (const m of text.matchAll(/className\s*=\s*(\{[^}]*\}|"[^"]*"|'[^']*')/gs)) {
     const expr = m[1];
-    if (expr.includes("${")) {
-      // template literal: still scan the static segments
-    }
+    // template literal: still scan the static segments
     for (const s of expr.matchAll(/"([^"]*)"|'([^']*)'|`([^`]*)`/gs)) {
       const lit = s[1] ?? s[2] ?? s[3];
       for (const tok of lit.split(/\s+/)) {
@@ -101,16 +105,15 @@ const ALLOWED_UNDEFINED = new Set([
   // defined; these literals never reach the DOM as classes):
   "success",    // badge-${... "success" ...}: WhitelistAdmin/RewardsAdmin/SystemAdmin/ValidationReport
   "muted",      // badge-${...} suffix + claim.tone === "muted": RewardsAdmin/SubmissionReview/SystemAdmin/WhitelistAdmin
-  "info",       // badge-${... "info" ...}: SubmissionReview.tsx:243
+  "info",       // badge-${... "info" ...}: SubmissionReview.tsx:249
   "danger",     // badge-${... "danger" ...}: ValidationReport.tsx:26
-  "approved",   // outcome.kind === "approved": SubmissionReview.tsx:688
-  "revision",   // outcome.kind === "revision": SubmissionReview.tsx:688
-  "grant",      // mode === "grant": RewardsAdmin.tsx:780
-  "compact",    // size === "compact": TaskLifecycleActions.tsx:60
+  "approved",   // outcome.kind === "approved": SubmissionReview.tsx:664
+  "revision",   // outcome.kind === "revision": SubmissionReview.tsx:664
+  "compact",    // size === "compact": TaskLifecycleActions.tsx:74
   "wide",       // size === "wide": components/ui/dialog.tsx (DialogContent size variant)
   "ok",         // outcome.tone === "ok": TaskRating.tsx:145
-  "verified",   // view.state === "verified": AccountSettings.tsx:531
-  "unverified", // view.state === "unverified": AccountSettings.tsx:533
+  "verified",   // view.state === "verified": AccountSettings.tsx:532
+  "unverified", // view.state === "unverified": AccountSettings.tsx:534
 ]);
 
 for (const [cls, where] of used) {

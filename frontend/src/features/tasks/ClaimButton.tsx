@@ -26,20 +26,29 @@ import {
 
 import { claimTask, type ClaimDto } from "./api";
 import { describeClaimError } from "./claimErrors";
-import { claimRewardLine, claimStatusView, NEAR_CUTOFF_MS } from "./display";
+import { claimCtaView, claimRewardLine, claimStatusView, NEAR_CUTOFF_MS } from "./display";
 import { useNow } from "./useNow";
 
 export interface ClaimButtonProps {
   taskId: string;
+  /** The server's availability count for THIS task at the last fetch —
+   * a depleted task disables the CTA up front (owner defect
+   * 2026-10-10): the page must never offer a pressable button the
+   * next press would reject. The typed 409 stays the fallback for the
+   * concurrent-race window (the last slot leaving after render). */
+  availability: number;
   /** The viewer's own non-terminal claim, when the detail already has one. */
   existingClaim: ClaimDto | null;
   /** Boundary hook: refetch owning server state after a successful claim. */
   onClaimed?: () => void;
 }
 import { Button } from "@/components/ui/button";
+import { usePlatformNames } from "@/features/platforms/platformDictionary";
+import { platformDisplayName } from "@/features/platforms/platformView";
 
 export function ClaimButton({
   taskId,
+  availability,
   existingClaim,
   onClaimed,
 }: ClaimButtonProps) {
@@ -70,6 +79,21 @@ export function ClaimButton({
 
   if (claim !== null) {
     return <AssignedClaimPanel claim={claim} nowMs={now} />;
+  }
+
+  const cta = claimCtaView(availability, existingClaim !== null);
+  if (cta.kind === "depleted") {
+    // Disabled AND explicit: the copy is the cue (never color-only);
+    // the random-allocation hint is gone — it would promise an
+    // allocation that cannot happen.
+    return (
+      <div className="section">
+        <Button block variant="primary" disabled>
+          <span>{cta.ctaLabel}</span>
+        </Button>
+        <p className="field-hint">{cta.hint}</p>
+      </div>
+    );
   }
 
   return (
@@ -111,6 +135,7 @@ export function ClaimButton({
  * display-only (§42; the authoritative boundary check is the backend's).
  */
 function AssignedClaimPanel({ claim, nowMs }: { claim: ClaimDto; nowMs: number }) {
+  const platformNames = usePlatformNames();
   const status = claimStatusView(claim.status);
   const deadlineMs = parseServerInstant(claim.deadline_at);
   const graceMs = parseServerInstant(claim.grace_deadline_at);
@@ -123,7 +148,7 @@ function AssignedClaimPanel({ claim, nowMs }: { claim: ClaimDto; nowMs: number }
       <div className="assignment-grid">
         <div className="assignment-item">
           <span className="assignment-label">平台</span>
-          <span className="assignment-value">{claim.platform}</span>
+          <span className="assignment-value">{platformDisplayName(claim.platform, platformNames)}</span>
         </div>
         <div className="assignment-item">
           <span className="assignment-label">关键词</span>

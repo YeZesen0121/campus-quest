@@ -23,9 +23,12 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { SectionError } from "@/components/ui/sectionStates";
+import { StaffLogoutButton } from "@/components/shell/StaffLogoutButton";
 import { StaffMenuSheet } from "@/components/shell/StaffMenuSheet";
 import { ApprovedNavIcon, WorkspaceSidebar } from "@/components/shell/WorkspaceSidebar";
+import { StaffShellSkeleton } from "@/components/shell/StaffShellSkeleton";
 import { useSession } from "@/features/auth/session";
+import { NicknameNudge } from "@/features/auth/NicknameNudge";
 import { teacherWorkspaceGate } from "@/features/auth/workspace";
 import { INNOVATION_NAV } from "@/features/innovation/InnovationNavigation";
 
@@ -36,6 +39,7 @@ const NAV_ITEMS = [
   { href: "/teacher/reviews", label: "审核队列", icon: <ApprovedNavIcon name="teacherReviews" /> },
   { href: "/teacher/tasks", label: "任务管理", icon: <ApprovedNavIcon name="teacherTasks" /> },
   INNOVATION_NAV,
+  { href: "/teacher/profile", label: "个人信息", icon: <ApprovedNavIcon name="profile" /> },
 ] as const;
 
 const SIDEBAR_GROUPS = [{ label: "教师工作台", items: NAV_ITEMS }] as const;
@@ -45,24 +49,20 @@ export function TeacherShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   if (state.status === "loading") {
+    // PATH IS GEOMETRY (owner feedback 2026-10-15): the /teacher group
+    // renders its own workspace shape from the first frame.
     return (
-      <div className="app-shell">
-        <div className="app-topbar">
-          <div className="app-topbar-inner">
-            <Link className="app-brand" href="/teacher/reviews">华师令</Link>
-          </div>
-        </div>
-        <main className="app-main" aria-busy="true">
-          <span className="skeleton skeleton-line" style={{ width: "40%" }} />
-          <span className="skeleton skeleton-line" />
-          <span className="skeleton skeleton-block" />
-        </main>
-      </div>
+      <StaffShellSkeleton
+        brandHref="/teacher/reviews"
+        navLabel="教师工作台导航"
+        navItems={NAV_ITEMS}
+        sidebarGroupLabel="教师工作台"
+      />
     );
   }
 
   if (state.status === "anonymous") {
-    return <AuthFrame><AuthPage title="员工工作台" kicker="校内空间" description="任务管理与提交审核需要员工账号登录" links={<Link href="/login">返回学生入口</Link>}><Link className="btn btn-primary" href="/staff/login">前往员工登录</Link></AuthPage></AuthFrame>;
+    return <AuthFrame><AuthPage title="员工工作台" kicker="校内空间" description="任务管理与提交审核需要员工账号登录" links={<Link href="/login">返回学生入口</Link>}><Link className="btn btn-primary" href="/login">前往员工登录</Link></AuthPage></AuthFrame>;
   }
 
   if (state.status === "error") {
@@ -140,12 +140,15 @@ export function TeacherShell({ children }: { children: ReactNode }) {
                   {state.me.role === "ADMIN" ? "管理员" : "教师"}
                 </span>
               </span>
-              <StaffMenuSheet label="教师工作台菜单" items={NAV_ITEMS} footer={<><p>{state.me.nickname} · {state.me.role === "ADMIN" ? "管理员" : "教师"}</p><Link className="btn btn-ghost" href="/logout" prefetch={false}>退出登录</Link></>} />
-              <Link className="btn btn-ghost app-logout" href="/logout" prefetch={false}>退出登录</Link>
+              <StaffLogoutButton />
+              <StaffMenuSheet label="教师工作台菜单" items={NAV_ITEMS} footer={<><p>{state.me.nickname} · {state.me.role === "ADMIN" ? "管理员" : "教师"}</p><StaffLogoutButton /></>} />
             </div>
           </div>
         </header>
-        <main className="app-main">{children}</main>
+        <main className="app-main">
+          <NicknameNudge me={state.me} />
+          {children}
+        </main>
       </div>
     </div>
   );

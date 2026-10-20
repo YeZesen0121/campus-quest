@@ -36,9 +36,11 @@ Cross-phase design decisions:
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -49,7 +51,9 @@ from app.core.clock import Clock
 from app.core.error_codes import ErrorCode
 from app.core.errors import BusinessError
 from app.core.rbac import is_admin
+from app.modules.audit.service import AuditLogWriter
 from app.modules.identity.events import Actor
+from app.modules.tasks import platform_registry
 from app.modules.tasks.collaborator_service import CollaboratorPermission
 from app.modules.tasks.import_confirm import (
     AssignmentImportResult,
@@ -58,7 +62,6 @@ from app.modules.tasks.import_confirm import (
 )
 from app.modules.tasks.import_parsing import (
     _DUPLICATE_IN_DB_MESSAGE,
-    SUPPORTED_IMPORT_PLATFORMS,
     AssignmentImportError,
     AssignmentPreviewRow,
     ImportErrorCode,
@@ -74,9 +77,13 @@ from app.modules.tasks.import_preview import (
 from app.modules.tasks.models import Assignment, Task, TaskCollaborator
 from app.modules.tasks.service import TaskNotFoundError
 
+#: Async view of the enabled platform codes (registry, V1.1 spec
+#: 2026-10-16): the seam focused unit tests pin while production
+#: always reads the real platforms table.
+PlatformCodeProvider = Callable[[Any], Awaitable[set[str]]]
+
 __all__ = [
     "ImportErrorCode",
-    "SUPPORTED_IMPORT_PLATFORMS",
     "AssignmentImportError",
     "AssignmentImportPreview",
     "AssignmentImportResult",
@@ -92,8 +99,39 @@ _DENIED_MESSAGE = (
     "只有任务所有者、拥有 MANAGE_ASSIGNMENTS 权限的协作者或管理员可以导入 Assignment"
 )
 
+# Audit action (spec §30, batch 4 item 5; owner ruling 2026-10-11):
+# the confirm leg — the one that writes rows — is the audited verb.
+AUDIT_TASK_ASSIGNMENTS_IMPORTED = "TASK_ASSIGNMENTS_IMPORTED"
+
 
 # --- authorization -----------------------------------------------------------------
+
+
+_IMPORT_TOO_LARGE_MESSAGE = "导入文件超过大小上限"
+
+
+async def read_import_body(stream: AsyncIterator[bytes], cap: int) -> bytes:
+    """Read the import upload body, bounded by the cap DURING the read.
+
+    The avatar-ingress pattern: the file travels as the raw request
+    body (no multipart), and Starlette's ``request.body()`` would
+    buffer an unbounded upload to memory before any application check
+    runs — this reader rejects the moment the running total crosses
+    ``cap`` instead (security round F2).
+    """
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in stream:
+        total += len(chunk)
+        if total > cap:
+            raise BusinessError(
+                ErrorCode.FILE_TOO_LARGE,
+                _IMPORT_TOO_LARGE_MESSAGE,
+                status_code=400,
+                details={"size": total, "limit": cap},
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _require_import_access(db: AsyncSession, task: Task, actor: Actor) -> None:
@@ -150,6 +188,8 @@ class AssignmentImportService:
         max_rows: int,
         keyword_max_length: int,
         preview_ttl_seconds: int,
+        audit: AuditLogWriter | None = None,
+        platform_codes: PlatformCodeProvider = platform_registry.enabled_codes,
     ) -> None:
         self._redis = redis
         self._clock = clock
@@ -157,6 +197,14 @@ class AssignmentImportService:
         self._max_rows = max_rows
         self._keyword_max_length = keyword_max_length
         self._preview_ttl_seconds = preview_ttl_seconds
+        # Flush-only audit writer (spec §30, batch 4 item 5) — default
+        # construction is free (the comment_service precedent).
+        self._audit = audit if audit is not None else AuditLogWriter()
+        # The registry view (V1.1 spec 2026-10-16 §3): an async callable
+        # so focused unit tests can pin the closed three-code world
+        # without a database, while production always reads the real
+        # platforms table.
+        self._platform_codes = platform_codes
         # Bounded cell length (engineering §14): raise csv's field limit
         # above the byte cap BEFORE any parsing can happen (see
         # import_parsing.ensure_field_size_limit).
@@ -183,11 +231,22 @@ class AssignmentImportService:
             raise TaskNotFoundError(task_id)
         await _require_import_access(db, task, actor)
 
-        parsed = parse_upload(
+        # Security round F6: the parse (csv dialect sniffing, the ZIP
+        # preflight, openpyxl) is pure CPU over up-to-2 MiB of bytes —
+        # it must not block the event loop that called this async
+        # handler, so it rides a worker thread like otp.py's to_thread
+        # seam.
+        # Registry-driven validation (V1.1 spec 2026-10-16 §3): the
+        # enabled-code set is read on THIS event loop (async DB), then
+        # handed to the pure-CPU parse as a plain frozenset.
+        allowed_platforms = frozenset(await self._platform_codes(db))
+        parsed = await asyncio.to_thread(
+            parse_upload,
             data,
             max_file_bytes=self._max_file_bytes,
             max_rows=self._max_rows,
             keyword_max_length=self._keyword_max_length,
+            allowed_platforms=allowed_platforms,
         )
         if parsed.file_error is not None:
             return self._file_rejected(task_id, parsed.file_error)
@@ -282,6 +341,14 @@ class AssignmentImportService:
             raise DuplicateAssignmentsError(sorted(conflicts))
 
         ordered_rows = await insert_previewed_rows(db, task_id=task_id, rows=rows)
+        await self._audit.append(
+            db,
+            actor=actor,
+            action=AUDIT_TASK_ASSIGNMENTS_IMPORTED,
+            target_type="task",
+            target_id=str(task_id),
+            details={"inserted": len(rows)},
+        )
         await db.commit()
 
         logger.info(

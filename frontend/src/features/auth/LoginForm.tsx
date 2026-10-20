@@ -1,6 +1,6 @@
 "use client";
 /**
- * Password login island for students and mentor-only accounts.
+ * Password login island for mentor-only accounts; student/staff use UnifiedLoginPanel.
  *
  * Client convenience validation mirrors the backend bands; the submit flow is
  * input -> validate -> role-specific login -> branch on the §29 envelope
@@ -9,16 +9,16 @@
  * cookie and `apiRequest` sends credentials on the follow-up /me fetch.
  */
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import { useSession } from "@/features/auth/session";
-import { MENTOR_LANDING_PATH, STUDENT_LANDING_PATH } from "@/features/auth/workspace";
+import { MENTOR_LANDING_PATH } from "@/features/auth/workspace";
 import { isApiError } from "@/lib/errors";
 
 import { AuthField } from "./AuthField";
 import { FormErrorSummary } from "./FormErrorSummary";
 import { SubmitButton } from "./SubmitButton";
-import { loginMentor, loginStudent } from "./api";
+import { loginMentor } from "./api";
 import {
   NETWORK_ERROR_TEXT,
   describeAuthError,
@@ -27,17 +27,14 @@ import {
   type AuthFieldName,
 } from "./errors";
 import { validatePassword, validateUsername } from "./validation";
+import { useClientReady } from "./useClientReady";
 
 type LoginFields = Extract<AuthFieldName, "username" | "password">;
 
-const subscribeToReadiness = () => () => {};
-const clientReady = () => true;
-const serverReady = () => false;
-
-export function LoginForm({ account = "student", secondaryAction }: { account?: "student" | "mentor"; secondaryAction?: ReactNode }) {
+export function LoginForm({ account, secondaryAction }: { account: "mentor"; secondaryAction?: ReactNode }) {
   // The SSR form remains visible while scripts load, but controlled fields
   // cannot accept input until hydration has installed their handlers.
-  const ready = useSyncExternalStore(subscribeToReadiness, clientReady, serverReady);
+  const ready = useClientReady();
   const router = useRouter();
   const { refresh: refreshSession } = useSession();
   const [username, setUsername] = useState("");
@@ -62,9 +59,9 @@ export function LoginForm({ account = "student", secondaryAction }: { account?: 
 
     setLoading(true);
     try {
-      await (account === "mentor" ? loginMentor : loginStudent)(trimmed, password);
+      await loginMentor(trimmed, password);
       refreshSession(); // invalidate the cached anonymous /me result
-      router.replace(account === "mentor" ? MENTOR_LANDING_PATH : STUDENT_LANDING_PATH);
+      router.replace(MENTOR_LANDING_PATH);
       router.refresh(); // re-render server components with the new session
     } catch (error) {
       if (!isApiError(error)) {
@@ -86,18 +83,18 @@ export function LoginForm({ account = "student", secondaryAction }: { account?: 
       <FormErrorSummary view={summary} />
       <AuthField
         name="username"
-        label={account === "mentor" ? "导师账号" : "学号"}
+        label={"导师账号"}
         error={fieldErrors.username}
         inputProps={{
           value: username,
           onChange: (event) => setUsername(event.target.value),
           type: "text",
-          inputMode: account === "mentor" ? "text" : "numeric",
+          inputMode: "text",
           autoComplete: "username",
           autoCapitalize: "none",
           autoCorrect: "off",
-          placeholder: account === "mentor" ? "请输入导师账号" : "请输入学号",
-          maxLength: account === "mentor" ? 64 : 20,
+          placeholder: "请输入导师账号",
+          maxLength: 64,
           disabled: !ready || loading,
         }}
       />

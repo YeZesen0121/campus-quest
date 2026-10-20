@@ -63,6 +63,17 @@ export function availabilityText(count: number): string {
   return count > 0 ? `可领取 ${count} 个` : "已被领完";
 }
 
+/**
+ * The TASK CARD's meta-row text (defect #20, QA 2026-10-03): the
+ * square's informational column keeps the COUNT shape at zero too —
+ * the depleted MARK is the card-level badge (TaskCard), so the phrase
+ * 已被领完 renders exactly once per card. The DETAIL page's fact row
+ * keeps availabilityText's depleted phrasing.
+ */
+export function cardAvailabilityMeta(count: number): string {
+  return `可领取 ${count} 个`;
+}
+
 // --- deadline (spec §9.1/§9.2 modes; patterns §14 display format) -------------
 
 export type DeadlineUrgency = "none" | "near" | "closed";
@@ -251,4 +262,53 @@ export function claimRewardLine(
     return "已超过截止时间，当前仍可获得积分（以提交时结算为准）";
   }
   return `当前可获得 ${baseRewardPoints} 积分`;
+}
+
+// --- square entrance choreography (owner ruling 2026-10-10) -----------------
+
+/**
+ * The task grid's per-card stagger interval, list-length-aware: every
+ * card takes the orchestrated rise, and the interval shrinks with the
+ * count so the stagger TAIL ((count-1) × interval) stays within the
+ * 80ms budget the old three-child cap spent (2 × --stagger 40ms).
+ * Total entrance = --motion-in 220ms + tail ≤ 80ms — §11's ~300ms
+ * ceiling holds at ANY grid size.
+ *
+ * Monotone-decreasing BY CONSTRUCTION: a load-more append can only
+ * shrink the interval, so an already-completed entrance can never be
+ * pushed back before its (now larger) delay and visibly rewind.
+ */
+export function entranceStaggerMs(count: number): number {
+  if (count <= 1) {
+    return 0;
+  }
+  return Math.min(40, 80 / (count - 1));
+}
+
+// --- depleted detail CTA (owner defect, 2026-10-10) -------------------------
+
+export type ClaimCtaView =
+  | { kind: "claim" }
+  | { kind: "depleted"; ctaLabel: string; hint: string };
+
+/**
+ * The detail page's CTA shape from the server's availability number —
+ * the same field the square card carries. A depleted task must say so
+ * UP FRONT (disabled CTA + explicit copy), never offer a pressable
+ * button that the next press rejects. The concurrent-race window
+ * (last slot leaves after render) keeps the typed 409 copy as the
+ * fallback; this table only owns the pre-press verdict.
+ */
+export function claimCtaView(
+  assignmentsAvailable: number,
+  hasExistingClaim: boolean,
+): ClaimCtaView {
+  if (assignmentsAvailable === 0 && !hasExistingClaim) {
+    return {
+      kind: "depleted",
+      ctaLabel: "名额已满",
+      hint: "该任务的所有名额都已被领取，看看其他任务吧",
+    };
+  }
+  return { kind: "claim" };
 }

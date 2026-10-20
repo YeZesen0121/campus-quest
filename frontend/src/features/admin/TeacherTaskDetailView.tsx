@@ -200,7 +200,7 @@ export function TeacherTaskDetailView({ taskId }: { taskId: string }) {
             <dd className="fact-value">{formatFileSize(task.max_file_size_bytes)}</dd>
           </div>
           <div className="fact-row">
-            <dt className="fact-label">提交校验 schema</dt>
+            <dt className="fact-label">提交校验规则</dt>
             <dd className="fact-value mono">
               {task.submission_schema !== null ? <details className="campus-task-schema"><summary>查看校验规则 · v{task.submission_schema_version ?? "—"}</summary><pre>{JSON.stringify(task.submission_schema, null, 2)}</pre></details> : "未配置（发布前必填）"}
             </dd>

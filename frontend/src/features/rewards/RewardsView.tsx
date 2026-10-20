@@ -39,6 +39,7 @@ import {
 } from "@/features/points/api";
 import { RedeemDialog } from "@/features/rewards/RedeemDialog";
 import {
+  balanceQuietView,
   nextRewardView,
   redemptionStatusView,
   rewardCtaView,
@@ -159,7 +160,11 @@ export function WalletSection({
                 <span className="balance-hero-unit">积分</span>
               </p>
               <p className="balance-quiet">
-                可用积分 {data.available_points} · 累计获得 {data.earned_points}
+                {balanceQuietView({
+                  available: data.available_points,
+                  spendable: data.spendable_points,
+                  earned: data.earned_points,
+                })}
               </p>
             </div>
             {goal !== null ? (
@@ -194,7 +199,7 @@ export function WalletSection({
           ) : null}
           {frozen > 0 ? (
             <p className="progress-note">
-              有 {frozen} 积分冻结在兑换申请中，兑换以可花费余额为准
+              有 {frozen} 积分冻结在审核中的兑换里，只能花未冻结的部分
             </p>
           ) : null}
         </>
@@ -310,7 +315,13 @@ export function RewardCard({
       {view.stockLabel !== null || view.windowLabel !== null ? (
         <div className="reward-card-meta">
           {view.stockLabel !== null ? <span>{view.stockLabel}</span> : null}
-          {view.windowLabel !== null ? <span>{view.windowLabel}</span> : null}
+          {/* The window line is the one CLOCK-DERIVED string on the
+           * card (formatted absolute bounds) — the visual suite masks
+           * .reward-window so baselines stay stable across capture
+           * times until the world mint pins its clock. */}
+          {view.windowLabel !== null ? (
+            <span className="reward-window">{view.windowLabel}</span>
+          ) : null}
         </div>
       ) : null}
       <p className="reward-price"><strong className="reward-cost meta-num">{item.point_cost}</strong> 积分</p>

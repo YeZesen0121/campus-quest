@@ -20,6 +20,7 @@ import { describe, test } from "node:test";
 import { ApiError } from "../lib/errors";
 import {
   TOTP_QR_STRATEGY,
+  classifyInviteAccept,
   confirmRecoveryCodesSeen,
   copyAllRecoveryCodesText,
   describeStaffError,
@@ -27,6 +28,8 @@ import {
   totpProvisioningView,
   validateInvitePassword,
   validateInvitePasswordRepeat,
+  validateOptionalInvitePassword,
+  validateOptionalInvitePasswordRepeat,
   validateSecondFactor,
   validateStaffEmail,
   validateTotpCode,
@@ -37,6 +40,50 @@ function apiError(code: string, message = "backend text", requestId: string | nu
 }
 
 // --- invitation form validation ---------------------------------------------
+
+// V1.1 (plan Task 7/9): the TEACHER branch's optional password — empty
+// means "email-code only, no password_hash"; a supplied value keeps the
+// shared 10-128 band (the backend band-checks BEFORE touching the
+// one-time token, so a client-rejected value never burns it).
+describe("optional invitation password (V1.1 teacher branch)", () => {
+  test("empty is valid; a supplied value keeps the shared band", () => {
+    assert.equal(validateOptionalInvitePassword(""), null);
+    assert.equal(validateOptionalInvitePassword("correct-horse-battery"), null);
+    assert.match(validateOptionalInvitePassword("short")!, /10-128/);
+    assert.ok(validateOptionalInvitePassword("x".repeat(129)) !== null);
+  });
+
+  test("repeat stays consistent: both empty passes; repeat-without-password fails", () => {
+    assert.equal(validateOptionalInvitePasswordRepeat("", ""), null);
+    assert.match(validateOptionalInvitePasswordRepeat("", "abc")!, /不一致/);
+    assert.equal(
+      validateOptionalInvitePasswordRepeat("correct-horse", "correct-horse"),
+      null,
+    );
+    assert.match(validateOptionalInvitePasswordRepeat("correct-horse", "")!, /请再次输入密码/);
+  });
+});
+
+// The accept-response branch discriminator (reviewer ruling 2026-10-15):
+// totp_required:false = TEACHER (single screen, done); true or MISSING
+// = ADMIN (TotpSetup) — the missing-field default keeps the old
+// contract's pending-session shape on the admin leg.
+describe("classifyInviteAccept (the totp_required discriminator)", () => {
+  test("totp_required:false is the teacher leg", () => {
+    assert.equal(
+      classifyInviteAccept({ totp_required: false, access_token: "at", token_type: "bearer" }),
+      "teacher",
+    );
+  });
+
+  test("totp_required:true is the admin leg; a body WITHOUT the field (old shape) defaults to admin", () => {
+    assert.equal(
+      classifyInviteAccept({ totp_required: true, access_token: "pending-at" }),
+      "admin",
+    );
+    assert.equal(classifyInviteAccept({ access_token: "pending-at" }), "admin");
+  });
+});
 
 describe("validateStaffEmail (login identifier)", () => {
   test("accepts a normal address and trims outer whitespace", () => {
@@ -100,8 +147,13 @@ describe("validateSecondFactor (staff login field)", () => {
     assert.equal(validateSecondFactor("0F1E2-D3C4B"), null);
   });
 
-  test("garbage and empty fail with the both-formats hint", () => {
-    assert.match(validateSecondFactor("")!, /动态验证码或恢复代码/);
+  test("garbage fails with the both-formats hint; EMPTY passes (the remembered relogin)", () => {
+    // Owner feedback ② (2026-10-17): a remembered device exempts the
+    // TOTP — the relogin submits password-only. The HttpOnly cookie's
+    // presence is unknowable client-side, so empty is simply ALLOWED
+    // and the server's uniform verdict decides (cookie absent → the
+    // same wrong email/password/code copy as any wrong factor).
+    assert.equal(validateSecondFactor(""), null);
     assert.match(validateSecondFactor("0f1e2d3c4b")!, /恢复代码/); // missing dash
     assert.match(validateSecondFactor("0123456789")!, /恢复代码/); // 10 digits
   });
@@ -119,7 +171,7 @@ describe("describeStaffError (AUTHENTICATION_REQUIRED per surface)", () => {
   test("staff-login: wrong credentials copy, NEVER the student 学号 copy", () => {
     const view = describeStaffError(apiError("AUTHENTICATION_REQUIRED"), "staff-login");
     assert.equal(view.summary, "邮箱、密码或动态验证码错误");
-    assert.notEqual(view.summary, "学号或密码不正确");
+    assert.notEqual(view.summary, "账号或密码不正确");
   });
 
   test("totp-confirm: wrong-code copy keeps the retry safe", () => {

@@ -69,6 +69,7 @@ from app.core.security import (
     verify_password,
 )
 from app.modules.identity.enums import Role, UserStatus
+from app.modules.identity.login_failure_guard import LoginFailureGuard
 from app.modules.identity.models import User, UserSession
 from app.modules.identity.repository import UserRepository
 
@@ -96,6 +97,10 @@ class SessionTokens:
 
     access_token: str
     refresh_token: str
+    # The login-time role (the access token's own claim, carried out for
+    # cookie derivation — cq_shell; None only for hand-built pairs in
+    # focused tests).
+    role: str | None = None
 
 
 class SessionService:
@@ -109,12 +114,19 @@ class SessionService:
         refresh_token_ttl_days: int = 30,
         refresh_grace_seconds: int = 0,
         replay_crypt: Fernet | None = None,
+        guard: LoginFailureGuard | None = None,
     ) -> None:
         self._clock = clock
         self._codec = access_codec
         self._refresh_ttl = timedelta(days=refresh_token_ttl_days)
         self._grace = timedelta(seconds=refresh_grace_seconds)
         self._replay_crypt = replay_crypt
+        # The per-account lockout counter (V1.1 §6). Optional only so
+        # focused unit tests can construct the service bare — the
+        # composition root injects it, and the wiring tests pin that
+        # (the AuditLogWriter pattern: a wiring slip must not silently
+        # disable the guard in production).
+        self._guard = guard
         if self._grace.total_seconds() > 0 and replay_crypt is None:
             raise ValueError(
                 "refresh_grace_seconds > 0 requires replay_crypt (the "
@@ -136,6 +148,11 @@ class SessionService:
         ``StaffService.authenticate_staff``'s role allowlist), so a staff
         account can never open a password-only session and reach the
         self-service endpoints without its second factor (spec §5.6, §33.4).
+
+        V1.1 §6: the per-account lockout rides the same order — the
+        check fires once the account is resolved (an unknown username
+        has no counter), a wrong password counts, and a success resets
+        the streak.
         """
         return await self._login_password_account(
             db, username, password, expected_role=Role.STUDENT
@@ -165,16 +182,33 @@ class SessionService:
             self._verify_shielded(password)
             raise self._authentication_required()
 
-        try:
-            matched = verify_password(password, user.password_hash)
-        except ValueError:
-            # Out-of-band length: cannot be anyone's password; keep the
-            # failure uniform instead of leaking policy at login.
+        if self._guard is not None:
+            await self._guard.ensure_not_locked(user.id)
+
+        if user.password_hash is None:
+            # A passwordless staff account (V1.1 §2.3) matches no
+            # password: the uniform authentication failure, never the
+            # hasher's None-type crash (final review F2).
             matched = False
+        else:
+            try:
+                matched = verify_password(password, user.password_hash)
+            except ValueError:
+                # Out-of-band length: cannot be anyone's password; keep
+                # the failure uniform instead of leaking policy at login.
+                matched = False
         if not matched:
+            if self._guard is not None:
+                await self._guard.record_failure(user.id)
             raise self._authentication_required()
 
-        if user.status != UserStatus.ACTIVE:
+        if user.status not in (
+            UserStatus.ACTIVE,
+            # PENDING_APPROVAL logs in like an ACTIVE student (V1.1 spec
+            # 2026-10-16 §2: login and browsing are open; the freeze is
+            # per-acting-surface, not on the session).
+            UserStatus.PENDING_APPROVAL,
+        ):
             raise BusinessError(
                 ErrorCode.ACCOUNT_NOT_ACTIVE,
                 _ACCOUNT_NOT_ACTIVE_MESSAGE,
@@ -196,6 +230,8 @@ class SessionService:
         # (accessing an expired attribute would trigger lazy IO).
         user_id, session_id = user.id, session_row.id
         await db.commit()
+        if self._guard is not None:
+            await self._guard.reset(user_id)
         logger.info("session opened user_id=%s session_id=%s", user_id, session_id)
         return tokens
 
@@ -263,7 +299,15 @@ class SessionService:
                 "session %s references missing user %s", current.id, current.user_id
             )
             raise self._authentication_required()
-        if user.status != UserStatus.ACTIVE:
+        if user.status not in (
+            UserStatus.ACTIVE,
+            # PENDING_APPROVAL rotates like an ACTIVE student (V1.1 spec
+            # 2026-10-16 §2: login and browsing are open — a hard refresh
+            # IS the browse path's foundation; the freeze lives on the
+            # acting guards, not on the session). Caught by the auth-II
+            # e2e: every reload logged the pending student out.
+            UserStatus.PENDING_APPROVAL,
+        ):
             logger.info(
                 "session rotate rejected session_id=%s reason=account_not_active",
                 current.id,
@@ -367,7 +411,13 @@ class SessionService:
             return None
 
         user = await db.scalar(select(User).where(User.id == row.user_id))
-        if user is None or user.status != UserStatus.ACTIVE:
+        if user is None or user.status not in (
+            UserStatus.ACTIVE,
+            # Same admission as the live rotate path (spec 2026-10-16
+            # §2): a pending student's grace-window replay resolves; the
+            # uniform-401 oracle discipline below applies to the rest.
+            UserStatus.PENDING_APPROVAL,
+        ):
             # Deliberate asymmetry vs the live path: a NON-ACTIVE account
             # gets a typed 403 on a LIVE presentation but a uniform 401
             # here — a replay must never become an account-state oracle
@@ -379,7 +429,9 @@ class SessionService:
             role=Role(user.role).value,
             now=now,
         )
-        return SessionTokens(access_token=access_token, refresh_token=secret), row
+        return SessionTokens(
+            access_token=access_token, refresh_token=secret, role=user.role
+        ), row
 
     def _decrypt_envelope(self, row: UserSession) -> str | None:
         """The successor secret inside ``row``'s envelope, or ``None``.
@@ -537,7 +589,7 @@ class SessionService:
             now=now,
         )
         return session_row, SessionTokens(
-            access_token=access_token, refresh_token=refresh_token
+            access_token=access_token, refresh_token=refresh_token, role=user.role
         )
 
     @staticmethod

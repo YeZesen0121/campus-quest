@@ -13,7 +13,7 @@
  * playwright webServer pins for the backend.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 // Playwright loads global-setup files through its TypeScript shim in
@@ -22,6 +22,14 @@ import { join } from "node:path";
 const here = __dirname;
 export const BACKEND_DIR = join(here, "..", "..", "backend");
 
+/**
+ * The MinIO CA bundle path, resolved AND provisioned at module load —
+ * every spawn below (webServer backend, seed, clean) shares one
+ * byte-identical cert copy (see ensureMinioCertificate for the
+ * cross-worktree identity contract).
+ */
+const MINIO_CA_BUNDLE = ensureMinioCertificate();
+
 /** The pinned test-stack env (the webServer's backendEnv contract). */
 export const backendEnv: NodeJS.ProcessEnv = {
   ...process.env,
@@ -29,10 +37,8 @@ export const backendEnv: NodeJS.ProcessEnv = {
   REDIS_URL: process.env.CQ_E2E_REDIS_URL ?? "redis://127.0.0.1:6379/0",
   // Mirror playwright.config.ts's backendEnv: the e2e-only https MinIO
   // on :9002 (mixed content is blocked from https pages) + the CA
-  // bundle that lets boto3 trust its self-signed certificate (resolved
-  // from this module's location — CWD-independent).
-  S3_ENDPOINT_URL: process.env.CQ_E2E_S3_ENDPOINT_URL ?? "https://127.0.0.1:9002",
-  AWS_CA_BUNDLE: process.env.CQ_E2E_S3_CA_BUNDLE ?? join(here, "..", "..", "infra", "e2e-certs", "minio", "public.crt"),
+  S3_ENDPOINT_URL: process.env.CQ_E2E_S3_ENDPOINT_URL ?? "https://localhost:9002",
+  AWS_CA_BUNDLE: process.env.CQ_E2E_S3_CA_BUNDLE ?? MINIO_CA_BUNDLE,
   S3_BUCKET: process.env.CQ_E2E_S3_BUCKET ?? "campusquest-test",
   S3_ACCESS_KEY: process.env.CQ_E2E_S3_ACCESS_KEY ?? "campusquest",
   S3_SECRET_KEY: process.env.CQ_E2E_S3_SECRET_KEY ?? "campusquest-dev",
@@ -95,6 +101,70 @@ export function ensureDevCertificate(): { key: string; crt: string } {
   return { key, crt };
 }
 
+/**
+ * The e2e MinIO's self-signed cert — ONE identity, shared by every
+ * worktree and the running container.
+ *
+ * The teardown forensics (2026-10-09) found two failure shapes, both
+ * fatal to e2e teardowns mid-clean (whole worlds left as residue):
+ * 1. a worktree without a cert pointed AWS_CA_BUNDLE at a missing
+ *    file — every boto3 call died `Errno 2` at CA load;
+ * 2. a worktree that GENERATED its own cert diverged from the cert
+ *    the shared container actually serves (compose mounts the MAIN
+ *    checkout's infra/e2e-certs) — `CERTIFICATE_VERIFY_FAILED`.
+ *
+ * So the canonical cert is the MAIN checkout's (the docker mount
+ * source, resolved via `git rev-parse --git-common-dir`): a worktree
+ * missing its copy REPLICATES that exact file; the CA bundle always
+ * points at the worktree copy, byte-identical to what the container
+ * serves. Generation only happens when the canonical copy itself is
+ * absent (a fresh clone before the first compose profile up).
+ */
+export function ensureMinioCertificate(): string {
+  const supplied = process.env.CQ_E2E_S3_CA_BUNDLE;
+  if (supplied !== undefined) {
+    if (!existsSync(supplied)) throw new Error("Configured e2e MinIO CA is missing");
+    return supplied;
+  }
+  const certDir = join(here, "..", "..", "infra", "e2e-certs", "minio");
+  const cert = join(certDir, "public.crt");
+  if (existsSync(cert)) {
+    return cert;
+  }
+  const gitRoot = spawnSync(
+    "git",
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    { cwd: here, encoding: "utf8" },
+  );
+  if (gitRoot.status === 0) {
+    const canonical = join(
+      gitRoot.stdout.trim(),
+      "..",
+      "infra",
+      "e2e-certs",
+      "minio",
+      "public.crt",
+    );
+    if (existsSync(canonical)) {
+      mkdirSync(certDir, { recursive: true });
+      copyFileSync(canonical, cert);
+      copyFileSync(
+        canonical.replace(/public\.crt$/, "private.key"),
+        join(certDir, "private.key"),
+      );
+      return cert;
+    }
+  }
+  const script = join(here, "..", "..", "infra", "scripts", "gen-e2e-minio-cert.sh");
+  const result = spawnSync("bash", [script], { encoding: "utf8" });
+  if (result.status !== 0 || !existsSync(cert)) {
+    throw new Error(
+      `e2e MinIO cert provision failed (${result.status}): ${result.stderr}`,
+    );
+  }
+  return cert;
+}
+
 export default function globalSetup(): void {
   // The suite's own guard (the spec-file convention): a bare
   // `npx playwright test` collects every spec as skipped and must not
@@ -107,6 +177,7 @@ export default function globalSetup(): void {
   // startup; this hook runs too late for that). Kept here as the
   // idempotent backstop for direct globalSetup consumers.
   ensureDevCertificate();
+  ensureMinioCertificate();
   const world = runWorldAction<{
     run: string;
     world_file: string;

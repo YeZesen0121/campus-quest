@@ -11,8 +11,8 @@
  *
  * Off by default: runs only when BOTH CQ_E2E=1 (the suite-wide
  * convention) and CQ_E2E_CAPTURE_DIR are set, so ordinary development
- * and the release gate (whose no-skip assertion watches
- * teacher/admin only) never depend on it.
+ * and the release gate (covered by its noskip exemption
+ * entries) never depend on it.
  *
  * Output: ${CQ_E2E_CAPTURE_DIR}/${pass}/${name}.png plus a
  * manifest.json recording route / account / viewport / world run for
@@ -177,7 +177,8 @@ test.describe("visual capture — anonymous auth surfaces", () => {
   test("auth screens", async ({ page }) => {
     await capture(page, "auth-login", "/login", "anonymous", false);
     await capture(page, "auth-register", "/register", "anonymous", false);
-    await capture(page, "auth-staff-login", "/staff/login", "anonymous", false);
+    // auth-staff-login retired with the unified page (/staff/login
+    // redirects to /login — one face, one baseline).
   });
 });
 
@@ -237,7 +238,7 @@ test.describe("visual capture — admin workstation", () => {
     await capture(page, "admin-redemptions", "/admin/redemptions", account);
     await capture(page, "admin-audit", "/admin/audit", account);
     await capture(page, "admin-system", "/admin/system", account);
-    await capture(page, "admin-whitelist", "/admin/whitelist", account);
+    await capture(page, "admin-approvals", "/admin/approvals", account);
   });
 });
 
