@@ -67,8 +67,8 @@ describe("the overview aggregate (spec §4.1)", () => {
       JSON.stringify({
         users: {
           total: 207,
-          by_role: { STUDENT: 200, TEACHER: 5, ADMIN: 2 },
-          by_status: { ACTIVE: 205, PENDING_APPROVAL: 1, SUSPENDED: 1, BANNED: 0 },
+            by_role: { STUDENT: 200, TEACHER: 5, ADMIN: 2, MENTOR: 0 },
+            by_status: { PENDING_PHONE: 0, ACTIVE: 205, PENDING_APPROVAL: 1, SUSPENDED: 1, BANNED: 0 },
         },
         tasks: {
           by_status: { DRAFT: 1, PUBLISHED: 8, PAUSED: 0, CLOSED: 2, ARCHIVED: 0 },
@@ -81,6 +81,8 @@ describe("the overview aggregate (spec §4.1)", () => {
     const overview = await fetchAdminOverview();
     assert.equal(overview.users.total, 207);
     assert.equal(overview.tasks.by_status.ARCHIVED, 0);
+    assert.equal(overview.users.by_role.MENTOR, 0);
+    assert.equal(overview.users.by_status.PENDING_PHONE, 0);
     assert.equal(recorded?.url, "/api/v1/admin/overview");
     assert.equal(recorded?.method, "GET");
     assert.equal(recorded?.credentials, "include");

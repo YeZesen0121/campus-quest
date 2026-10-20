@@ -102,6 +102,7 @@ describe("account directory affordances (spec §5.7)", () => {
     assert.deepEqual(userStatusView("SUSPENDED"), { label: "已停用", tone: "warning" });
     assert.deepEqual(userStatusView("BANNED"), { label: "已封禁", tone: "danger" });
     assert.deepEqual(userStatusView("PENDING_PHONE"), { label: "待验证", tone: "muted" });
+    assert.deepEqual(userStatusView("PENDING_APPROVAL"), { label: "待审核", tone: "warning" });
     assert.deepEqual(userStatusView("WEIRD"), { label: "未知状态", tone: "muted" });
   });
 

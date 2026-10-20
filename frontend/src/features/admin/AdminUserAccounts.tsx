@@ -84,6 +84,7 @@ const BUTTON_VARIANT: Record<"btn-primary" | "btn-secondary" | "btn-danger", But
 };
 
 export function AdminUserAccounts() {
+  const batchDialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="users"]'));
   const [filters, setFilters] = useState<Filters>({ role: "", status: "" });
   const [items, setItems] = useState<AdminUserDto[]>([]);
   const [total, setTotal] = useState(0);
@@ -340,13 +341,13 @@ export function AdminUserAccounts() {
             <table className="staff-table" aria-label="账号列表">
               <thead>
                 <tr>
-                  <th scope="col">选择</th>
-                  <th scope="col">学号 / 用户名</th>
+                  <th scope="col" data-admin-column="selection">选择</th>
+                  <th scope="col" data-admin-column="identifier">学号 / 用户名</th>
                   <th scope="col">昵称</th>
                   <th scope="col">角色</th>
                   <th scope="col" className="cq-status-cell">状态</th>
                   <th scope="col">注册时间</th>
-                  <th scope="col">用户 ID</th>
+                  <th scope="col" data-admin-column="user-id">用户 ID</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
@@ -394,7 +395,7 @@ export function AdminUserAccounts() {
             }
           }}
         >
-          <DialogContent>
+          <DialogContent {...batchDialogFocus}>
             <DialogTitle>
               {batchConfirm === "suspend" ? "批量停用" : "批量恢复"} {selected.size} 个账号？
             </DialogTitle>
@@ -442,13 +443,15 @@ function UserRow({
   const status = userStatusView(user.status);
   return (
     <tr>
-      <td>
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggleSelect}
-          aria-label={`选择 ${user.username}`}
-        />
+      <td data-label="选择">
+        <label className="admin-account-selection">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`选择 ${user.username}`}
+          />
+        </label>
       </td>
       <td className="staff-cell-title mono" data-label="学号 / 用户名">
         {/* Wave 2a (spec §3.1): the row's entry into the detail page. */}
@@ -458,7 +461,7 @@ function UserRow({
       </td>
       <td data-label="昵称">{user.nickname}</td>
       <td data-label="角色">{roleLabel(user.role)}</td>
-      <td>
+      <td data-label="状态" className="cq-status-cell">
         <span className={`badge badge-${status.tone}`}>{status.label}</span>
       </td>
       <td data-label="注册时间">

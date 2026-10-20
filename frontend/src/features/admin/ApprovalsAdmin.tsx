@@ -34,6 +34,8 @@ import {
   validateRejectReason,
 } from "./approvalsView";
 import { Button } from "@/components/ui/button";
+import { useDialogReturnFocus } from "@/components/ui/useDialogReturnFocus";
+import { getAuthEpoch } from "@/lib/accessToken";
 import { COPY_GENERIC_FAIL } from "@/lib/errors";
 
 interface PendingRow {
@@ -143,7 +145,7 @@ export function ApprovalsAdmin() {
       : null;
 
   return (
-    <section className="section" aria-label="注册审批">
+    <section className="section" aria-label="注册审批" data-admin-return="approvals" tabIndex={-1}>
       <div className="section-head">
         <h2 className="section-title">待审核学生</h2>
         <div className="row-actions">
@@ -186,15 +188,15 @@ export function ApprovalsAdmin() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td className="mono">{row.username}</td>
-                  <td>{row.nickname}</td>
-                  <td className="mono">{row.phoneMasked ?? "—"}</td>
-                  <td>
+                  <td className="mono" data-label="学号">{row.username}</td>
+                  <td data-label="昵称">{row.nickname}</td>
+                  <td className="mono" data-label="手机号">{row.phoneMasked ?? "—"}</td>
+                  <td data-label="注册时间">
                     <time dateTime={row.createdAt}>
                       {formatDeadlineDateTime(parseServerInstant(row.createdAt))}
                     </time>
                   </td>
-                  <td>
+                  <td data-label="操作">
                     <div className="row-actions">
                       <Button
                         variant="primary"
@@ -255,6 +257,7 @@ function RejectDialog({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const dialogFocus = useDialogReturnFocus(getAuthEpoch, () => document.querySelector<HTMLElement>('[data-admin-return="approvals"]'));
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [summary, setSummary] = useState<{ message: string; requestId: string | null } | null>(null);
@@ -285,7 +288,7 @@ function RejectDialog({
 
   return (
     <Dialog open onOpenChange={(next) => { if (!next && !busy) onCancel(); }}>
-      <DialogContent asChild aria-labelledby="reject-title"
+      <DialogContent asChild aria-labelledby="reject-title" {...dialogFocus}
         onPointerDownOutside={(event) => { event.preventDefault(); }}>
         <form onSubmit={onSubmit} noValidate>
           <DialogTitle id="reject-title">拒绝注册</DialogTitle>

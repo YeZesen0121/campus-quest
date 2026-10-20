@@ -14,7 +14,9 @@ owned report source before the browser starts. Separate exit codes and report
 hashes live in `.runtime/batteries/<run-id>/result.json`, bound to native HEAD.
 
 Browser modes pin `RAYON_NUM_THREADS=2`, Node's heap to 768 MiB and disable Next
-telemetry. The retained source stacks run several independent ClamAV engines
+telemetry. They also use the upstream CI's existing `CQ_E2E_LOGIN_RATELIMIT=1`
+browser profile. Backend mode keeps the production limiter defaults; its
+seven limiter-contract unit tests are a separate required check. The retained source stacks run several independent ClamAV engines
 in this WSL VM; the bounds apply only to integration browser processes. They
 do not change the installed Next bundler, test timeouts, retries, masks or
 assertions. Keep the integration scanner running for complete browser and
@@ -35,6 +37,15 @@ Run `test-host-auth-flags.ps1` outside the wrapper to verify explicit
 The dedicated fence/probe run uses these flags with the two auth specs; clear
 them before the unfiltered standard battery. Its exemptions require separate
 actual evidence for all three dedicated cases.
+`test-host-special-flags.ps1` proves `CQ_E2E_MOCK_STORAGE` and capture-directory
+forwarding, rejection from the standard battery without report mutation, and
+unsafe-path rejection. Capture output must be one direct child of
+`/workspace/infra/integration/.runtime/captures/` with an alphanumeric,
+underscore or hyphen name. The host and Linux launcher both enforce this.
+`test-browser-profile.mjs` checks the actual launcher profile and direct Linux
+unsafe-path rejection; invoke it outside the wrapper because it acquires the
+same lock through child launches. These selftests do not replace the actual
+mock-upload wire test, capture harness, dedicated authentication or pixel runs.
 `test-ui-noskip.mjs` runs the original guard against disposable synthetic
 reports: the two removed unread/zero-balance prerequisites must be rejected,
 and the four R6 visual exemptions must remain registered. This selfproof does

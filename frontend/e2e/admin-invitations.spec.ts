@@ -53,6 +53,9 @@ test.describe("admin staff invitations (spec §5.8 step 1)", () => {
     page,
   }) => {
     await expect(page.getByRole("link", { name: "员工邀请" })).toBeVisible();
+    await expect(page.getByText('受邀人通过链接自行激活账号；管理员还需绑定动态口令（TOTP）。', { exact: false })).toBeVisible();
+    await expect(page.getByText('学生自行注册后等待管理员审核，不使用员工邀请。', { exact: false })).toBeVisible();
+    await expect(page.getByRole('main')).not.toContainText('白名单');
 
     // A run-unique address: this row is dead weight after the run (the
     // token is never accepted), and re-runs must never collide with a

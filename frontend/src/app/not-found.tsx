@@ -1,8 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { Button } from "@/components/ui/button";
+import { AuthFrame } from "@/features/auth/AuthFrame";
+import { AuthPage } from "@/features/auth/AuthPage";
 
 export const metadata: Metadata = {
-  title: "页面不存在 · CampusQuest",
+  title: "页面不存在 · 华师令",
 };
 
 /**
@@ -14,23 +17,12 @@ export const metadata: Metadata = {
  */
 export default function NotFound() {
   return (
-    <div className="app-shell" data-shell="not-found">
-      <header className="app-topbar">
-        <div className="app-topbar-inner">
-          <span className="app-brand">CampusQuest</span>
+    <AuthFrame>
+      <AuthPage title="页面不存在" description="你访问的页面不存在或已被移动。">
+        <div className="auth-actions">
+          <Button asChild><Link href="/">返回首页</Link></Button>
         </div>
-      </header>
-      <main className="app-main">
-        <div className="auth-card">
-          <div className="auth-head">
-            <h1 className="auth-title">页面不存在</h1>
-            <p className="auth-subtitle">你访问的页面不存在或已被移动。</p>
-          </div>
-          <Link className="btn btn-primary btn-block" href="/">
-            返回首页
-          </Link>
-        </div>
-      </main>
-    </div>
+      </AuthPage>
+    </AuthFrame>
   );
 }

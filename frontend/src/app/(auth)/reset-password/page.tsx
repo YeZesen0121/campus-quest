@@ -2,9 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { ResetTokenSpendForm } from "@/features/auth/ResetTokenSpendForm";
+import { AuthPage } from "@/features/auth/AuthPage";
 
 export const metadata: Metadata = {
-  title: "重置密码 · CampusQuest",
+  title: "重置密码 · 华师令",
   description: "使用管理员交付的一次性重置口令设置新密码",
 };
 
@@ -23,17 +24,10 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
   const token = typeof raw === "string" ? raw : "";
 
   return (
-    <>
-      <div className="auth-head">
-        <h1 className="auth-title">重置密码</h1>
-        <p className="auth-subtitle">输入管理员交付的一次性重置口令，设置新密码</p>
-      </div>
+    <AuthPage title="重置密码"
+      description="输入管理员交付的一次性重置口令，设置新密码"
+      links={<Link href="/login">返回登录</Link>}>
       <ResetTokenSpendForm initialToken={token} />
-      <p className="auth-alt-action">
-        <Link className="link" href="/login">
-          返回登录
-        </Link>
-      </p>
-    </>
+    </AuthPage>
   );
 }

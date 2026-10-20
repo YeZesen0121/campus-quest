@@ -20,7 +20,7 @@
  * state).
  */
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/features/auth/session";
@@ -48,7 +48,7 @@ import {
 import { landAfterStaffLogin } from "./staffLoginFlow";
 import { useCooldown } from "./useCooldown";
 import { useClientReady } from "./useClientReady";
-import { validatePassword, validateStudentNumber } from "./validation";
+import { firstGraphemeCluster, validatePassword, validateStudentNumber } from "./validation";
 import {
   describeChallengeError,
   validateChallengeCode,
@@ -65,8 +65,13 @@ import {
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
+function localValidationSummary(): AuthErrorView {
+  return { summary: "请检查表单填写后重试", fieldErrors: {}, requestId: null };
+}
+
 export function UnifiedLoginPanel() {
   const ready = useClientReady();
+  const identifierRef = useRef<HTMLInputElement>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [registerToken, setRegisterToken] = useState<string | null>(null);
   // The remember checkbox's VALUE is panel-level: the user may check it
@@ -134,8 +139,10 @@ export function UnifiedLoginPanel() {
           removeRecentLogin(value);
           refreshRecent();
         }}
+        onEmpty={() => identifierRef.current?.focus()}
       />
       <IdentifierForm
+        identifierRef={identifierRef}
         identifier={identifier}
         setIdentifier={setIdentifier}
         rememberDevice={rememberDevice}
@@ -158,27 +165,34 @@ function RecentLogins({
   entries,
   onPick,
   onRemove,
+  onEmpty,
 }: {
   entries: RecentLoginEntry[];
   onPick: (identifier: string) => void;
   onRemove: (identifier: string) => void;
+  onEmpty: () => void;
 }) {
+  const picks = useRef(new Map<string, HTMLButtonElement>());
   if (entries.length === 0) {
     return null;
   }
   const badge: Record<string, string> = { STUDENT: "学生", TEACHER: "教师", ADMIN: "管理员" };
   return (
     <div className="login-recent" aria-label="最近登录">
-      {entries.map((entry) => (
+      {entries.map((entry, index) => (
         <div className="login-recent-card" key={entry.identifier}>
           <button
             type="button"
             className="login-recent-pick"
+            ref={(node) => {
+              if (node) picks.current.set(entry.identifier, node);
+              else picks.current.delete(entry.identifier);
+            }}
             onClick={() => onPick(entry.identifier)}
             aria-label={`切换到 ${entry.masked}`}
           >
             <span className={`login-recent-avatar role-${entry.role.toLowerCase()}`} aria-hidden="true">
-              {(entry.nickname || entry.masked)[0]}
+              {firstGraphemeCluster(entry.nickname || entry.masked, "?")}
             </span>
             <span className="login-recent-meta">
               <span className="mono">{entry.masked}</span>
@@ -191,7 +205,12 @@ function RecentLogins({
           <Button
             variant="ghost"
             className="login-recent-remove"
-            onClick={() => onRemove(entry.identifier)}
+            onClick={() => {
+              onRemove(entry.identifier);
+              const next = entries[index + 1] ?? entries[index - 1];
+              if (next) picks.current.get(next.identifier)?.focus();
+              else onEmpty();
+            }}
             aria-label={`从本机移除 ${entry.masked}`}
           >
             移除
@@ -217,6 +236,7 @@ function useLanding() {
 }
 
 function IdentifierForm({
+  identifierRef,
   identifier,
   setIdentifier,
   rememberDevice,
@@ -225,6 +245,7 @@ function IdentifierForm({
   onUnregistered,
   onAuthenticated,
 }: {
+  identifierRef: RefObject<HTMLInputElement | null>;
   identifier: string;
   setIdentifier: (value: string) => void;
   rememberDevice: boolean;
@@ -234,6 +255,7 @@ function IdentifierForm({
   onAuthenticated: (role: string, nickname?: string) => void;
 }) {
   const land = useLanding();
+  const ready = useClientReady();
   const cooldown = useCooldown();
   const [mode, setMode] = useState<"code" | "password">("code");
   const [password, setPassword] = useState("");
@@ -272,6 +294,7 @@ function IdentifierForm({
     const error = validateChallengeIdentifier(identifier) ?? undefined;
     setIdentifierError(error);
     if (error !== undefined) {
+      setSummary(localValidationSummary());
       return;
     }
     setSending(true);
@@ -310,6 +333,7 @@ function IdentifierForm({
     setIdentifierError(errors.identifier);
     setCodeError(errors.code);
     if (errors.identifier !== undefined || errors.code !== undefined) {
+      setSummary(localValidationSummary());
       return;
     }
     setVerifying(true);
@@ -337,6 +361,15 @@ function IdentifierForm({
     }
   }
 
+  async function onCodeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!codeSent) {
+      await onSendCode();
+      return;
+    }
+    await onVerifyCode(event);
+  }
+
   async function onPasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (verifying) {
@@ -350,6 +383,7 @@ function IdentifierForm({
     setIdentifierError(errors.identifier);
     setPasswordError(errors.password);
     if (errors.identifier !== undefined || errors.password !== undefined) {
+      setSummary(localValidationSummary());
       return;
     }
     setVerifying(true);
@@ -402,6 +436,7 @@ function IdentifierForm({
             label="账号"
             error={identifierError}
             inputProps={{
+              ref: identifierRef,
               value: identifier,
               onChange: (event) => {
                 setIdentifier(event.target.value);
@@ -414,7 +449,7 @@ function IdentifierForm({
               autoCapitalize: "none",
               autoCorrect: "off",
               placeholder: "请输入手机号、邮箱、学号",
-              disabled: verifying,
+              disabled: !ready || verifying,
             }}
           />
           <AuthField
@@ -432,7 +467,7 @@ function IdentifierForm({
               type: "password",
               autoComplete: "current-password",
               placeholder: "请输入密码",
-              disabled: verifying,
+              disabled: !ready || verifying,
             }}
           />
           <label className="field-hint">
@@ -440,20 +475,21 @@ function IdentifierForm({
               type="checkbox"
               checked={rememberDevice}
               onChange={(event) => setRememberDevice(event.target.checked)}
-              disabled={verifying}
+              disabled={!ready || verifying}
             />{" "}
             记住此设备 30 天（对需要动态口令的账号生效）
           </label>
-          <SubmitButton loading={verifying}>登录</SubmitButton>
+          <SubmitButton loading={verifying} disabled={!ready} block={false}>登录</SubmitButton>
         </form>
       ) : (
-        <form className="form" onSubmit={onVerifyCode} noValidate>
+        <form className="form" onSubmit={onCodeSubmit} noValidate>
           <FormErrorSummary view={summary} />
           <AuthField
             name="unified-login-identifier"
             label="账号"
             error={identifierError}
             inputProps={{
+              ref: identifierRef,
               value: identifier,
               onChange: (event) => {
                 setIdentifier(event.target.value);
@@ -466,7 +502,7 @@ function IdentifierForm({
               autoCapitalize: "none",
               autoCorrect: "off",
               placeholder: "请输入手机号或邮箱",
-              disabled: sending || verifying,
+              disabled: !ready || sending || verifying,
             }}
           />
           {codeSent ? (
@@ -497,12 +533,12 @@ function IdentifierForm({
                     aria-describedby={
                       codeError !== undefined ? "unified-login-code-error" : undefined
                     }
-                    disabled={verifying}
+                    disabled={!ready || verifying}
                   />
                   <Button
                     variant="secondary"
                     onClick={() => void onSendCode()}
-                    disabled={sending || cooldown.remaining > 0 || verifying}
+                    disabled={!ready || sending || cooldown.remaining > 0 || verifying}
                     aria-busy={sending}
                   >
                     {sending ? <span className="spinner" aria-hidden="true" /> : null}
@@ -520,18 +556,17 @@ function IdentifierForm({
                   type="checkbox"
                   checked={rememberDevice}
                   onChange={(event) => setRememberDevice(event.target.checked)}
-                  disabled={verifying}
+                  disabled={!ready || verifying}
                 />{" "}
                 30 天内免登录
               </label>
-              <SubmitButton loading={verifying}>登录</SubmitButton>
+              <SubmitButton loading={verifying} disabled={!ready} block={false}>登录</SubmitButton>
             </>
           ) : (
             <Button
               onClick={() => void onSendCode()}
-              disabled={sending || cooldown.remaining > 0}
+              disabled={!ready || sending || cooldown.remaining > 0}
               aria-busy={sending}
-              block
             >
               {sending ? <span className="spinner" aria-hidden="true" /> : null}
               <span>获取验证码</span>
@@ -540,14 +575,15 @@ function IdentifierForm({
         </form>
       )}
       <p className="auth-alt-action">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className="link"
           onClick={switchMode}
+          disabled={!ready || sending || verifying}
           aria-expanded={inPasswordMode}
         >
           {inPasswordMode ? "使用验证码登录" : "使用密码登录"}
-        </button>
+        </Button>
       </p>
     </>
   );
@@ -582,6 +618,7 @@ function TotpLeg({
     const error = validateChallengeCode(totpCode.trim()) ?? undefined;
     setTotpError(error);
     if (error !== undefined) {
+      setSummary(localValidationSummary());
       return;
     }
     setVerifying(true);
@@ -638,7 +675,7 @@ function TotpLeg({
         />{" "}
         记住此设备 30 天（下次登录可免动态口令）
       </label>
-      <SubmitButton loading={verifying}>完成登录</SubmitButton>
+      <SubmitButton loading={verifying} block={false}>完成登录</SubmitButton>
       <p className="auth-alt-action">
         <Button variant="ghost" onClick={onBack} disabled={verifying}>
           返回登录
@@ -682,6 +719,7 @@ function InlineRegister({
     setStudentNumberError(errors.student_number);
     setPasswordError(errors.password);
     if (Object.values(errors).some((message) => message !== undefined)) {
+      setSummary(localValidationSummary());
       return;
     }
     setVerifying(true);
@@ -764,7 +802,7 @@ function InlineRegister({
           disabled: verifying,
         }}
       />
-      <SubmitButton loading={verifying}>完成注册并登录</SubmitButton>
+      <SubmitButton loading={verifying} block={false}>完成注册并登录</SubmitButton>
     </form>
   );
 }

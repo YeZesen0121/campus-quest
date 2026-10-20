@@ -159,7 +159,7 @@ export function StaffInvitations({
         <h2 className="section-title">新建邀请</h2>
       </div>
       <p className="field-hint">
-        受邀人通过链接自行设置密码并绑定动态口令（TOTP）；每个链接{" "}
+        受邀人通过链接自行激活账号；管理员还需绑定动态口令（TOTP）。每个链接{" "}
         {INVITATION_TTL_HOURS} 小时内有效、仅可使用一次，且创建后只显示这一次。
       </p>
       <form className="panel" onSubmit={onIssue} noValidate>
@@ -212,7 +212,7 @@ export function StaffInvitations({
             ))}
           </select>
           <p className="field-hint">
-            教师发布并管理任务；管理员拥有与您相同的后台权限。学生注册走白名单流程，不通过邀请。
+            教师发布并管理任务；管理员拥有与您相同的后台权限。学生自行注册后等待管理员审核，不使用员工邀请。
           </p>
         </div>
         <div className="dialog-actions">

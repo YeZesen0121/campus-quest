@@ -27,11 +27,25 @@ Task12 正在重新收口：以下旧批次通过记录是该批次历史证据�
 | UI17 | 员工登录辅助函数 | 已接受的认证遇慢跳转不得重复提交；只有明确认证拒绝才重新计算动态验证码；不增加重试次数或放宽超时 | `frontend/e2e/fixture-staff-navigation.spec.ts` | 已覆盖，受控RSC延迟RED→GREEN，当前完整电池两项通过，审计/no-skip0；只有明确401才重算验证码 |
 | UI18 | 数据就绪前置条件 | 导航完成及本次自身读取结束后才检查业务状态；人才新建不等待不存在的文件请求，已有档案等待文件读取；保留原有断言与全局超时 | `frontend/e2e/fixture-talent-readiness.spec.ts`；`frontend/e2e/innovation-review.spec.ts`；`frontend/e2e/innovation-recruitment.spec.ts`；`frontend/e2e/cross-browser-smoke.spec.ts` | 已覆盖，真实自身读取和荣誉区就绪前置条件RED→GREEN，当前完整电池及全部8跨浏览器通过；原断言/全局超时不变 |
 | UI19 | 学生登录辅助函数 | 已接受的认证等待真实导航，不因5秒URL断言提前失败；只提交一次，不新增全局超时/重试/no-skip豁免 | `frontend/e2e/fixture-student-navigation.spec.ts` | 已覆盖，真实POST200+6500ms落点延迟RED→GREEN，当前完整228及同报告guard通过，只提交一次，未新增全局超时/重试/豁免 |
-| UI20 | 跨标签退出后测试就绪 | 完整新文档加载后才填写换号表单；字段持续存在，真实POST200和主页面身份/私密清理断言保留 | `frontend/e2e/innovation-mentors.spec.ts` | 已覆盖，真实脚本延迟RED证明初始化前填写会丢学号，正确等待完整导航后GREEN；新完整导师8通过，原主文档身份/隐私断言保留，产品初始化行为未改 |
+| UI20 | 跨标签退出后测试就绪 | 完整新文档加载后等待统一账号输入可用；切换密码模式保留账号，真实POST200和主页面身份/私密清理断言保留；导师说明链接不只靠颜色区分 | `frontend/e2e/innovation-mentors.spec.ts` | 已覆盖（开发检查点，最终H待验收）：整合完整10项实际8过2败，暴露旧学号定位和说明链接axe问题；最小修复后完整10项通过、零skip/flaky，含生命周期3次正式像素。保留6500ms真实脚本延迟、主文档身份/隐私断言 |
 | UI21 | Task12 慢脚本真实表单就绪 | 学生、导师与员工 SSR 登录框在客户端事件就绪前禁用输入与提交；受控 6500ms 脚本延迟后邮箱/账号、密码及员工二次验证值保留；原登录接口、会话和身份分流不变 | `frontend/e2e/auth-reference-layout.spec.ts` | 已覆盖：学生/导师与员工实际输入丢失 RED；final-closure-green 三类表单及原员工慢导航/一次拒绝重算验证通过，完整最终门禁待执行 |
 | UI22 | Task12 actual approved tag/action paint | Ordinary workflow variants share neutral11/400/3/2x6/no-border paint; represented danger triggers stay quiet on hover with44px targets; explicit blue contexts and unread/self/skill/privateTalent exceptions use their actual source recipes | `frontend/e2e/ui-migration-layout.spec.ts`; `frontend/e2e/growth-reference-layout.spec.ts`; `frontend/e2e/innovation-private-reference-layout.spec.ts`; `frontend/e2e/innovation-public-reference-layout.spec.ts`; `frontend/e2e/innovation-review.spec.ts`; `frontend/e2e/innovation-mentors.spec.ts` | 已覆盖（回归已编写并复现 RED）；修复后 fresh focused GREEN 进行中，整站最终门禁尚未完成 |
 
 | UI23 | Cross-browser staff queue readiness | Real unified password login plus TOTP only if challenged; accepted landing's own GET200; named workspace with response-matched empty state or exact rows; no second navigation or timeout/retry relaxation | `frontend/e2e/cross-browser-smoke.spec.ts` | 流程行：Task4两引擎8项通过、零skip/flaky，实际均itemsCount=1；空态分支及最终H完整电池待Task6，不借用UI16旧结果 |
+
+## 当前集成新增结构（Task5，最终 H 尚未验收）
+
+| # | 规则引用 | 预期行为 | 测试位置 | 状态 |
+| --- | --- | --- | --- | --- |
+| UI24 | 集成 Task5 / upstream unified-login | 默认手机号/邮箱验证码，密码展开保留学号/手机/邮箱；旧员工 URL 跳转统一入口，导师账户仍独立；390/1440保留批准的标题、卡宽、字体和紧凑动作 | `frontend/e2e/auth-reference-layout.spec.ts`; `frontend/e2e/unified-login-hydration.spec.ts` | 已覆盖（开发检查点，最终H待验收）：SSR受控6500ms RED→GREEN；紧凑发码与弱动作修复后的33项联跑31通过（另两项404随后修复），最终H待验收 |
+| UI25 | patterns§18 / 集成 Task5 | 本地校验失败同时关联行内错误与可聚焦摘要；验证码、密码、ADMIN TOTP、新手机号内联注册不发无效请求，不跳过审核或二次验证 | `frontend/e2e/unified-login-accessibility.spec.ts` | 已覆盖（开发检查点，最终H待验收）：四类摘要实际RED→GREEN；已用独立有效邮箱与真实202修正无关共享challenge消费，全部7项在33项联跑通过；最终H待验收 |
+| UI26 | 集成 Task5 / 内容和键盘 | 本机账号卡仅展示掩码；完整emoji字素、长掩码/昵称在390/1440不溢出；移除后焦点转相邻卡，最后一项转账号框；删除刷新后保持 | `frontend/e2e/unified-login-accessibility.spec.ts`; `frontend/e2e/recent-logins.spec.ts` | 已覆盖（开发检查点，最终H待验收）：两宽度实际RED→GREEN，axe零违规；最终H全量尚未执行 |
+| UI27 | 集成 Task5 / 新旧语义 | 注册密码可选、待管理员审核；员工邀请按角色激活，管理员的TOTP挑战与既有设备凭据规则保留；不恢复白名单或独立员工三字段旧语义 | `frontend/e2e/auth-reference-layout.spec.ts`; `frontend/e2e/staff-auth.spec.ts`; `frontend/e2e/unified-login.spec.ts` | 已覆盖（开发检查点，最终H待验收）：入口390/1440十项当前通过；真实流程与最终H复测待完成 |
+| UI28 | 集成 Task5 / UI17延续 | teacher/community与公共fixture共用实际响应驱动的staffLogin，慢导航不重复POST，仅明确401才重算TOTP | `frontend/e2e/teacher.spec.ts`; `frontend/e2e/community.spec.ts`; `frontend/e2e/fixture-staff-navigation.spec.ts` | 已覆盖（开发检查点，最终H待验收）：两私有旧循环已移除，实际完整模块及6500ms回归待复测 |
+| UI29 | 集成 Task5 / 原生表单键盘 | 初始账号框Enter只发一次challenge/request；验证码框Enter只发一次verify并完成真实员工登录 | `frontend/e2e/unified-login-keyboard.spec.ts` | 已覆盖（开发检查点，最终H待验收）：无发码/无验证码框的实际RED；最小提交分派后真实登录GREEN，最终H待验收 |
+| UI30 | 设计体系UI9 / 集成 Task5 | 新批量选择不挤压320/390记录字段；审批表保留手机字段标签及主字段字体；批量及拒绝弹窗Escape返回当前账号的原触发按钮，Enter可再次打开 | `frontend/e2e/admin-user-mobile-layout.spec.ts`; `frontend/e2e/admin.spec.ts`; `frontend/e2e/auth-extension-2.spec.ts` | 已覆盖（开发检查点，最终H待验收）：手机字段、五宽度批量焦点与拒绝弹窗均实际RED→GREEN；拒绝/注册/回放完整5项通过 |
+| UI31 | 集成 Task5 / world清理契约 | 真实注册使用world预留学生号前缀及互不冲突的用例后缀；不污染后续审批列表或像素数据；保留真实201、审核、拒绝和设备回放 | `frontend/e2e/auth-extension-2.spec.ts` | 已覆盖（开发检查点，最终H待验收）：命名空间实际RED→GREEN，完整5项通过；global teardown后真实PG核对新注册3个ID及前缀记录均为0 |
+| UI32 | 统一认证 / AP6 canonical枚举 | 邀请说明使用开放注册后待审及ADMIN绑定动态口令规则；概览覆盖四角色、五账户状态及五任务状态并保留零值；新注册账户显示待审核；不造新生命周期或改变权限 | `frontend/e2e/admin-invitations.spec.ts`; `frontend/e2e/admin-powers.spec.ts`; `frontend/src/__tests__/admin-view.test.ts`; `tests/integration/admin/test_admin_batch_and_overview.py` | 已覆盖（开发检查点，最终H待验收）：文案、非法任务键、遗漏导师/待验证用户、待审未知状态均有实际RED；PG完整4项及真实后台7项已通过；当前静态/全量单测与新像素另记 |
 
 ## 缺口明细
 

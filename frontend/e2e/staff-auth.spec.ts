@@ -120,6 +120,10 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
   }
 
   test("admin invite -> password -> TOTP confirm -> recovery codes once -> done", async ({ page }, info) => {
+    const hydrationWarnings: string[] = [];
+    page.on('console', message => {
+      if (/hydrated|hydration/i.test(message.text())) hydrationWarnings.push(message.text());
+    });
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
     // V1.1 §2.3: TOTP onboarding belongs to ADMIN invitations — a
@@ -132,7 +136,7 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
     for (const width of [390,1440]) {
       await page.setViewportSize({width,height:900});
       await page.evaluate(()=>document.fonts.ready);
-      await page.screenshot({path:info.outputPath(`staff-invite-password-${width}.png`),fullPage:true});
+      await page.screenshot({path:info.outputPath(`staff-invite-password-${width}.png`),fullPage:true,caret:'initial'});
     }
 
     // Password step: band mirror + repeat field.
@@ -225,6 +229,7 @@ test.describe("staff invitation acceptance (brief step 1)", () => {
       "href",
       "/login",
     );
+    expect(hydrationWarnings, 'evidence capture must not alter SSR input styles before hydration').toEqual([]);
   });
 
   test("remember this device: the password+TOTP login's checkbox buys 30 TOTP-free days (owner feedback ②)", async ({

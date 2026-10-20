@@ -480,3 +480,20 @@ Teacher review keeps the 校验报告 region while naming its visible heading �
 | B | 本人分类中 `a[href="/profile/collaboration/projects/<opaque reference>"]` | 只用于精确找回测试所建项目的SPA入口；仍检查可访问名称与实际目标路由，不读取旧页面地址代替导航完成 |
 
 功能旅程：`innovation-collaboration.spec.ts`、`innovation-collaboration-transfer.spec.ts`、`innovation-collaboration-states.spec.ts`、`innovation-collaboration-review.spec.ts`、`innovation-collaboration-recovery.spec.ts`。独立像素：`innovation-collaboration-visual.spec.ts`，Linux固定字体，390/1440，无新增mask或容差/重试放宽；四个新基线须逐张走查后另行无更新重跑。
+
+
+## R1–R6 集成：统一认证与本机账号（Task5）
+
+| 分类 | 真实可访问定位 | 行为/等强度要求 |
+| --- | --- | --- |
+| A | `账号` textbox、`获取验证码` button、`使用密码登录 / 使用验证码登录` button | 默认验证码、密码渐进展开；SSR事件就绪前禁用；切换保留账号，密码模式仍接受学号；旧员工URL跳转统一入口 |
+| A | 实际 `form` 内 `role=alert` | 校验摘要聚焦并播报，Tab继续到实际表单；不能把Next空route-announcer当业务错误；行内aria-invalid/describedby保留 |
+| A | `切换到 <掩码>` 与 `从本机移除 <掩码>` button | 仅本机预填/删除，不代表已登录；删除保持键盘上下文，最后一项返回账号输入 |
+| B | `.login-recent-card / .login-recent-avatar / .login-recent-meta` | 390/1440长掩码/昵称不横向溢出、移除可见；头像完整字素；卡片不包含原始账号，预填只进入本人选中的表单 |
+| A | `动态验证码`、`完成登录`；`学号`、`密码（可选）`、`完成注册并登录` | ADMIN真实二次验证与新注册待审批保持，局部校验错误不消费challenge或注册令牌 |
+
+新增回归在标准电池必跑；不添加no-skip豁免。几何值继续来自批准样张，不以新截图作为样张来源。
+
+导师跨标签退出的专项恢复回归同样使用统一入口的`账号`与`使用密码登录`。保留6500ms脚本延迟及完整导航等待，等待账号可用后填写并检查模式切换保留值；仍须实际POST200、主文档不重建和旧身份私密输入清除。默认报告中的该专项豁免必须绑定完整导师文件，不能只跑两项布局冒称包含三个正式像素。
+
+账号输入框的原生Enter在初始阶段发码，验证码显示后才提交验证；对应 `unified-login-keyboard.spec.ts` 检查两端点各一次及真实落地。审批表的 `data-label="学号 / 昵称 / 手机号 / 注册时间 / 操作"` 是批准体系的手机记录标签契约；账号表额外保留选择、角色、状态、用户ID字段。批量停用/恢复弹窗关闭使用现有actor围栏焦点返回，实际Escape检查保留在管理员五宽度测试中。

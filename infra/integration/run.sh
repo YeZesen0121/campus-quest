@@ -11,6 +11,11 @@ export CQ_S3_SMOKE_ORIGIN=http://localhost:3311
 
 python /workspace/infra/integration/check-isolation.py
 
+if [[ -n "${CQ_E2E_CAPTURE_DIR:-}" && ! "$CQ_E2E_CAPTURE_DIR" =~ ^/workspace/infra/integration/\.runtime/captures/[A-Za-z0-9_-]+$ ]]; then
+  printf 'Capture directory must be a direct child of the owned integration runtime.\n' >&2
+  exit 2
+fi
+
 mode="${1:-}"
 shift || true
 # The retained UI/R6/R7 scanners share this WSL VM. Bound only our browser
@@ -20,6 +25,9 @@ case "$mode" in
     export RAYON_NUM_THREADS=2
     export NODE_OPTIONS="--max-old-space-size=768"
     export NEXT_TELEMETRY_DISABLED=1
+    # Match upstream CI's existing browser-only battery profile; production
+    # and backend limit tests retain the shipped default buckets.
+    export CQ_E2E_LOGIN_RATELIMIT=1
     ;;
 esac
 case "$mode" in
@@ -29,7 +37,7 @@ case "$mode" in
   node) cd /workspace/frontend; command=(node "$@");;
   tsx) cd /workspace/frontend; command=(npx --no-install tsx "$@");;
   battery)
-    if [ "$#" -ne 0 ] || [ "${CQ_VISUAL:-0}" != 0 ] || [ "${CQ_E2E_MENTOR_WORLD:-0}" != 0 ] || [ "${CQ_E2E_FENCE:-0}" != 0 ] || [ "${CQ_E2E_PROBE:-0}" != 0 ]; then
+    if [ "$#" -ne 0 ] || [ "${CQ_VISUAL:-0}" != 0 ] || [ "${CQ_E2E_MENTOR_WORLD:-0}" != 0 ] || [ "${CQ_E2E_FENCE:-0}" != 0 ] || [ "${CQ_E2E_PROBE:-0}" != 0 ] || [ "${CQ_E2E_MOCK_STORAGE:-0}" != 0 ] || [ -n "${CQ_E2E_CAPTURE_DIR:-}" ]; then
       printf 'Standard battery requires no filters or special-world flags.\n' >&2
       exit 2
     fi

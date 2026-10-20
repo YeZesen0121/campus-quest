@@ -38,6 +38,11 @@ test("the dashboard landing renders the overview census", async ({ page }) => {
   await expect(page.getByText("待审提交")).toBeVisible();
   await expect(page.getByText("任务状态分布")).toBeVisible();
   await expect(page.getByText("已归档")).toBeVisible(); // a zero-valued fixed key still renders
+  await expect(page.getByText('已关闭', { exact: true })).toBeVisible();
+  await expect(page.getByText('导师', { exact: true })).toBeVisible();
+  await expect(page.getByText('待验证', { exact: true })).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText('COMPLETED');
+  await expect(page.getByRole('main')).not.toContainText('DEPLETED');
 });
 
 test("the user detail: reset link once, kick answers 401, the role round-trips", async ({

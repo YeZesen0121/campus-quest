@@ -26,11 +26,18 @@ if ($LASTEXITCODE -ne 0 -or $integrationActualOwner.Trim() -ne $integrationOwner
     throw 'INTEGRATION container ownership guard rejected the runner.'
 }
 $integrationFlagArguments = @()
-foreach ($integrationFlag in @('CQ_E2E', 'CQ_E2E_MENTOR_WORLD', 'CQ_E2E_FENCE', 'CQ_E2E_PROBE', 'CQ_S3_SMOKE', 'CQ_EVIDENCE_SCAN_SMOKE', 'CQ_COMPOSITION_SMOKE', 'CQ_VISUAL', 'CQ_E2E_FIXED_LABELS')) {
+foreach ($integrationFlag in @('CQ_E2E', 'CQ_E2E_MENTOR_WORLD', 'CQ_E2E_FENCE', 'CQ_E2E_PROBE', 'CQ_E2E_MOCK_STORAGE', 'CQ_S3_SMOKE', 'CQ_EVIDENCE_SCAN_SMOKE', 'CQ_COMPOSITION_SMOKE', 'CQ_VISUAL', 'CQ_E2E_FIXED_LABELS')) {
     $integrationValue = [Environment]::GetEnvironmentVariable($integrationFlag)
     if ([string]::IsNullOrEmpty($integrationValue)) { continue }
     if ($integrationValue -notin @('0', '1')) { throw "Test flag $integrationFlag must be 0 or 1." }
     $integrationFlagArguments += @('--env', "$integrationFlag=$integrationValue")
+}
+$integrationCaptureDirectory = [Environment]::GetEnvironmentVariable('CQ_E2E_CAPTURE_DIR')
+if (-not [string]::IsNullOrEmpty($integrationCaptureDirectory)) {
+    if ($integrationCaptureDirectory -cnotmatch '^/workspace/infra/integration/\.runtime/captures/[A-Za-z0-9_-]+$') {
+        throw 'Capture directory must be a direct child of the owned integration runtime.'
+    }
+    $integrationFlagArguments += @('--env', "CQ_E2E_CAPTURE_DIR=$integrationCaptureDirectory")
 }
 # Export filenames as raw UTF-8/NUL bytes. PowerShell's text pipeline would
 # corrupt unusual names; this native Git call is read-only against this worktree.

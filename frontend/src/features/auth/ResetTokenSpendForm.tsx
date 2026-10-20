@@ -103,7 +103,7 @@ export function ResetTokenSpendForm({ initialToken }: { initialToken: string }) 
           disabled: loading,
         }}
       />
-      <SubmitButton loading={loading}>重置密码</SubmitButton>
+      <SubmitButton loading={loading} block={false}>重置密码</SubmitButton>
     </form>
   );
 }

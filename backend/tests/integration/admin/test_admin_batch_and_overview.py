@@ -34,6 +34,7 @@ from app.modules.identity.enums import Role, UserStatus
 from app.modules.identity.models import TotpCredential, User
 from app.modules.identity.providers import get_rate_limiter
 from app.modules.identity.session_service import SessionService
+from app.modules.tasks.models import Task
 from tests.fakes.integrations import FakeRateLimiter
 
 pytestmark = pytest.mark.integration
@@ -90,7 +91,7 @@ async def _seed_staff(
     )
     db.add(user)
     await db.flush()
-    if role is not Role.STUDENT:
+    if role in (Role.TEACHER, Role.ADMIN):
         db.add(
             TotpCredential(
                 user_id=user.id,
@@ -184,6 +185,30 @@ async def test_overview_answers_fixed_key_aggregates(
     client: httpx.AsyncClient, db_session: AsyncSession, api_clock: FrozenClock
 ) -> None:
     _, headers = await _admin_headers(db_session, api_clock)
+    teacher = await _seed_staff(
+        db_session, api_clock, role=Role.TEACHER, status=UserStatus.ACTIVE
+    )
+    await _seed_staff(db_session, api_clock, role=Role.MENTOR, status=UserStatus.ACTIVE)
+    await _seed_staff(
+        db_session, api_clock, role=Role.STUDENT, status=UserStatus.PENDING_PHONE
+    )
+    db_session.add(
+        Task(
+            owner_teacher_id=teacher.id,
+            title="Closed task in the administrative census",
+            description="A legal CLOSED task must be counted, not silently omitted.",
+            task_type="DATA_CRAWL",
+            rarity="NORMAL",
+            base_reward_points=100,
+            status="CLOSED",
+            deadline_mode="RELATIVE",
+            duration_minutes=60,
+            allowed_file_types=["CSV"],
+            max_file_size_bytes=1024,
+            notification_channels=[],
+            closed_at=api_clock.now(),
+        )
+    )
     await db_session.commit()
 
     response = await client.get("/api/v1/admin/overview", headers=headers)
@@ -198,10 +223,21 @@ async def test_overview_answers_fixed_key_aggregates(
         "today",
     }
     assert set(body["users"]) == {"total", "by_role", "by_status"}
-    for key in ("STUDENT", "TEACHER", "ADMIN"):
+    for key in ("STUDENT", "TEACHER", "ADMIN", "MENTOR"):
         assert key in body["users"]["by_role"]
-    for key in ("ACTIVE", "PENDING_APPROVAL", "SUSPENDED", "BANNED"):
+    for key in ("PENDING_PHONE", "ACTIVE", "PENDING_APPROVAL", "SUSPENDED", "BANNED"):
         assert key in body["users"]["by_status"]
+    assert body["users"]["by_role"]["MENTOR"] == 1
+    assert body["users"]["by_status"]["PENDING_PHONE"] == 1
+    assert sum(body["users"]["by_role"].values()) == body["users"]["total"]
+    assert sum(body["users"]["by_status"].values()) == body["users"]["total"]
     assert set(body["today"]) == {"new_users", "active_users"}
     assert isinstance(body["users"]["total"], int)
     assert body["users"]["total"] >= 1
+    assert body["tasks"]["by_status"] == {
+        "DRAFT": 0,
+        "PUBLISHED": 0,
+        "PAUSED": 0,
+        "CLOSED": 1,
+        "ARCHIVED": 0,
+    }

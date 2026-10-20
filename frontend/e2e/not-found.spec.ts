@@ -19,6 +19,6 @@ test("a missing route renders the Chinese not-found page with a way home", async
   // No English default leakage.
   await expect(page.getByText("This page could not be found.")).toHaveCount(0);
 
-  await page.getByRole("link", { name: "返回首页" }).click();
+  await page.getByRole("main").getByRole("link", { name: "返回首页", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${BASE_URL}/`));
 });

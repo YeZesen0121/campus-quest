@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 const ADMIN_DESTINATIONS: Record<string, string> = {
   users: '用户与账户', 'innovation-operations': '双创运营授权',
+  invitations: '员工邀请', platforms: '平台管理', approvals: '注册审批',
   'owner-qualifications': '负责人资格', whitelist: '注册白名单',
   rewards: '奖励目录', redemptions: '兑换审核', audit: '审计日志', system: '系统设置',
 };
@@ -14,7 +15,9 @@ function CurrentContext() {
   const search = useSearchParams();
   // Route labels are public; private entity names remain owned by each page.
   let context = '学生首页';
-  if (path.startsWith('/admin/')) context = `管理后台 / ${ADMIN_DESTINATIONS[path.split('/')[2]] ?? '管理后台'}`;
+  if (path === '/admin') context = '管理后台 / 概览';
+  else if (path.startsWith('/admin/')) context = `管理后台 / ${ADMIN_DESTINATIONS[path.split('/')[2]] ?? '管理后台'}`;
+  else if (path === '/teacher/profile') context = '教师工作台 / 个人信息';
   else if (path.startsWith('/teacher/')) context = path.startsWith('/teacher/reviews') ? '教师工作台 / 提交审核' : path === '/teacher/tasks' ? '教师工作台 / 任务管理' : '教师工作台 / 任务详情';
   else if (path.startsWith('/claims/')) context = '任务 / 我的领取记录';
   else if (path.startsWith('/tasks')) context = path === '/tasks' ? '任务 / 任务广场' : '任务 / 任务详情';
@@ -27,6 +30,8 @@ function CurrentContext() {
   else if (path.startsWith('/innovation/achievements')) context = path === '/innovation/achievements' ? '创新创业 / 校内成果' : '创新创业 / 成果详情';
   else if (path.startsWith('/innovation/talents')) context = path === '/innovation/talents' ? '创新创业 / 人才库' : '创新创业 / 人才档案';
   else if (path.startsWith('/innovation')) context = '校内空间 / 创新创业';
+  else if (path === '/profile/collaboration') context = '我的 / 项目协作与交接';
+  else if (path.startsWith('/profile/collaboration/')) context = '我的 / 协作项目工作区';
   else if (path === '/profile/owner-profile') context = '我的 / 负责人资料与资格';
   else if (path === '/profile/talent-profile') context = '我的 / 我的人才档案';
   else if (path.startsWith('/profile/project-drafts')) context = path.endsWith('/achievements') ? '我的 / 我的成果' : path.endsWith('/recruitments') ? '我的 / 我的招募' : '我的 / 我的项目';

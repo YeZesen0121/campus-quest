@@ -80,6 +80,14 @@ test("approved administrator login acknowledgement is not resubmitted while the 
   }
 });
 
+// Exercise a genuine login; the serial operations group deliberately resumes
+// at /admin/users and cannot serve as a new-login landing assertion.
+test("an admin login lands on the admin workspace, not the teacher cockpit", async ({ page }) => {
+  await loginAsStaff(page, ADMIN!, ADMIN_TOTP_SECRET!);
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "管理台概览", exact: true })).toBeVisible();
+});
+
 test.describe("admin workspace privilege navigation (plan step 1)", () => {
   test("a teacher opening /admin/approvals gets guidance and ZERO admin API calls", async ({
     page,
@@ -109,7 +117,7 @@ test.describe("admin workspace privilege navigation (plan step 1)", () => {
 test.describe("admin workspace operations (brief: users / redemptions / settings)", () => {
   // This serial workflow exercises operations, not nine independent logins.
   // Carry only the latest real rotating cookies between fresh contexts; the
-  // production ten-attempt staff limit remains enabled for every request.
+  // response-acknowledged login and session rotation remain real requests.
   let adminCookies: Awaited<ReturnType<BrowserContext["cookies"]>> | undefined;
   let successfulLogins = 0;
   const authenticatedContexts = new WeakSet<BrowserContext>();
@@ -272,12 +280,12 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
     }
   });
 
-  test("approved administrator composition: eight real families at four widths and native dialog return", async ({ page }, testInfo) => {
+  test("approved administrator composition: eight current families at four widths and native dialog return", async ({ page }, testInfo) => {
     test.setTimeout(240_000);
     page.setDefaultTimeout(12_000);
     const differences: string[] = [];
     const focusSettlements: { name: string; width: number; immediate: boolean; settled: boolean }[] = [];
-    const routes = ["users", "innovation-operations", "owner-qualifications", "whitelist", "rewards", "redemptions", "audit", "system"];
+    const routes = ["users", "innovation-operations", "owner-qualifications", "approvals", "rewards", "redemptions", "audit", "system"];
     const check = (ok: boolean, label: string) => { if (!ok) differences.push(label); };
     const checkFocus = async (control: ReturnType<Page["getByRole"]>, name: string, width: number) => {
       const immediate = await control.evaluate((el) => el === document.activeElement);
@@ -287,21 +295,9 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
       focusSettlements.push({ name, width, immediate, settled });
       check(settled, `${name}@${width} Escape return`);
     };
-    await page.goto(`${BASE_URL}/admin/whitelist`);
-    await page.getByLabel("导入内容").fill(String(Date.now()).slice(-9));
-    await page.getByRole("button", { name: "预览导入", exact: true }).click();
-    const importTable = page.getByRole("table", { name: "导入预览逐行结果", exact: true });
-    await expect(importTable).toBeVisible();
-    for (const width of [320, 390, 800, 1440]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0); });
-      await page.screenshot({ path: testInfo.outputPath(`admin-whitelist-preview-${width}.png`), fullPage: true, animations: 'disabled' });
-    }
-    const previewWidth = await importTable.evaluate(table => ({ width: table.getBoundingClientRect().width, available: table.parentElement!.clientWidth }));
-    check(Math.abs(previewWidth.width - Math.min(800, previewWidth.available)) <= 1, `source import preview width:${JSON.stringify(previewWidth)}`);
-    await page.getByRole("checkbox").check();
-    await page.getByRole("button", { name: "确认导入 1 行", exact: true }).click();
-    await expect(page.getByText(/已成功导入 1 个学号/)).toBeVisible();
+    // The upstream approval queue replaces the retired whitelist UI.
+    // Real register/approve/reject business journeys live in auth-extension-2;
+    // this layout pass preserves the current queue's honest empty state.
     for (const width of [320, 390, 640, 800, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       for (const route of routes) {
@@ -348,7 +344,7 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
                 return { rowGap: parseFloat(style.rowGap), columnGap: parseFloat(style.columnGap), blockPadding: parseFloat(style.paddingTop) };
               })(),
               primaryFont: (() => {
-                const cell = table.querySelector("tbody tr td:first-child");
+                const cell = table.querySelector(table.getAttribute("aria-label") === "账号列表" ? 'tbody tr td[data-label="学号 / 用户名"]' : "tbody tr td:first-child");
                 return cell ? getComputedStyle(cell.querySelector("time") ?? cell).fontSize : null;
               })(),
               scrolls: table.scrollWidth > innerWidth,
@@ -404,7 +400,6 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
               canvas.fillStyle = getComputedStyle(el).color; canvas.fillRect(0, 0, 1, 1);
               return [...canvas.getImageData(0, 0, 1, 1).data].join(',') === '69,72,63,255';
             }),
-            whitelistConsequence: main.querySelector('[role="note"][aria-label="白名单停用影响"]')?.textContent,
             rewardHeadingFlow: (() => {
               const heading = main.querySelector('.page-head'), actions = main.querySelector('[data-admin-return="rewards"] > .section-head > .row-actions');
               if (!heading || !actions) return null;
@@ -426,7 +421,7 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
           check(metrics.workspaceCaption === '管理后台', `${prefix} source visible workspace caption:${metrics.workspaceCaption}`);
           check(metrics.roleTagVisible, `${prefix} role label must not be ellipsized with the real nickname`);
         }
-        const contextTitle: Record<string, string> = { users: '用户与账户', 'innovation-operations': '双创运营授权', 'owner-qualifications': '负责人资格', whitelist: '注册白名单', rewards: '奖励目录', redemptions: '兑换审核', audit: '审计日志', system: '系统设置' };
+        const contextTitle: Record<string, string> = { users: '用户与账户', 'innovation-operations': '双创运营授权', 'owner-qualifications': '负责人资格', approvals: '注册审批', rewards: '奖励目录', redemptions: '兑换审核', audit: '审计日志', system: '系统设置' };
         if (width >= 1024) check(metrics.workspaceContext === `管理后台 / ${contextTitle[route]}`, `${prefix} actual destination context:${metrics.workspaceContext}`);
         check(metrics.sectionActionsFramed, `${prefix} approved framed section actions`);
         check(metrics.secondarySourceInk, `${prefix} source body ink on enabled outlined actions`);
@@ -458,23 +453,22 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
           if (width >= 640) check(metrics.templatePairAligned, `${prefix} event and channel field pair`);
           else check(metrics.settingsColumns.every((column) => column.heading >= column.row - 1 && column.value >= column.row * 0.4 && column.hint >= column.row * 0.4), `${prefix} readable paired parameter columns:${JSON.stringify(metrics.settingsColumns)}`);
         }
-        if (route === 'whitelist') check(!!metrics.whitelistConsequence?.includes('已注册账号不受影响'), `${prefix} permanent truthful whitelist consequence note`);
         if (route === "redemptions") check(!!metrics.redemptionConsequences, `${prefix} consequences attached below detail actions`);
         for (const table of metrics.tables) {
           check(table.head !== null && table.head.padding === "9px 10px" && Math.abs(table.head.line - 19.2) < 0.2 && table.head.background === "238,238,229,255", `${prefix}/${table.name} source header density:${JSON.stringify(table.head)}`);
           if (width >= 640) {
             const specified = new Map<number, number>();
             if (width >= 1024) {
-              specified.set(table.columns.length - 1, 22);
-              if (table.name === "账号列表") { specified.set(0, 15); specified.set(5, 12); specified.set(table.columns.length - 1, 18); }
-              if (table.name === "奖励目录列表") { specified.set(0, 24); specified.set(table.columns.length - 1, 18); }
-              if (table.name === "审计日志列表") { specified.set(1, 22); specified.set(table.columns.length - 1, 12); }
-              if (table.name === "负责人资格申请列表") specified.set(0, 30);
+              specified.set(table.columns.length - 1, table.width * 0.22);
+              if (table.name === "账号列表") { specified.set(0, 64); specified.set(1, table.width * 0.15); specified.set(6, table.width * 0.12); specified.set(table.columns.length - 1, table.width * 0.18); }
+              if (table.name === "奖励目录列表") { specified.set(0, table.width * 0.24); specified.set(table.columns.length - 1, table.width * 0.18); }
+              if (table.name === "审计日志列表") { specified.set(1, table.width * 0.22); specified.set(table.columns.length - 1, table.width * 0.12); }
+              if (table.name === "负责人资格申请列表") specified.set(0, table.width * 0.30);
             }
-            const rest = (100 - [...specified.values()].reduce((sum, value) => sum + value, 0)) / (table.columns.length - specified.size);
-            check(table.columns.every((column, index) => Math.abs(column - table.width * (specified.get(index) ?? rest) / 100) <= 1), `${prefix}/${table.name} source responsive columns:${JSON.stringify(table.columns)}`);
+            const rest = (table.width - [...specified.values()].reduce((sum, value) => sum + value, 0)) / (table.columns.length - specified.size);
+            check(table.columns.every((column, index) => Math.abs(column - (specified.get(index) ?? rest)) <= 1), `${prefix}/${table.name} source responsive columns:${JSON.stringify(table.columns)}`);
           }
-          if (["users", "whitelist", "audit"].includes(route) && table.primaryFont !== null) check(table.primaryFont === `${width < 640 ? 14 : 13}px`, `${prefix}/${table.name} source primary field typography:${table.primaryFont}`);
+          if (["users", "approvals", "audit"].includes(route) && table.primaryFont !== null) check(table.primaryFont === `${width < 640 ? 14 : 13}px`, `${prefix}/${table.name} source primary field typography:${table.primaryFont}`);
           if (width < 640) {
             const accountRows = table.name === "账号列表";
             if (table.record) check(Math.abs(table.record.rowGap - (accountRows ? 3 : 5)) < 0.2 && Math.abs(table.record.columnGap - (accountRows || width < 360 ? 10 : 14)) < 0.2 && Math.abs(table.record.blockPadding - (accountRows ? 9 : 10)) < 0.2, `${prefix}/${table.name} source record spacing:${JSON.stringify(table.record)}`);
@@ -553,10 +547,11 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
         await cancelDialog(reward.getByRole("button", { name: "编辑", exact: true }), "reward-edit");
         await cancelDialog(reward.getByRole("button", { name: "下架", exact: true }), "reward-disable");
       }
-      await page.goto(`${BASE_URL}/admin/whitelist`);
-      const whitelist = page.locator("tbody tr").filter({ has: page.getByRole("button", { name: "停用", exact: true }) }).first();
-      await expect(whitelist).toBeVisible();
-      await cancelDialog(whitelist.getByRole("button", { name: "停用", exact: true }), "whitelist-disable");
+      await page.goto(`${BASE_URL}/admin/users`);
+      const selection = page.getByRole("table", { name: "账号列表", exact: true }).getByRole("checkbox").first();
+      await selection.check();
+      await cancelDialog(page.getByRole("button", { name: "批量停用", exact: true }), "batch-suspend");
+      await selection.uncheck();
       await page.goto(`${BASE_URL}/admin/redemptions`);
       await page.locator(".review-item").first().click();
       await cancelDialog(page.getByRole("button", { name: "通过并扣减积分", exact: true }), "redemption-approve");
@@ -754,15 +749,6 @@ test.describe("admin workspace operations (brief: users / redemptions / settings
     expect(new URL(cleared.url()).searchParams.has("target_type")).toBe(false);
     await expect(rows).toHaveCount(20);
     expect(writes).toEqual([]);
-  });
-
-  // Owner report (2026-10-15): an admin login used to land on the
-  // teacher review queue. The beforeEach just logged in — the page's
-  // CURRENT url IS the landing verdict.
-  test("an admin login lands on the admin workspace, not the teacher cockpit", async ({
-    page,
-  }) => {
-    await expect(page).toHaveURL(/\/admin$/);
   });
 
   test("user suspend blocks on a blank reason, then applies with one", async ({ page }) => {

@@ -19,19 +19,7 @@ import {
   fetchAdminOverview,
   type AdminOverviewDto,
 } from "./adminPowersApi";
-
-const ROLE_LABELS: Record<string, string> = {
-  STUDENT: "学生",
-  TEACHER: "教师",
-  ADMIN: "管理员",
-};
-
-const USER_STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "正常",
-  PENDING_APPROVAL: "待审核",
-  SUSPENDED: "已停用",
-  BANNED: "已封禁",
-};
+import { roleLabel, userStatusView } from "./adminView";
 
 const TASK_STATUS_LABELS: Record<string, string> = {
   DRAFT: "草稿",
@@ -131,14 +119,14 @@ export function AdminDashboard() {
           <div className="metric-row">
             <Metric label="用户总数" value={data.users.total} />
             {Object.entries(data.users.by_role).map(([role, count]) => (
-              <Metric key={role} label={ROLE_LABELS[role] ?? role} value={count} />
+              <Metric key={role} label={roleLabel(role)} value={count} />
             ))}
           </div>
           <dl className="fact-rows">
             {Object.entries(data.users.by_status).map(([status, count]) => (
               <FactLine
                 key={status}
-                label={USER_STATUS_LABELS[status] ?? status}
+                label={userStatusView(status).label}
                 value={count}
               />
             ))}

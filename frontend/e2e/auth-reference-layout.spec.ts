@@ -3,10 +3,9 @@ import { BASE_URL, expect, test } from './fixtures';
 test.skip(process.env.CQ_E2E !== '1', 'CQ_E2E=1 with the owned UI test world');
 
 const entries = [
-  { path: '/register', title: '注册学生账号', detail: '完成手机号验证后，使用学号登录。', action: '注册', brief: '仅支持老师导入的白名单学号。' },
+  { path: '/register', title: '注册学生账号', detail: '使用学号与手机验证码注册；注册后待管理员审核。', action: '注册' },
   { path: '/forgot-password', title: '找回密码', detail: '通过绑定手机号验证，重新设置密码。', action: '获取验证码', steps: '找回密码步骤' },
-  { path: '/staff/login', title: '员工登录', detail: '使用员工邮箱、密码和动态验证码登录。', action: '登录', brief: '教师与管理员使用独立员工账号登录。' },
-  { path: '/staff/invite/ui-layout-placeholder', title: '接受员工邀请', detail: '设置密码后，继续完成动态口令绑定。', action: '设置密码并继续', steps: '账号激活步骤' },
+  { path: '/staff/invite/ui-layout-placeholder', title: '接受员工邀请', detail: '教师可选设置密码后激活；管理员还需绑定动态口令。', action: '激活账号', brief: '邀请链接仅可使用一次，请一次性完成激活。' },
   { path: '/mentor/login', title: '导师登录', detail: '使用导师账号确认与管理本人的导师档案。', action: '登录' },
   { path: '/logout', title: '退出当前账号', detail: '退出前，请确认当前操作已保存。', action: '确认退出登录' },
 ] as const;
@@ -42,11 +41,18 @@ for (const width of [390, 1440]) {
         await expect(card).toHaveCSS('padding-top', '0px');
       }
       if (entry.path === '/register') {
+        await expect(card.getByLabel('密码（可选）', { exact: true })).toBeVisible();
+        await expect(card.getByText(/白名单/)).toHaveCount(0);
         const phone = (await card.getByLabel('手机号', { exact: true }).boundingBox())!;
         const code = (await card.getByRole('button', { name: '获取验证码', exact: true }).boundingBox())!;
         expect(code.y).toBeCloseTo(phone.y, 0);
         expect(code.x).toBeGreaterThan(phone.x + phone.width);
         expect(code.width).toBeLessThan(140);
+      }
+      if (entry.path.startsWith('/staff/invite/')) {
+        await expect(card.getByLabel('设置密码（可选）', { exact: true })).toBeVisible();
+        await expect(card.getByText(/管理员必须设置/)).toBeVisible();
+        await expect(card.getByRole('list', { name: '账号激活步骤' })).toHaveCount(0);
       }
       await expect(page.getByRole('button', { name: '填入虚构演示数据' })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -60,7 +66,7 @@ for (const width of [390, 1440]) {
 // measured at the same CSS viewports. This checks reference fidelity rather
 // than merely accepting a new screenshot of our own implementation.
 for (const width of [390, 1440]) {
-  test(`approved student login composition at ${width}px`, async ({ page }, info) => {
+  test(`approved unified login composition at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${BASE_URL}/login`);
     const banner = page.getByRole('banner');
@@ -83,15 +89,15 @@ for (const width of [390, 1440]) {
     expect(cardBox.y).toBeCloseTo(mobile ? 198.09375 : 228.1953125, 0);
     expect(headingBox.y + headingBox.height).toBeLessThan(cardBox.y);
     expect(await heading.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize))).toBe(mobile ? 29 : 32);
-    const input = form.getByLabel('学号', { exact: true });
+    const input = form.getByLabel('账号', { exact: true });
     expect((await input.boundingBox())!.height).toBe(44);
     expect(await input.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize))).toBe(14);
-    const submit = form.getByRole('button', { name: '登录', exact: true });
-    expect((await submit.boundingBox())!.width).toBeLessThan(80);
+    const submit = form.getByRole('button', { name: '获取验证码', exact: true });
+    expect((await submit.boundingBox())!.width).toBeLessThan(170);
     expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    await expect(form.getByRole('link', { name: '忘记密码', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '使用密码登录', exact: true })).toHaveAttribute('aria-expanded', 'false');
     const links = page.getByRole('navigation', { name: '其他登录与注册入口' });
-    for (const [name, href] of [['首次使用，注册账号', '/register'], ['教师 / 管理员入口', '/staff/login'], ['导师入口', '/mentor/login']]) {
+    for (const [name, href] of [['首次使用，注册学生账号', '/register'], ['忘记密码', '/forgot-password'], ['导师入口', '/mentor/login']]) {
       await expect(links.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
     }
     expect((await links.boundingBox())!.y).toBeGreaterThan(cardBox.y + cardBox.height);
@@ -105,7 +111,9 @@ for (const width of [390, 1440]) {
 // Controlled slow-script reproduction: server HTML must not offer a form
 // whose controlled inputs have no handlers yet. This is not a retry or a
 // page-load stabilization sleep; the 6500ms gate is the regression stimulus.
-for (const entry of [{ path: '/login', label: '学号' }, { path: '/mentor/login', label: '导师账号' }]) {
+// Unified code/password readiness is covered by unified-login-hydration.spec.ts;
+// the dedicated mentor account keeps its own password contract.
+for (const entry of [{ path: '/mentor/login', label: '导师账号' }]) {
   test(`login hydration readiness ${entry.path}: controlled delayed scripts`, async ({ page }) => {
     let release!: () => void;
     const scripts = new Promise<void>(resolve => { release = resolve; });
@@ -129,27 +137,28 @@ for (const entry of [{ path: '/login', label: '学号' }, { path: '/mentor/login
   });
 }
 
-test('C1 staff form: same controlled slow-script readiness and typed-value preservation', async ({ page }) => {
+test('C1 retired staff entry redirects to unified form with the same readiness contract', async ({ page }) => {
   let release!: () => void;
   const scripts = new Promise<void>(resolve => { release = resolve; });
   await page.route(/\/_next\/static\/.*\.js(?:\?.*)?$/, async route => { await scripts; await route.continue(); });
   try {
     await page.goto(`${BASE_URL}/staff/login`, { waitUntil: 'commit' });
-    const username = page.getByLabel('邮箱', { exact: true });
-    const password = page.getByLabel('密码', { exact: true });
-    const factor = page.getByLabel('动态验证码', { exact: true });
-    const submit = page.getByRole('button', { name: '登录', exact: true });
+    const username = page.getByLabel('账号', { exact: true });
+    const submit = page.getByRole('button', { name: '获取验证码', exact: true });
+    const mode = page.getByRole('button', { name: '使用密码登录', exact: true });
     await expect(username).toBeVisible();
-    for (const control of [username, password, factor, submit]) expect.soft(await control.isDisabled(), 'SSR staff control waits for its handlers').toBe(true);
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+    for (const control of [username, mode, submit]) expect.soft(await control.isDisabled(), 'SSR unified control waits for its handlers').toBe(true);
     await new Promise(resolve => setTimeout(resolve, 6500));
     release();
-    for (const control of [username, password, factor, submit]) await expect(control).toBeEnabled();
+    for (const control of [username, mode, submit]) await expect(control).toBeEnabled();
     await username.fill('readiness@example.invalid');
+    await mode.click();
+    const password = page.getByLabel('密码', { exact: true });
     await password.fill('DemoPass2026!');
-    await factor.fill('123456');
     await username.press('End'); await username.press('2');
     await expect(username).toHaveValue('readiness@example.invalid2');
     await expect(password).toHaveValue('DemoPass2026!');
-    await expect(factor).toHaveValue('123456');
+    await expect(page.getByLabel('动态验证码', { exact: true })).toHaveCount(0);
   } finally { release(); }
 });

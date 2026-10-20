@@ -1055,6 +1055,7 @@ body {
 
 .login-recent-card {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -1104,6 +1105,7 @@ body {
   display: grid;
   gap: 2px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .login-recent-sub {
@@ -6056,6 +6058,7 @@ html:has(.campus-management-page) { scroll-padding-top: calc(var(--workspace-hea
 .campus-mentor-filters :is(.input, .field-label) { font-size: var(--text-sm); font-weight: 400; }
 .campus-mentor-directory-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); color: var(--muted-foreground); font-size: var(--text-2xs); }
 .campus-mentor-directory-meta p { margin: 0; }
+.campus-mentor-directory-note a { text-decoration: underline; }
 .campus-mentor-directory-list { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--mentor-directory-gap); padding: 0; margin: 0; list-style: none; }
 .campus-mentor-directory-list::before { content: ""; position: absolute; inset-block: 0; left: 50%; width: var(--discovery-divider-width); background: var(--divider); pointer-events: none; }
 .campus-mentor-directory-list > li { position: relative; min-width: 0; padding-block: var(--work-page-gutter-narrow); border-top: var(--section-divider-width) solid var(--border); overflow-wrap: anywhere; }
@@ -6446,8 +6449,9 @@ html:has(.campus-mentor-page) { scroll-padding-top: calc(var(--workspace-header-
 .campus-admin-main .staff-cell-title { min-width: 0; font-weight: 400; color: var(--foreground); }
 @media (min-width: 64rem) {
   .campus-admin-main .staff-table th:last-child { width: 22%; }
-  .campus-admin-main [aria-label="账号列表"] th:first-child { width: 15%; }
-  .campus-admin-main [aria-label="账号列表"] th:nth-child(6) { width: 12%; }
+  .campus-admin-main [aria-label="账号列表"] th[data-admin-column="selection"] { width: calc(var(--control-height) + 2 * var(--admin-cell-inline)); }
+  .campus-admin-main [aria-label="账号列表"] th[data-admin-column="identifier"] { width: 15%; }
+  .campus-admin-main [aria-label="账号列表"] th[data-admin-column="user-id"] { width: 12%; }
   .campus-admin-main [aria-label="账号列表"] th:last-child { width: 18%; }
   .campus-admin-main [aria-label="奖励目录列表"] th:first-child { width: 24%; }
   .campus-admin-main [aria-label="奖励目录列表"] th:last-child { width: 18%; }
@@ -6455,7 +6459,8 @@ html:has(.campus-mentor-page) { scroll-padding-top: calc(var(--workspace-header-
   .campus-admin-main [aria-label="审计日志列表"] th:last-child { width: 12%; }
   .campus-admin-main [aria-label="负责人资格申请列表"] th:first-child { width: 30%; }
 }
-.campus-admin-main [aria-label="账号列表"] td:nth-child(6) > .mono { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.campus-admin-main [aria-label="账号列表"] td[data-label="用户 ID"] > .mono { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.campus-admin-main .admin-account-selection { display: inline-flex; align-items: center; justify-content: center; min-width: var(--control-height); min-height: var(--control-height); cursor: pointer; }
 .campus-admin-main [aria-label="导入预览逐行结果"] { max-width: var(--admin-preview-table-width); }
 .campus-admin-main .staff-table .mono { font-size: var(--staff-meta); overflow-wrap: anywhere; }
 .campus-admin-main .staff-table .notif-time { font-size: var(--text-xs); }
@@ -6560,17 +6565,18 @@ html:has(.campus-mentor-page) { scroll-padding-top: calc(var(--workspace-header-
   .campus-admin-main .staff-table .cq-status-cell { text-align: left; }
   .campus-admin-main .staff-table .btn { font-size: var(--text-xs); }
   .campus-admin-main .review-detail .fact-row { grid-template-columns: var(--staff-fact-key-phone) minmax(0, 1fr); }
-  .campus-admin-main [aria-label="账号列表"] tr { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--admin-user-record-row-gap) var(--admin-cell-inline); padding-block: var(--admin-table-head-padding-block); }
+  .campus-admin-main [aria-label="账号列表"] tr { grid-template-columns: var(--control-height) repeat(2, minmax(0, 1fr)); align-items: center; gap: var(--admin-user-record-row-gap) var(--admin-cell-inline); padding-block: var(--admin-table-head-padding-block); }
   .campus-admin-main [aria-label="账号列表"] td::before { display: none; }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(1) { grid-column: 1 / 3; grid-row: 1; font-size: var(--text-sm); }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(2) { grid-column: 3; grid-row: 1; text-align: right; font-size: var(--text-sm); }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(3) { grid-column: 1; grid-row: 2; font-size: var(--text-2xs); }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(4) { grid-column: 2; grid-row: 2; }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(5) { grid-column: 1 / 3; grid-row: 3; color: var(--muted-foreground); }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(5)::before { content: "注册于 "; display: inline; }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(6) { grid-column: 3; grid-row: 3; text-align: right; max-width: var(--admin-heading-action-reserve); }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(7) { grid-column: 3; grid-row: 2; }
-  .campus-admin-main [aria-label="账号列表"] td:nth-child(7) .row-actions { justify-content: flex-end; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="选择"] { grid-column: 1; grid-row: 1 / 3; align-self: start; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="学号 / 用户名"] { grid-column: 2 / -1; grid-row: 1; font-size: var(--text-sm); }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="昵称"] { grid-column: 2 / -1; grid-row: 2; font-size: var(--text-sm); }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="角色"] { grid-column: 2; grid-row: 3; font-size: var(--text-2xs); }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="状态"] { grid-column: 3; grid-row: 3; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="注册时间"] { grid-column: 2 / -1; grid-row: 4; color: var(--muted-foreground); }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="注册时间"]::before { content: "注册于 "; display: inline; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="用户 ID"] { grid-column: 2 / -1; grid-row: 5; max-width: 100%; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="操作"] { grid-column: 2 / -1; grid-row: 6; }
+  .campus-admin-main [aria-label="账号列表"] td[data-label="操作"] .row-actions { justify-content: flex-start; }
   .campus-admin-main [aria-label="负责人资格申请详情"] dl > div:nth-child(odd) { margin-bottom: var(--admin-snapshot-pair-gap-phone); }
 }
 @media (max-width: 22.4375rem) {

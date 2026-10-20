@@ -92,6 +92,7 @@ export interface UserStatusView {
 }
 
 const USER_STATUS_VIEWS: Record<string, UserStatusView> = {
+  PENDING_APPROVAL: { label: "待审核", tone: "warning" },
   PENDING_PHONE: { label: "待验证", tone: "muted" },
   ACTIVE: { label: "正常", tone: "success" },
   SUSPENDED: { label: "已停用", tone: "warning" },

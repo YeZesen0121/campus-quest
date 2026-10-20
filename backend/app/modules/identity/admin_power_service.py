@@ -437,6 +437,7 @@ async def overview(db: AsyncSession, *, clock: Clock) -> dict[str, Any]:
 
     from app.modules.points.models import RewardRedemption
     from app.modules.submissions.models import Submission
+    from app.modules.tasks.enums import TaskStatus
     from app.modules.tasks.models import Task
 
     def _fixed(pairs: dict[str, int], keys: tuple[str, ...]) -> dict[str, int]:
@@ -462,14 +463,7 @@ async def overview(db: AsyncSession, *, clock: Clock) -> dict[str, Any]:
             select(Task.status, func.count()).group_by(Task.status)
         )
     }
-    task_keys = (
-        "DRAFT",
-        "PUBLISHED",
-        "PAUSED",
-        "COMPLETED",
-        "ARCHIVED",
-        "DEPLETED",
-    )
+    task_keys = tuple(status.value for status in TaskStatus)
 
     pending_submissions = int(
         await db.scalar(
@@ -511,10 +505,8 @@ async def overview(db: AsyncSession, *, clock: Clock) -> dict[str, Any]:
     return {
         "users": {
             "total": total,
-            "by_role": _fixed(roles, ("STUDENT", "TEACHER", "ADMIN")),
-            "by_status": _fixed(
-                statuses, ("ACTIVE", "PENDING_APPROVAL", "SUSPENDED", "BANNED")
-            ),
+            "by_role": _fixed(roles, tuple(role.value for role in Role)),
+            "by_status": _fixed(statuses, tuple(status.value for status in UserStatus)),
         },
         "tasks": {"by_status": _fixed(task_rows, task_keys)},
         "pending_submissions": pending_submissions,

@@ -29,14 +29,11 @@
  * invalidate warning) against the VALIDATED queue row the fixture
  * seeds on the browser teacher's own task.
  */
-import { createHmac } from "node:crypto";
-
 import { expect, test } from "@playwright/test";
-import { readControlClearance, API_URL, mintToken } from "./fixtures";
+import { readControlClearance, API_URL, mintToken, staffLogin as loginAsStaff } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
-const STAFF_LOGIN_URL = process.env.CQ_E2E_STAFF_LOGIN_URL ?? `${BASE_URL}/login`;
 const STAFF = process.env.CQ_E2E_STAFF; // "e2e-teacher-{run}@school.edu:password" (factories' DEFAULT_PASSWORD)
 const STAFF_TOTP_SECRET = process.env.CQ_E2E_STAFF_TOTP_SECRET;
 // An UNRELATED teacher for the access-denied negative (F6): a second
@@ -52,81 +49,6 @@ test.skip(
 // The staff contract itself is a HARD requirement now (PR #6 final
 // review): the world always provides it, and a missing export must
 // fail the suite — never read as a skip the gate would have to catch.
-
-/** RFC 4648 base32 (the TOTP secret alphabet) -> bytes. */
-function base32Decode(input: string): Buffer {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = 0;
-  let value = 0;
-  const out: number[] = [];
-  for (const char of input.toUpperCase().replace(/=+$/, "")) {
-    const index = alphabet.indexOf(char);
-    if (index === -1) {
-      throw new Error(`non-base32 character in secret: ${char}`);
-    }
-    value = (value << 5) | index;
-    bits += 5;
-    if (bits >= 8) {
-      out.push((value >>> (bits - 8)) & 0xff);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(out);
-}
-
-/** The current RFC 6238 code for `secret` (SHA-1, 30s step, 6 digits). */
-export function totpCode(secret: string, atMs: number = Date.now()): string {
-  const counter = Math.floor(atMs / 30_000);
-  const block = Buffer.alloc(8);
-  block.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", base32Decode(secret)).update(block).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const binary =
-    ((digest[offset] & 0x7f) << 24) |
-    (digest[offset + 1] << 16) |
-    (digest[offset + 2] << 8) |
-    digest[offset + 3];
-  return String(binary % 1_000_000).padStart(6, "0");
-}
-
-/** Staff login through the real form; retries across a 30s step rollover.
- * The success wait is the NEGATED login URL (community.spec's proven
- * shape): an unanchored `BASE_URL/` match would also match /staff/login
- * itself and let the test navigate away while the login POST is still
- * in flight — aborting it and landing the next page anonymous. */
-async function loginAsStaff(
-  page: import("@playwright/test").Page,
-  credentials: string,
-  totpSecret: string,
-): Promise<void> {
-  const [email, password] = credentials.split(":");
-  await page.goto(STAFF_LOGIN_URL);
-  // The unified page: the weak link expands the password form; an
-  // ADMIN's password answers totp_required (the leg completes it).
-  await page.getByRole("button", { name: "使用密码登录" }).click();
-  await page.getByLabel("账号", { exact: true }).fill(email);
-  await page.getByLabel("密码").fill(password);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByRole("button", { name: "登录", exact: true }).click();
-    const legAppeared = await page
-      .getByTestId("unified-login-totp-leg")
-      .waitFor({ state: "visible", timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (legAppeared) {
-      await page.getByLabel("动态验证码").fill(totpCode(totpSecret));
-      await page.getByRole("button", { name: "完成登录" }).click();
-    }
-    try {
-      await expect(page).not.toHaveURL(/\/login/, { timeout: 5_000 });
-      return;
-    } catch {
-      // A slow hop can carry the submit across the step boundary —
-      // recompute the code exactly like a real user would.
-    }
-  }
-  await expect(page).not.toHaveURL(/\/staff\/login/);
-}
 
 /** The §7.1 CSV payload: a valid row plus a duplicate-in-file error row.
  * The platform must be one of the closed import vocabulary

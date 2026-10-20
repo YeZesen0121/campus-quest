@@ -15,7 +15,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
-import { ensureStudentLogin, staffLogin } from "./fixtures";
+import { ensureStudentLogin, logoutStudentThroughUi, staffLogin } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE_URL = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
@@ -30,12 +30,12 @@ test.skip(
   "set CQ_E2E=1 (and the CQ_E2E_* vars) to run this suite.",
 );
 
-/** A time-unique student number (registration has no whitelist now). */
-function freshStudentNumber(): string {
-  return `7${String(Date.now()).slice(-9)}`;
+/** Stay in the seed's reserved prefix so its existing cleanup owns the row. */
+function freshStudentNumber(suffix: 1 | 2 | 3): string {
+  return `${process.env.CQ_E2E_REGISTER_NUMBER!}${suffix}${test.info().retry}`;
 }
 
-/** A time-unique phone (registered users are teardown-invisible). */
+/** A time-unique phone; user-row cleanup follows the reserved student number. */
 function freshPhone(): string {
   return `139${String(Date.now()).slice(-8)}`;
 }
@@ -70,9 +70,10 @@ async function fillLoginIdentifierVerified(page: Page, identifier: string): Prom
 
 async function registerThroughUi(
   page: Page,
-  options: { withPassword: boolean },
+  options: { withPassword: boolean; numberSuffix: 1 | 2 | 3 },
 ): Promise<{ number: string; phone: string; password: string | null }> {
-  const studentNumber = freshStudentNumber();
+  const studentNumber = freshStudentNumber(options.numberSuffix);
+  expect(studentNumber.startsWith(process.env.CQ_E2E_REGISTER_NUMBER!), 'registered students must use the owned world cleanup namespace').toBe(true);
   const phone = freshPhone();
   const password = options.withPassword ? "e2e-correct-horse" : null;
   await page.goto(`${BASE_URL}/register`);
@@ -86,7 +87,16 @@ async function registerThroughUi(
   if (password !== null) {
     await page.getByLabel("密码（可选）").fill(password);
   }
+  const registration = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/v1/auth/register' && response.request().method() === 'POST');
   await page.getByRole("button", { name: "注册", exact: true }).click();
+  const response = await registration;
+  expect(response.status()).toBe(201);
+  const body = await response.json() as { user: { id: string } };
+  await test.info().attach('registration-world-ownership', {
+    contentType: 'application/json',
+    body: JSON.stringify({ run: RUN, number_prefix: process.env.CQ_E2E_REGISTER_NUMBER, user_id: body.user.id }),
+  });
   // ④ (owner feedback 2026-10-17): the register response's {user,
   // tokens} envelope IS the login — straight onto the student home
   // (PENDING_APPROVAL browse-frozen surface), never a login-page round
@@ -99,7 +109,7 @@ test.describe("the register → approval → unlock chain (spec §1/§2/§5)", (
   test("register without a password → straight in → banner → admin approves → frozen surface unlocks", async ({
     page,
   }) => {
-    const { phone } = await registerThroughUi(page, { withPassword: false });
+    const { phone } = await registerThroughUi(page, { withPassword: false, numberSuffix: 1 });
 
     // ④ straight-in: the registration's tokens opened the session —
     // the PENDING banner greets the landing itself, no login round
@@ -125,11 +135,18 @@ test.describe("the register → approval → unlock chain (spec §1/§2/§5)", (
   });
 
   test("reject with a reason removes the student from the queue", async ({ page }) => {
-    const { phone } = await registerThroughUi(page, { withPassword: false });
+    const { phone } = await registerThroughUi(page, { withPassword: false, numberSuffix: 2 });
     await staffLogin(page, ADMIN!, ADMIN_TOTP_SECRET!);
     await page.goto(`${BASE_URL}/admin/approvals`);
     const row = page.locator("tr", { hasText: `+86****${phone.slice(-4)}` });
-    await row.getByRole("button", { name: "拒绝" }).click();
+    const reject = row.getByRole("button", { name: "拒绝", exact: true });
+    await reject.click();
+    await expect(page.getByRole('dialog', { name: '拒绝注册', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(reject).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: '拒绝注册', exact: true })).toBeVisible();
     await page.getByLabel(/拒绝理由/).fill("端到端拒绝用例");
     await page.getByRole("button", { name: "确认拒绝" }).click();
     await expect(row).toHaveCount(0);
@@ -155,12 +172,12 @@ test.describe("mobile-code login (spec §3/§4)", () => {
     page,
     browser,
   }) => {
-    const { phone } = await registerThroughUi(page, { withPassword: false });
+    const { phone } = await registerThroughUi(page, { withPassword: false, numberSuffix: 3 });
     // ④ leaves the account logged in; log out to reach the code form
     // (register itself arms NO device cookie — there is no checkbox on
     // the register surface).
     await page.goto(`${BASE_URL}/profile?tab=info`);
-    await page.getByRole("button", { name: "退出登录" }).click();
+    await logoutStudentThroughUi(page);
     await expect(page).toHaveURL(new RegExp(`${BASE_URL}/login`));
 
     // First login WITH the remember checkbox: arms the cookie.
