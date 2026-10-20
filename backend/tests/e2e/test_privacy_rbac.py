@@ -569,6 +569,12 @@ async def test_direct_route_rbac_matrix(
                     "GET",
                     "/api/v1/admin/whitelist",
                     None,
+                    {"admin": 404, "teacher": 404, "student": 404},
+                ),
+                (
+                    "GET",
+                    "/api/v1/admin/users",
+                    None,
                     {"admin": 200, "teacher": 403, "student": 403},
                 ),
                 (

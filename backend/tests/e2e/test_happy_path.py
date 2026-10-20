@@ -5,16 +5,17 @@ The plan's step-1 chain, every hop through the public surface with ZERO
 core provider overrides (G18 — the composition-smoke posture, widened
 from one submission to the whole product loop):
 
-    whitelist -> phone OTP (real Redis hash) -> register -> login
+    phone OTP (real Redis hash) -> register with a pending session
     -> Teacher publishes Task/Assignments (real management API)
-    -> Student claims -> presign -> real HTTP PUT (+ 412 replay)
+    -> pending claim refused -> Admin approves -> Student claims
+    -> presign -> real HTTP PUT (+ 412 replay)
     -> finalize -> real validation job -> Teacher approves
     -> one ASSIGNMENT_REWARD ledger + wallet + Redis ranking projection
     -> redeem -> Admin approves (consume) -> Admin fulfills
 
 World-building stays ORM-side (the e1 factories' charter): the teacher,
 the admin (with the management guard's confirmed-TOTP row), the reward
-item, and the whitelist entry are seeded directly; every FLOW step above
+item are seeded directly; every FLOW step above
 runs through ``create_app()``'s real routes, the real presigning
 ``S3ObjectStorage``, the real ``run_submission_validation`` job entry
 (downloading the object this test PUT back from MinIO into the sandboxed
@@ -89,7 +90,6 @@ from tests.e2e.factories import (
     seed_admin_confirmed_totp,
     seed_reward_item,
     seed_teacher_confirmed_totp,
-    seed_whitelist_entry,
     snapshot_honor_ids,
 )
 from tests.e2e.otp_probe import recover_otp_code
@@ -216,7 +216,6 @@ async def test_full_happy_path_chain(
     item = await seed_reward_item(db_factory, run=run, point_cost=50)
     student_number = _unique_student_number(run)
     phone = _unique_phone(run)
-    await seed_whitelist_entry(db_factory, student_number=student_number)
 
     teacher_token = await _mint_access_token(db_factory, teacher.user_id)
     admin_token = await _mint_access_token(db_factory, admin.user_id)
@@ -234,7 +233,7 @@ async def test_full_happy_path_chain(
         async with httpx.AsyncClient(
             transport=transport, base_url="http://e2e-happy"
         ) as client:
-            # --- identity: real OTP -> register -> login ------------------
+            # --- identity: real OTP -> register with a pending session ----
             challenged = await client.post(
                 "/api/v1/auth/phone/challenges", json={"phone": phone}
             )
@@ -259,16 +258,15 @@ async def test_full_happy_path_chain(
                 },
             )
             assert registered.status_code == 201, registered.text
-            student_id = uuid.UUID(registered.json()["id"])
-
-            logged_in = await client.post(
-                "/api/v1/auth/login",
-                json={"username": student_number, "password": _PASSWORD},
-            )
-            assert logged_in.status_code == 200, logged_in.text
+            registration = registered.json()
+            student_id = uuid.UUID(registration["user"]["id"])
+            assert registration["user"]["status"] == "PENDING_APPROVAL"
             student_headers = {
-                "Authorization": f"Bearer {logged_in.json()['access_token']}"
+                "Authorization": f"Bearer {registration['tokens']['access_token']}"
             }
+            pending_me = await client.get("/api/v1/me", headers=student_headers)
+            assert pending_me.status_code == 200, pending_me.text
+            assert pending_me.json()["status"] == "PENDING_APPROVAL"
 
             # --- teacher publishes Task + Assignments (real mgmt API) -----
             created = await client.post(
@@ -319,6 +317,23 @@ async def test_full_happy_path_chain(
             assert published.status_code == 200, published.text
             assert published.json()["status"] == "PUBLISHED"
             assert published.json()["claimable"] is True
+
+            # The registration session can browse, but cannot act until a
+            # real admin verdict. The same JWT observes the committed status.
+            pending_claim = await client.post(
+                f"/api/v1/tasks/{task_id}/claim", headers=student_headers
+            )
+            assert pending_claim.status_code == 403, pending_claim.text
+            assert pending_claim.json()["error"]["code"] == "APPROVAL_PENDING"
+            approved = await client.post(
+                f"/api/v1/admin/users/{student_id}/approve", headers=admin_headers
+            )
+            assert approved.status_code == 200, approved.text
+            assert approved.json()["status"] == "ACTIVE"
+            assert approved.json()["approved_at"] is not None
+            active_me = await client.get("/api/v1/me", headers=student_headers)
+            assert active_me.status_code == 200, active_me.text
+            assert active_me.json()["status"] == "ACTIVE"
 
             # --- student claims (random server-side allocation) -----------
             claimed = await client.post(
@@ -607,5 +622,4 @@ async def test_full_happy_path_chain(
             task_ids=[uuid.UUID(task_id)] if task_id else [],
             reward_item_ids=[item.reward_item_id],
             honor_ids_before=honors_before,
-            whitelist_numbers=[student_number],
         )
