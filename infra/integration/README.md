@@ -26,6 +26,14 @@ and must restore the same container before those gates.
 Private random credentials and certificates stay under ignored .runtime/.
 Never run the original release/migration scripts against a source database.
 Only native Git manages commits; the runner builds a private disposable index.
+For the final pre-push gate, import an authentic bundle containing the frozen
+native head and locked origin/main into that private Git directory only.
+Verify its head, merge base, tree and clean index against native Git; normalize
+Windows text line endings in the private index. A missing-history warning that
+skips ratchet direction is not final evidence. Run the original `make pre-push`
+with `TEST_STACK_ENV=` and the installed owned Python environment; never use
+the Makefile's old 15432 defaults. Preserve the bundle and complete gate log
+under ignored runtime, without mounting or changing a source .git directory.
 
 Run `test-isolation.mjs`, `test-battery-exit.mjs` and `test-runner-lock.mjs`
 directly with docker exec, outside the wrapper: they launch child commands and

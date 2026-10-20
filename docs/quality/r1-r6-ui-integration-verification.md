@@ -2,9 +2,32 @@
 
 ## 当前范围
 
-2026-10-20，Asia/Shanghai。串行实施，R6固定在`e20bf06f95b0dcfec6d24a8a9e4d8abbc0a61285`。
-Task1来源保护与Task2独立环境已完成；Task3合流、迁移及认证兼容、Task4的UI增量处置已完成；Task5视觉适配正在验收。最终全量门禁、独立评审和远端CI尚未完成。
-以下是开发检查点证据，不是最终整合版的功能验收或交付结论。
+冻结前记录：2026-10-21，Asia/Shanghai。串行实施，R6固定在`e20bf06f95b0dcfec6d24a8a9e4d8abbc0a61285`。
+Task1–5实施及对应开发验收已完成；I3为`c0f89358816206e0ee781a558bf1a30887eac6cd`，I4为`f9a1b2d66ae2fdb6f1be120566f16e942c09cb5c`。I4干净提交上23像素＋23axe无更新复跑46/46通过、零skip/flaky；不能代替最终H的七组像素和完整电池。
+本文随I5整理范围、方法和历史，再冻结最终H。冻结后的实际结果、独立评审及CI状态写H绑定runtime和PR43，不以修改本文填数字造成提交漂移。以下开发检查点不是最终整合版的功能验收或交付结论。
+
+## 冻结提交与最终证据方法
+
+1. I5只整理计划、指南、走查和证据方法；提交后原生Git工作树须干净，记录H及完整tree，并另记产品树、测试树和两个锁文件SHA。原八提交仍是祖先，R6来源不推进到R7 tip。
+2. 每个完整门禁开始/结束均核对同一H及干净状态。日志保存完整输出和真实外层退出码；pytest XML、浏览器JSON、逐图SHA及skip原因与该命令绑定。失败和环境错误保留，不覆盖成成功；产品/测试修复形成新H并刷新适用门禁。
+3. runner的私有Git平时仅提供工作文件索引；正式`make pre-push`前，从原生Git创建H及锁定origin/main的真实bundle，仅导入独立runner私有Git。核对HEAD、merge-base、tree和索引一致，再执行原命令；缺少历史而跳过floor方向检查的warning不算通过。不得修改来源工作树Git目录。
+4. 依确认计划逐项运行完整后端unit/workers、integration及E2E、同配置greenlet/thread覆盖率、M1–M4、契约零差异、前端静态/全量单测/覆盖率/build及实时依赖审计。标准浏览器使用无过滤battery，原子保存同一report并在同一锁中执行原no-skip guard；不是两个独立wrapper冒称同锁。
+5. 根据实际标准report逐条对账具名豁免；完整导师文件（包括三次stableShot）、认证围栏/probe、mock上传wire、capture harness以及七组固定字体像素均另取当前专项。仅入口自测、文件库存或两项布局不算实际专项覆盖。
+6. 核对七角色R1–R6及上游任务闭环，包含C01–C22、异常恢复、迟响应及390/1440键盘/axe。代理驱动浏览器与真人物理设备分开表述；未记录路径的两条早期HTTP401不归因、不声称零控制台错误。
+
+`final-evidence.json`位于ignored integration runtime，至少包含：
+
+| 字段组 | 实际绑定内容 |
+| --- | --- |
+| source | H、锁定上游SHA、完整tracked tree、产品/测试树哈希、8祖先/R7范围检查、四源保护结果 |
+| environment | 资源归属/端口/挂载、锁文件、实际Python/Node/依赖/浏览器版本、字体文件SHA；不含口令/token |
+| commands | 每条cwd、原argv、flags、start/end、exit、完整log路径及SHA、原始report/XML及SHA |
+| coverage | 后端同配置累计与ratchet、前端ratchet、标准skip逐项对应专项、逐图前后来源 |
+| journeys | 七角色、C01–C22、上游代表闭环、自动axe和键盘观察的实际证据 |
+| limits | 失败历史、原上游base降级限制、未执行/外部阻塞、未覆盖的物理设备与生产部署 |
+| review/CI | 独立评审精确H/tree与实际范围，PR43 head或测试merge SHA的parent/base，真实check/run链接和未解决线程数 |
+
+原始私有身份、备份和恢复命令载荷不进入Git或公开附件。PR正文提供非敏感的H绑定结果、报告/日志SHA和可访问的CI/评审入口；完整原始日志继续保存在本地归属runtime。最终评审方法见[评审范围](r1-r6-ui-integration-review.md)。
 
 ## 来源与资源
 

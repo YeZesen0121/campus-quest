@@ -1,6 +1,14 @@
-# 集成界面像素走查（进行中）
+# 集成界面像素走查
 
 本文件只记录本次集成的实际无更新差异及处置。旧UI通过数量不作为当前覆盖；I3/I4、最终H和远端CI分开记账。
+
+## I3/I4开发验收结果
+
+I3为`c0f89358816206e0ee781a558bf1a30887eac6cd`，不含PNG；I4为`f9a1b2d66ae2fdb6f1be120566f16e942c09cb5c`，仅含12张已走查的主组PNG，其余51张原字节不变。I4干净提交上23像素＋23axe无更新复跑46/46通过、零skip/flaky（`20261020T181609194348Z`，4.2分钟，报告SHA256 `f9c2ad06530a7d07fd871b32ff40348f3c5a074e4b5ab1222bf842ec446ee0d7`，working diff为空）。最终H仍须重跑全部七组，不借用此开发检查点。
+
+以下初轮及I3前记录保留历史状态，不能把其中“未更新PNG”理解为I4之后的当前状态。
+
+## 历史：I3前首轮
 
 首轮 `20261020T151533842829Z`：23axe全部通过，23主像素10通过/13失败，零skip/flaky；报告SHA256 `f2c835d5137e71a2e6dfef123f3e69a6dc7a8051779125791a1d9698758d87fe`。基准为I2及当时工作差异；完整报告、PNG、源码patch和逐图SHA位于ignored `.runtime/focused-browser/task5-main-pixels-no-update-20261020T151534-c64d13da/`、`.runtime/pixels/task5-main-initial.json`。尚未更新PNG。
 
@@ -32,7 +40,7 @@
 | admin-dashboard | unexpected | intentional plus adaptation defect: Keep real server census counts and approved paper; /admin context wrongly defaults to student home. Regression and minimal label mapping before candidate. |
 | admin-user-detail | unexpected | intentional upstream screen: Real self-view and account actions retained, existing paper/sidebar/table/action tokens; exact role-aware route context. Pair reviewed. |
 
-其他五组专项图、完整新候选逐图走查及最终无更新复跑尚未完成。
+以上为首轮历史停点；后续七组实际覆盖、I4逐图字节及提交后无更新结果见下文。
 
 ## 干净验收库七组首次比较
 
@@ -119,3 +127,22 @@
 | `frontend/e2e/innovation-mentors.spec.ts-snapshots/mentor-confirmation-linux.png` | 原基线字节保留；当前独立world无更新比较通过。 | `9568e0e2e4a2` |
 | `frontend/e2e/innovation-mentors.spec.ts-snapshots/mentor-operations-form-linux.png` | 原基线字节保留；当前独立world无更新比较通过。 | `618c4fe28493` |
 | `frontend/e2e/innovation-mentors.spec.ts-snapshots/mentor-public-mobile-linux.png` | 原基线字节保留；当前独立world无更新比较通过。 | `d699216e6637` |
+
+## I4逐图字节核对
+
+候选生成23/23通过（`20261020T181052257551Z`，报告SHA256 `227f18dac009bc39b8f5cefb9dcd3d2704e77c352f6876d16247590c28b4533a`）。精确12条允许路径改变，51张保持原SHA；没有代码、阈值、mask、重试或字体修改。11张候选与此前原尺寸走查actual字节相同。概览另作原尺寸双图复核：有效会话用户数1→3，完整主组先登录三种角色而聚焦两图仅登录管理员；原服务端distinct有效UserSession计数保留，其余枚举/内容/布局不变。
+
+| PNG | I3前SHA256（前12位） | I4 SHA256（前12位） | 核对 |
+| --- | --- | --- | --- |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-approvals-linux.png` | `818a61f8e2eb` | `811c21fb0890` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-dashboard-linux.png` | `b8eabc5fed57` | `78521fcb0ce4` | 原尺寸双图及会话计数来源已复核 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-innovation-operations-linux.png` | `3c126627febb` | `faa9c43180c1` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-invitations-linux.png` | `ac9dfc4cf55c` | `c99e155bcec4` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-platforms-linux.png` | `6cbd149cfb52` | `a3b495dac890` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-user-detail-linux.png` | `7b447a77a7a9` | `83671f70d10b` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/admin-users-linux.png` | `970d67fa5715` | `86f8def10433` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/auth-reset-password-linux.png` | `ca7f71ff1ad3` | `1a72c55ef388` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/dev-gallery-linux.png` | `430c9e6f7f22` | `4b9a802312ab` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/not-found-linux.png` | `1aefac1a762a` | `6e6c56fbf05d` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/student-claim-linux.png` | `e9a60c408668` | `aa75d1b01300` | 与已走查actual字节一致 |
+| `frontend/e2e/visual-regression.spec.ts-snapshots/student-tasks-linux.png` | `062b8ab5e145` | `54a1a774fc27` | 与已走查actual字节一致 |
