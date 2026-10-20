@@ -5,7 +5,7 @@
 | OG1 | 输入 | 原因去空白必填且有上限；严格非负整数版本；拒绝额外字段 | `tests/unit/innovation/test_operations_schemas.py` | 已覆盖 |
 | OG2 | 授权生命周期 | 未授权 0 → 授予 1 → 撤回 2 → 重授 3；同状态或旧版本 409 | `tests/integration/innovation/test_operations_grants.py::test_http_lifecycle_and_scope` | 已覆盖 |
 | OG3 | 管理员门禁 | 匿名、学生、教师、停用管理员、未确认 TOTP、网络策略不符拒绝 | `tests/integration/innovation/test_operations_grants.py::test_http_guards` + `tests/integration/innovation/test_operations_grants.py::test_actual_store_network_policy_and_validation` | 已覆盖 |
-| OG4 | 目标限制/新鲜权限 | 仅 ACTIVE STUDENT 可被授予；被停用/改角色仍可撤回；旧 Actor 角色/状态/TOTP 拒绝 | `tests/integration/innovation/test_operations_grants.py::test_target_rules_fresh_admin_and_revocation` | 已覆盖 |
+| OG4 | 目标限制/新鲜权限 + AP4 | 仅 ACTIVE STUDENT 可被授予；被停用/改角色仍可撤回；旧 Actor 角色/状态/TOTP 拒绝；角色变更测试保留另一 ACTIVE ADMIN，遵守 0031 数据库不变量 | `tests/integration/innovation/test_operations_grants.py::test_target_rules_fresh_admin_and_revocation` | 已覆盖 |
 | OG5 | 并发 | 独立连接同时首次授予仅一笔成功；旧撤回不能移除重授；等待锁期间账号停用后拒绝 | `tests/integration/innovation/test_operations_grants.py::test_independent_grants_and_stale_revoke` + `tests/integration/innovation/test_operations_grants.py::test_waiting_grant_observes_committed_suspension` | 已覆盖 |
 | OG6 | 事务 | 审计异常时授权不落库；审计仅状态/版本 | `tests/integration/innovation/test_operations_grants.py::test_audit_failure_rolls_back_grant` + `tests/integration/innovation/test_operations_grants.py::test_http_lifecycle_and_scope` | 已覆盖 |
 | OG7 | 权限边界 | 运营仍 STUDENT，不能进入管理员/积分管理；无他人负责人资料端点 | `tests/integration/innovation/test_operations_grants.py::test_http_lifecycle_and_scope` | 已覆盖 |

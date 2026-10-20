@@ -10,9 +10,8 @@ Scenario map (the plan's steps, verbatim semantics):
   reviews — approve consumes the freeze, fulfill records delivery, the
   queue reads — and an Admin revocation makes the very next call 403
   again (the guard reads the grant row per request, no cache); Admin
-  reviews globally; a granted Teacher WITHOUT a confirmed TOTP never
-  reaches the surface (TOTP_SETUP_REQUIRED — the §33.4 gate the
-  delegation inherits).
+  reviews globally; V1.1 exempts Teachers from mandatory TOTP while an
+  Admin without a confirmed credential still receives TOTP_SETUP_REQUIRED.
 - **Update rules (step 2):** editing point_cost / per_user_term_limit /
   stock binds FUTURE redemption requests only — the open redemption
   keeps its request-time ``points`` snapshot and its ACTIVE reservation
@@ -870,27 +869,37 @@ async def test_service_gate_matches_the_transport_guard(
         )
 
 
-async def test_granted_teacher_without_confirmed_totp_cannot_reach_review(
-    client: httpx.AsyncClient, db_session: AsyncSession, api_clock: FrozenClock
+@pytest.mark.parametrize(
+    ("role", "granted", "expected_status", "expected_code"),
+    [
+        (Role.TEACHER, True, 200, None),
+        (Role.TEACHER, False, 403, "PERMISSION_DENIED"),
+        (Role.ADMIN, False, 403, "TOTP_SETUP_REQUIRED"),
+    ],
+)
+async def test_reward_review_totp_policy_by_role(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    api_clock: FrozenClock,
+    role: Role,
+    granted: bool,
+    expected_status: int,
+    expected_code: str | None,
 ) -> None:
-    """The delegation inherits the §33.4 management gate: a Teacher may
-    hold the grant and STILL not reach the surface before the second
-    factor is confirmed (ACTIVE+TOTP is part of the widened guard, not
-    an optional extra)."""
+    """V1.1: teacher TOTP is optional; review grants and admin 2FA remain gates."""
     admin = await _seed_user(db_session, username="rewadm-totp-0024", role=Role.ADMIN)
-    teacher = await _seed_user(
-        db_session, username="rewadm-totp-0025", role=Role.TEACHER
-    )
+    reviewer = await _seed_user(db_session, username="rewadm-totp-0025", role=role)
     student = await _seed_user(
         db_session, username="rewadm-totp-0026", role=Role.STUDENT
     )
-    teacher_headers, _session_id = await _headers(db_session, api_clock, teacher)
+    reviewer_headers, _session_id = await _headers(db_session, api_clock, reviewer)
     item = await _admin_service().create_reward_item(
         db_session, _actor(admin), name="TOTP 矩阵", point_cost=100
     )
-    await _admin_service().grant_reward_review(
-        db_session, _actor(admin), teacher.id, reason="先授权，后配 2FA"
-    )
+    if granted:
+        await _admin_service().grant_reward_review(
+            db_session, _actor(admin), reviewer.id, reason="指定审核教师"
+        )
     await _fund(db_session, student.id, 500)
     await db_session.commit()
     redemption = await _redemptions().request_redemption(
@@ -898,16 +907,26 @@ async def test_granted_teacher_without_confirmed_totp_cannot_reach_review(
     )
 
     queue = await client.get(
-        "/api/v1/teacher/rewards/redemptions", headers=teacher_headers
+        "/api/v1/teacher/rewards/redemptions", headers=reviewer_headers
     )
-    assert queue.status_code == 403
-    assert queue.json()["error"]["code"] == "TOTP_SETUP_REQUIRED"
+    assert queue.status_code == expected_status, queue.text
+    if expected_code is not None:
+        assert queue.json()["error"]["code"] == expected_code
+    else:
+        assert any(item["id"] == str(redemption.id) for item in queue.json()["items"])
 
     approve = await client.post(
         f"/api/v1/teacher/rewards/redemptions/{redemption.id}/approve",
-        headers=teacher_headers,
+        headers=reviewer_headers,
     )
-    assert approve.status_code == 403
-    assert approve.json()["error"]["code"] == "TOTP_SETUP_REQUIRED"
+    assert approve.status_code == expected_status, approve.text
+    if expected_code is not None:
+        assert approve.json()["error"]["code"] == expected_code
+    else:
+        assert approve.json()["status"] == "APPROVED"
     await db_session.refresh(redemption)
-    assert redemption.status == RedemptionStatus.REQUESTED.value
+    assert redemption.status == (
+        RedemptionStatus.APPROVED.value
+        if expected_status == 200
+        else RedemptionStatus.REQUESTED.value
+    )

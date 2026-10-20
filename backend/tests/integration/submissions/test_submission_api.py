@@ -831,20 +831,26 @@ async def test_download_url_issued_only_after_authorization(
 
 
 @pytest.mark.integration
-async def test_download_staff_arm_requires_confirmed_totp(
+@pytest.mark.parametrize("staff_role", [Role.TEACHER, Role.ADMIN])
+async def test_download_staff_totp_policy_by_role(
     db_session: AsyncSession,
     api_clock: FrozenClock,
     client: httpx.AsyncClient,
+    fake_storage: FakeObjectStorage,
+    staff_role: Role,
 ) -> None:
-    """The staff arm of the download gate passes the management 2FA gate
-    (spec §33.4; PR #4 hardening 5.2): a pending-TOTP task owner — whose
-    standing would otherwise pass the service gate — is refused with the
-    setup-forcing 403 and no URL is minted; the owning Student downloads
-    regardless (students never establish TOTP); confirming the teacher's
-    credential flips the same request through."""
-    # A TEACHER with reviewer standing but NO confirmed TOTP credential.
+    """V1.1: teachers need standing; only ADMIN needs confirmed TOTP as well."""
     owner = await _seed_user(db_session, username=_OWNER_EMAIL, role=Role.TEACHER)
-    owner_tokens = await _session_tokens(db_session, api_clock, owner)
+    staff = (
+        owner
+        if staff_role == Role.TEACHER
+        else await _seed_user(
+            db_session, username="download-admin@campus.example.edu", role=Role.ADMIN
+        )
+    )
+    staff_tokens = await _session_tokens(db_session, api_clock, staff)
+    outsider = await _seed_user(db_session, username=_OUTSIDER_EMAIL, role=Role.TEACHER)
+    outsider_tokens = await _session_tokens(db_session, api_clock, outsider)
     student = await _seed_user(db_session, username=_STUDENT_NUMBER, role=Role.STUDENT)
     student_tokens = await _session_tokens(db_session, api_clock, student)
     task = _seed_task(owner.id)
@@ -862,27 +868,39 @@ async def test_download_staff_arm_requires_confirmed_totp(
     claim.latest_submission_id = submission.id
     await db_session.flush()
 
-    # The owning Student is untouched by the staff arm's gate.
+    # The owning student is authorized without TOTP.
     as_student = await client.get(
         f"/api/v1/submissions/{submission.id}/download",
         headers=_bearer(student_tokens),
     )
     assert as_student.status_code == 200, as_student.text
 
-    # Pending-TOTP staff: refused at the transport boundary with the
-    # distinct setup-forcing code, before any ownership judgment runs.
+    minted = len(fake_storage.download_urls)
     denied = await client.get(
         f"/api/v1/submissions/{submission.id}/download",
-        headers=_bearer(owner_tokens),
+        headers=_bearer(outsider_tokens),
     )
     assert denied.status_code == 403, denied.text
-    assert _envelope(denied)["code"] == "TOTP_SETUP_REQUIRED"
+    assert _envelope(denied)["code"] == "PERMISSION_DENIED"
+    assert len(fake_storage.download_urls) == minted
 
-    # Confirming the credential is the only change: the same request —
-    # same standing (task owner), same token — now passes.
+    pending = await client.get(
+        f"/api/v1/submissions/{submission.id}/download",
+        headers=_bearer(staff_tokens),
+    )
+    if staff_role == Role.ADMIN:
+        assert pending.status_code == 403, pending.text
+        assert _envelope(pending)["code"] == "TOTP_SETUP_REQUIRED"
+        assert len(fake_storage.download_urls) == minted
+    else:
+        assert pending.status_code == 200, pending.text
+        assert set(pending.json()) == _DOWNLOAD_FIELDS
+        assert len(fake_storage.download_urls) == minted + 1
+
+    # The same session and standing pass after confirmation for both roles.
     db_session.add(
         TotpCredential(
-            user_id=owner.id,
+            user_id=staff.id,
             secret_encrypted=b"test-stand-in-secret",
             confirmed_at=api_clock.now(),
         )
@@ -890,7 +908,7 @@ async def test_download_staff_arm_requires_confirmed_totp(
     await db_session.flush()
     allowed = await client.get(
         f"/api/v1/submissions/{submission.id}/download",
-        headers=_bearer(owner_tokens),
+        headers=_bearer(staff_tokens),
     )
     assert allowed.status_code == 200, allowed.text
     assert set(allowed.json()) == _DOWNLOAD_FIELDS

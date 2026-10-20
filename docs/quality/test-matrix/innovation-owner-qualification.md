@@ -43,3 +43,5 @@ Q11为后续Actor核验补测的对账行，依据既有G10/G11/G12鉴权契约�
 - G-3（本功能已闭合）：只新增ADMIN资格页和更新负责人资料页两张Linux PNG；两张最终基线均经人工走查，运营管理及用户管理页保持既有PNG字节。最终四个资格/管理导航相关页面全部通过原比较阈值；全16页比较的student-tasks继承差异15142像素仍失败，归G-5全站限制，不宣称完整像素门禁通过。
 - G-4（已闭合）：`test_refresh_cookie_alone_cannot_read_or_apply_qualification`明确覆盖仅refresh Cookie不能读取或提交资格申请；`test_operations_student_cannot_manage_owner_qualifications`明确覆盖已有运营授权的学生不能读取资格管理队列/资料详情或执行批准。主任务在补验后的资格文件取得15 passed、9.92s、退出0，完整日志为工作区 `.local-dev/logs/qualification-guards-final.log`。
 - G-5：已取得后端2400项全量两批通过、另10项真实PG补验通过、同collector追加采集后全部18模块原地板通过，以及`284345a`之上未提交树独立Agent复核无阻塞问题的证据；最初innovation 96.9低于97.8的棘轮失败记录保留。完整发布电池、最终HEAD CI和合并审查仍未闭合；工作树复核不等于提交级APPROVE。全站视觉为15/16通过，student-tasks的15142像素继承差异尚未闭合。已通过的本功能门禁不构成完整发布门禁通过或合并/生产上线批准。
+
+Q11 集成前置条件：旧 Actor 角色变更使用本测试世界拥有的另一 ACTIVE ADMIN，遵守上游 0031 最后管理员不变量；清理同时覆盖备用管理员。角色/状态/TOTP 变化后的拒绝、资格不变及零审计断言保持。

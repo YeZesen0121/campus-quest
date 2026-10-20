@@ -275,6 +275,8 @@ async def test_grant_database_constraints(db_session, clock):
 
 async def test_target_rules_fresh_admin_and_revocation(db_session, clock):
     admin, target = await user(db_session, Role.ADMIN), await user(db_session)
+    # A legal demotion leaves another ACTIVE ADMIN (upstream migration 0031).
+    await user(db_session, Role.ADMIN)
     service = OperationsGrantService(clock=clock)
     aa = actor(admin)
     for role, status in [("TEACHER", "ACTIVE"), ("STUDENT", "SUSPENDED")]:

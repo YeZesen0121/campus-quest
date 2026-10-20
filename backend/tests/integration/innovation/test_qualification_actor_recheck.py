@@ -60,7 +60,9 @@ async def qualification_world(db_engine, clock) -> AsyncIterator[QualificationWo
     ids = []
     try:
         async with sessions() as seed:
-            student, admin = [
+            # Keep role mutations legal under the last-active-admin backstop.
+            # The spare is owned and cleaned with this world's other accounts.
+            student, admin, spare_admin = [
                 User(
                     username=f"qualification-recheck-{uuid4().hex}",
                     password_hash="unused",
@@ -68,11 +70,11 @@ async def qualification_world(db_engine, clock) -> AsyncIterator[QualificationWo
                     role=role.value,
                     status="ACTIVE",
                 )
-                for role in (Role.STUDENT, Role.ADMIN)
+                for role in (Role.STUDENT, Role.ADMIN, Role.ADMIN)
             ]
-            seed.add_all([student, admin])
+            seed.add_all([student, admin, spare_admin])
             await seed.flush()
-            ids = [student.id, admin.id]
+            ids = [student.id, admin.id, spare_admin.id]
             seed.add(
                 TotpCredential(
                     user_id=admin.id,

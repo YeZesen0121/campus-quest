@@ -9,7 +9,7 @@
 
 | 状态 | 数量 | 明细 |
 |---|---|---|
-| 已覆盖 | 23 | E1-E15、E17、E18、E20-E24 |
+| 已覆盖 | 24 | E1-E15、E17、E18、E20-E24、E26 |
 | 缺口（轻，列出不补） | 2 | G-1（榜单 DTO 字段集显式冻结测试）、G-2（积分列 integer 类型冻结测试） |
 | 不匹配 | 0 | — |
 | 流程行（无对应测试，按定义） | 1 | E25（G13 元规则——本矩阵自身即其机制） |
@@ -43,6 +43,7 @@
 | E23 | §32 approve 行 | submission approve 重放幂等 | `tests/integration/points/test_ledger_service.py::test_grant_assignment_reward_twice_posts_one_entry_and_one_increment` + `tests/integration/points/test_admin_adjustment.py::test_same_operation_id_and_intent_replays_the_original_entry`（operation_id 重放族） | 已覆盖 |
 | E24 | §32 幂等 key 段 | 高价值写接口幂等 key（建议级）+ 无 key 时 DB 约束兜底（MUST 级） | `tests/integration/points/test_points_api.py::test_redeem_idempotency_key_is_advisory_in_v1`（V1 advisory）；兜底= E10/E17/E18 约束族 | 已覆盖（spec 的 MUST 落在 DB 约束；key 为建议级，V1 advisory 与 spec 措辞一致） |
 | E25 | G13（quality-gates §16） | 上述语义变更必须先改 spec（元规则） | ——（流程行：本矩阵的建立/更新纪律即其机制，不对应单条测试） | 流程行 |
+| E26 | §4.2/§16 + V1.1 §2.1/2.3 | 教师无需强制 TOTP，但只有有效兑换审核授权才可读队列并批准；无授权教师及未确认 TOTP 的 ADMIN 均拒绝，兑换仍为 REQUESTED | `tests/integration/points/test_reward_admin.py::test_reward_review_totp_policy_by_role` + `tests/integration/points/test_reward_admin.py::test_granted_teacher_reviews_until_revocation_is_immediate` | 已覆盖 |
 
 ## 缺口明细（列出不补）
 

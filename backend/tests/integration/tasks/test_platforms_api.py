@@ -68,6 +68,10 @@ async def api_redis() -> AsyncIterator[aioredis.Redis]:
 
 @pytest.fixture
 def api_clock() -> FrozenClock:
+    # Full-suite collection can precede this test by more than the JWT TTL.
+    # Refresh both the injected clock and seed timestamps at fixture setup.
+    global _T0
+    _T0 = datetime.now(UTC).replace(microsecond=0)
     return FrozenClock(_T0)
 
 
