@@ -1030,6 +1030,56 @@ async def test_in_app_delivery_uses_notification_row_as_inbox(
     assert email.messages == []
 
 
+@pytest.mark.parametrize(
+    ("winning_status", "observed"),
+    [
+        (DeliveryStatus.SENT, SendOutcome.ALREADY_SENT),
+        (DeliveryStatus.FAILED, SendOutcome.ALREADY_FAILED),
+        (DeliveryStatus.RETRYABLE, SendOutcome.IN_FLIGHT),
+    ],
+)
+async def test_late_provider_completion_preserves_another_dispatchers_result(
+    db_engine: AsyncEngine, monkeypatch, winning_status, observed
+) -> None:
+    """A provider returning after lease recovery must not overwrite the new outcome."""
+    clock = StepClock(_T0)
+    sms = FakeSmsSender()
+    service = _service(db_engine, sms=sms, clock=clock)
+    finalize = service._finalize
+    winner_time = _T0 + timedelta(minutes=6)
+
+    async def after_other_dispatcher(delivery_id, *args, **kwargs):
+        # Deterministically interleave a committed independent connection after
+        # the provider response and before this worker's final row lock.
+        maker = async_sessionmaker(db_engine, expire_on_commit=False)
+        async with maker() as session, session.begin():
+            row = await session.get(NotificationDelivery, delivery_id)
+            assert row is not None
+            row.status = winning_status.value
+            row.attempts = 2
+            row.updated_at = winner_time
+            row.last_error = "another dispatcher's outcome"
+            row.provider_message_id = "winning-provider-receipt"
+            if winning_status is DeliveryStatus.SENT:
+                row.sent_at = winner_time
+            if winning_status is DeliveryStatus.RETRYABLE:
+                row.scheduled_at = winner_time + timedelta(minutes=5)
+        return await finalize(delivery_id, *args, **kwargs)
+
+    monkeypatch.setattr(service, "_finalize", after_other_dispatcher)
+    async with _seeded(db_engine) as seeded:
+        delivery = seeded[2]
+        result = await service.send(delivery.id, "late-provider-completion")
+        row = await _row(db_engine, delivery.id)
+        assert result.outcome is observed
+        assert result.attempts == 2
+        assert row.status == winning_status.value
+        assert row.updated_at == winner_time
+        assert row.last_error == "another dispatcher's outcome"
+        assert row.provider_message_id == "winning-provider-receipt"
+        assert len(sms.messages) == 1
+
+
 # --- claim-before-send race ----------------------------------------------
 
 
