@@ -141,7 +141,11 @@ export default defineConfig({
       // an https page origin, and Set-Cookie's Secure attribute rides
       // the same-origin response untouched (webkit stores it by page
       // origin, not backend protocol).
-      command: `uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port ${backendPort}`,
+      // Next's bundled httpxy pool can reuse a socket just as Uvicorn's
+      // idle cutoff closes it, turning a real /me 401 into proxy 500.
+      // Explicitly close these disposable test-server connections so the
+      // proxy never caches them. No request is retried or budget extended.
+      command: `uv run uvicorn app.main:create_app --factory --host 127.0.0.1 --port ${backendPort} --header Connection:close`,
       url: `${backendOrigin}/health/ready`,
       cwd: "../backend",
       env: backendEnv,

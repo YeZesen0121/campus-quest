@@ -1,6 +1,7 @@
 // Approved student-task layout contracts. Read existing seeded claims only;
 // the existing allocation journey owns the shared task's single mutation.
 import { BASE_URL, ensureStudentLogin, expect, test } from './fixtures';
+import { request as isolatedRequest } from '@playwright/test';
 
 test.skip(process.env.CQ_E2E !== '1', 'CQ_E2E=1 with the isolated student world');
 
@@ -148,7 +149,27 @@ for (const width of [320, 390, 800, 1440]) {
           await month.click();
           await expect(page).toHaveURL(/period=monthly/);
           await expect(page.getByRole('link',{name:'本月榜',exact:true})).toHaveAttribute('aria-current','page');
+          // A real rotation commits before its response reaches this document.
+          // An independent transport must not update the browser cookie early.
+          const transport = await isolatedRequest.newContext({ ignoreHTTPSErrors: true });
+          let acknowledge!: () => void;
+          const committed = new Promise<void>(resolve => { acknowledge = resolve; });
+          await page.route('**/api/v1/auth/refresh', async route => {
+            try {
+              const response = await transport.fetch(route.request());
+              expect(response.status()).toBe(200);
+              acknowledge();
+              await new Promise(resolve => setTimeout(resolve, 6500));
+              await route.fulfill({ response });
+            } finally {
+              await transport.dispose();
+            }
+          }, { times: 1 });
+          const restoredSession = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/me' && response.ok());
           await page.goto(`${BASE_URL}/profile`);
+          await committed;
+          expect(await (await restoredSession).finished()).toBeNull();
+          await expect(page.locator('.page-subtitle').first()).toHaveText('每一次完成，都是成长的一部分。');
         }
       }
       await page.evaluate(() => document.fonts.ready);
