@@ -7,7 +7,7 @@
 | I01 | 四棵来源树、R7 与旧库 | 原 HEAD、索引、未提交字节和旧资源保留；只在新树新栈实施 | 外部 source-manifest、还原副本、source guard；最终再次复核 | 流程行 |
 | I02 | 错源路径、owner 或资源 | 在连接、清理及运行被测命令前拒绝 | `infra/integration/test-host-isolation.ps1`；`infra/integration/test-isolation.mjs` | 已覆盖 |
 | I03 | 连续两次运行与参数转发 | 同一个世界锁内串行；argv 保留空格，子进程非零逐层传播 | `infra/integration/test-runner-lock.mjs`；`infra/integration/probe-exit.mjs` | 已覆盖 |
-| I04 | 标准浏览器 battery 与 guard | 同锁执行，保存本次新报告；浏览器或 guard 任一失败均失败，拒绝旧报告 | `infra/integration/test-battery-exit.mjs` | 已覆盖 |
+| I04 | 标准浏览器 battery 与 guard | 同锁保存本次新报告及全部输出；未生成报告时仍保留已有截图和哈希，缺报告或任一进程失败仍失败，拒绝旧报告 | `infra/integration/test-battery-exit.mjs` | 已覆盖 |
 | I05 | 主/E2E 服务及对象存储 | 指向本栈独立服务器、库、bucket、CA；不复用来源服务 | `infra/integration/test-compose.ps1`；`infra/integration/test-playwright-env.ts`；`infra/integration/smoke-runtime.py` | 已覆盖 |
 | I06 | Windows worktree 经 WSL 运行 | 私有测试索引只含本树 tracked 清单，原 .git 指针不变 | `infra/integration/test-git-context.mjs` | 已覆盖 |
 | I07 | 上游迁移与双创迁移合流 | 单链唯一 head；18 项重命名完整，上游文件及原双创 DDL/操作保持 | `tests/unit/db/test_innovation_migration_graph.py` | 已覆盖 |

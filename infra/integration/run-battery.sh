@@ -40,9 +40,10 @@ archive_exit=0
 if [ -f "$report_source" ]; then
     cp -- "$report_source" "$output/report.json" || exit 1
     fresh=1
-    # Snapshot the complete output before another Playwright invocation can
-    # clean it. testInfo.outputPath screenshots need not be JSON attachments.
-    python3 - "$output" "$report_source" <<'PY'
+fi
+# A browser can exit after producing screenshots but before writing its report.
+# Retain the complete output in both cases; a missing report still fails below.
+python3 - "$output" "$report_source" <<'PY'
 import datetime as dt
 import hashlib
 import json
@@ -73,12 +74,12 @@ files = [
 manifest = {'head': os.environ.get('CQ_INTEGRATION_HEAD', 'unbound-selfproof'),
             'run_id': directory.name, 'source': str(source.parent),
             'archive': 'test-results', 'files': files,
+            'report_present': source.is_file(),
             'snapshotted_at': dt.datetime.now(dt.timezone.utc).isoformat()}
 (directory / 'artifacts-manifest.json').write_text(json.dumps(manifest, indent=2))
 print('INTEGRATION_BATTERY_ARTIFACTS=' + json.dumps({'files': len(files)}), flush=True)
 PY
-    archive_exit=$?
-fi
+archive_exit=$?
 "${guard[@]}" >"$output/guard.log" 2>&1
 guard_exit=$?
 cat "$output/browser.log"
@@ -103,7 +104,7 @@ report_hash = hash_(directory / 'report.json') if fresh else None
 unchanged = fresh and source.is_file() and hash_(source) == report_hash
 archive_exit = int(sys.argv[7])
 manifest_path = directory / 'artifacts-manifest.json'
-preserved = fresh and archive_exit == 0 and manifest_path.is_file()
+preserved = archive_exit == 0 and manifest_path.is_file()
 manifest = json.loads(manifest_path.read_text()) if preserved else None
 if manifest is not None:
     preserved = all(

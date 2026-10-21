@@ -11,11 +11,13 @@ Task1–5实施及对应开发验收已完成；I3为`c0f89358816206e0ee781a558b
 1. I5只整理计划、指南、走查和证据方法；提交后原生Git工作树须干净，记录H及完整tree，并另记产品树、测试树和两个锁文件SHA。原八提交仍是祖先，R6来源不推进到R7 tip。
 2. 每个完整门禁开始/结束均核对同一H及干净状态。日志保存完整输出和真实外层退出码；pytest XML、浏览器JSON、逐图SHA及skip原因与该命令绑定。失败和环境错误保留，不覆盖成成功；产品/测试修复形成新H并刷新适用门禁。
 3. runner的私有Git平时仅提供工作文件索引；正式`make pre-push`前，从原生Git创建H及锁定origin/main的真实bundle，仅导入独立runner私有Git。核对HEAD、merge-base、tree和索引一致，再执行原命令；缺少历史而跳过floor方向检查的warning不算通过。不得修改来源工作树Git目录。
-4. 依确认计划逐项运行完整后端unit/workers、integration及E2E、同配置greenlet/thread覆盖率、M1–M4、契约零差异、前端静态/全量单测/覆盖率/build及实时依赖审计。标准浏览器使用无过滤battery，同一锁中先归档完整`test-results`（包括未挂在JSON附件中的`outputPath`截图）及逐文件大小/SHA256清单，再执行原no-skip guard。核对report未被guard改写、附件仍可读；归档失败也返回非零。不能以两个独立wrapper调用冒称同锁。`infra/integration/test-battery-exit.mjs`另外验证成功、浏览器失败、guard失败、新旧报告与后续源截图删除后归档仍存续，并拒绝递归归档目标。
+4. 依确认计划逐项运行完整后端unit/workers、integration及E2E、同配置greenlet/thread覆盖率、M1–M4、契约零差异、前端静态/全量单测/覆盖率/build及实时依赖审计。标准浏览器使用无过滤battery，同一锁中先归档完整`test-results`（包括未挂在JSON附件中的`outputPath`截图）及逐文件大小/SHA256清单，再执行原no-skip guard。浏览器退出而未写报告时也保留已有截图，并明确`report_present=false`；缺报告仍失败。核对report未被guard改写、附件仍可读；归档失败也返回非零。不能以两个独立wrapper调用冒称同锁。`infra/integration/test-battery-exit.mjs`验证成功、浏览器失败、guard失败、新旧报告、无报告部分输出与后续源截图删除后归档仍存续，并拒绝递归归档目标。整个runner被强制终止时不能保证shell完成归档，须在下次浏览器命令清理输出前单独保存并标记部分工件，不能冒称完整报告。
 5. 根据实际标准report逐条对账具名豁免；完整导师文件（包括三次stableShot）、认证围栏/probe、mock上传wire、capture harness以及七组固定字体像素均另取当前专项。仅入口自测、文件库存或两项布局不算实际专项覆盖。
 6. 核对七角色R1–R6及上游任务闭环，包含C01–C22、异常恢复、迟响应及390/1440键盘/axe。代理驱动浏览器与真人物理设备分开表述；未记录路径的两条早期HTTP401不归因、不声称零控制台错误。
 
 E2E 类型检查使用 `frontend run typecheck:e2e`，由 `tsconfig.e2e.json` 继承项目严格模式、别名及模块解析，显式加载 Node 类型并检查全部 Playwright 源码和配置；本地与 CI 同入口。不用忽略项目配置的临时命令替代。
+
+Windows/WSL 外层命令通过一个管道读取 stdout/stderr，再由单个写入者保存原始字节，避免两个输出句柄覆盖文件偏移。2026-10-21 的 200 条交错输出诊断中，旧直接文件捕获丢失全部 100 条 stderr，新捕获保留全部 200 条；原始失败日志不覆盖。Linux runner 内层日志独立保留。该采集修复与无报告截图归档的 RED/GREEN 均属于开发证据，最终门禁须在新 H 全量重跑。
 
 `final-evidence.json`位于ignored integration runtime，至少包含：
 

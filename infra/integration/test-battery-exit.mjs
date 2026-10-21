@@ -19,8 +19,8 @@ const [mode, path, tag, code, write] = process.argv.slice(2);
 if (mode === 'browser') {
   const image = join(dirname(path), 'viewport.png');
   if (existsSync(image)) unlinkSync(image);
-  if (write === 'yes') {
-    writeFileSync(path, JSON.stringify({tag}));
+  if (write !== 'no') {
+    if (write === 'yes') writeFileSync(path, JSON.stringify({tag}));
     // Screenshots written via testInfo.outputPath need not be JSON attachments.
     writeFileSync(image, Buffer.from('attachment:' + tag));
   }
@@ -40,13 +40,14 @@ const scenarios = [
   { tag: "guard-fails", browser: 0, guard: 9, write: true, expected: 9 },
   { tag: "fresh-report", browser: 0, guard: 0, write: true, expected: 0 },
   { tag: "missing-report", browser: 0, guard: 0, write: false, expected: 1 },
+  { tag: "partial-output-without-report", browser: 13, guard: 0, write: false, partial: true, expected: 13 },
 ];
 
 for (const row of scenarios) {
   test(row.tag, () => {
     const output = join(base, row.tag);
     const arguments_ = [helper, output, source,
-      "--browser", process.execPath, fixture, "browser", source, row.tag, String(row.browser), row.write ? "yes" : "no",
+      "--browser", process.execPath, fixture, "browser", source, row.tag, String(row.browser), row.write ? "yes" : row.partial ? "partial" : "no",
       "--guard", process.execPath, fixture, "guard", join(output, "report.json"), row.tag, String(row.guard), "no",
     ];
     const child = spawnSync("bash", existsSync(helper) ? arguments_ : [fileURLToPath(new URL("run.sh", import.meta.url)), "battery"], { encoding: "utf8" });
@@ -54,8 +55,13 @@ for (const row of scenarios) {
     const result = JSON.parse(readFileSync(join(output, "result.json"), "utf8"));
     assert.equal(result.browser_exit, row.browser);
     assert.equal(result.guard_exit, row.guard);
-    if (row.write) {
-      assert.equal(JSON.parse(readFileSync(join(output, "report.json"))).tag, row.tag);
+    if (row.write || row.partial) {
+      if (row.write) assert.equal(JSON.parse(readFileSync(join(output, "report.json"))).tag, row.tag);
+      else {
+        assert.equal(result.fresh_report, false, "partial output must not become a successful report");
+        assert.equal(result.report_sha256, null);
+        assert.equal(existsSync(join(output, "report.json")), false);
+      }
       // A later Playwright invocation removes its output. The archive must
       // still retain screenshots, including those absent from JSON attachments.
       unlinkSync(join(dirname(source), "viewport.png"));
@@ -63,6 +69,7 @@ for (const row of scenarios) {
       assert.equal(image.toString(), "attachment:" + row.tag);
       const manifestPath = join(output, "artifacts-manifest.json");
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      assert.equal(manifest.report_present, row.write);
       const saved = manifest.files.find(file => file.path === "viewport.png");
       assert.equal(saved.sha256, createHash("sha256").update(image).digest("hex"));
       assert.equal(saved.bytes, image.length);
