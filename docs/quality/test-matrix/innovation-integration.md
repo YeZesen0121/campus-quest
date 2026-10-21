@@ -25,8 +25,9 @@
 | I22 | 教师免TOTP邀请/登录后进入管理工作区及下载 | 未设或未完成可选TOTP的ACTIVE教师可正常审核；ADMIN仍需已确认TOTP，角色和账号状态拒绝不变 | `tests/integration/identity/test_account_status.py`；`tests/integration/identity/test_invitation_accept_no_totp.py`；`tests/integration/identity/test_identity_api.py` | 已覆盖 |
 | I23 | 已保存最近账号的浏览器首次加载统一登录 | SSR与首次hydration一致，无树替换或丢失输入；账号卡仍可预填且仅在本机移除 | `frontend/e2e/recent-logins.spec.ts`；`frontend/src/__tests__/recent-logins.test.ts` | 已覆盖 |
 | I24 | 显式开启跨标签与冷启动专门回归 | 宿主FENCE/PROBE布尔开关传入本栈；带专门开关的标准battery须在改写报告和运行浏览器前拒绝 | `infra/integration/test-host-auth-flags.ps1`；`infra/integration/probe-auth-flags.mjs` | 已覆盖 |
-| I18 | UI 最终298路径、17脚本与图片来源 | 每条有来源哈希、处置和理由；仅移植确有缺口，保留 R6 行为 | Task4 处置清单和摘要，尚未生成 | 流程行 |
-| I19 | 已确认 UI 与新增认证/管理员页面 | 保留真实功能，逐图分类；axe、键盘及390/1440实际旅程验收 | Task5/Task6 门禁和截图记录，尚未完成 | 流程行 |
-| I20 | 最终提交 H、独立评审、PR43 | 全量证据绑定 H；正常快进、实际 CI 与评审齐备才解除 Draft | Task6/Task7 最终记录，尚未执行 | 流程行 |
+| I25 | 成果保存后核实区独立读取仍在进行 | 加载与空态分开；等待真实 workflow/evidence 成功且完整返回后才核对空态，保留原5秒渲染断言及所有四宽度/证明/人才检查 | `frontend/e2e/innovation-private-reference-layout.spec.ts`（真实workflow响应延迟6500ms回归） | 已覆盖 |
+| I18 | UI 最终298路径、17脚本与图片来源 | 每条有来源哈希、处置和理由；仅移植确有缺口，保留 R6 行为 | Task4 处置清单和摘要；Task6 最终来源核对 | 流程行 |
+| I19 | 已确认 UI 与新增认证/管理员页面 | 保留真实功能，逐图分类；axe、键盘及390/1440实际旅程验收 | Task5 开发回归及 Task6 最终门禁/截图 | 流程行 |
+| I20 | 最终提交 H、独立评审、PR43 | 全量证据绑定 H；正常快进、实际 CI 与评审齐备才解除 Draft | Task6/Task7 最终 H 绑定记录 | 流程行 |
 
-本矩阵不将 I18–I20 视为已通过。跨世界清理、缺失 seed 前提及 UI 新行为的可执行行在 Task4 确认差异后补齐，既有域矩阵继续有效。
+本矩阵不将 I18–I20 视为已通过。跨世界清理、seed 前提和 UI 行为的可执行断言见各域矩阵与集成 runner；流程行由最终 H 证据验收，既有域矩阵继续有效。

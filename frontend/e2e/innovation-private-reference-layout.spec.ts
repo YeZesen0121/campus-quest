@@ -1,4 +1,4 @@
-import type { Locator, Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 import { readSourceTagPaint, readControlClearance, API_URL, BASE_URL, ensureStudentLogin, expect, mintToken, test } from './fixtures';
 import { prepare, fillRole, publish } from './recruitment-helpers';
 import { editor as talentEditor, prepareTalent, fillTalent, saveTalent, publishTalent, uploadTalent } from './talent-helpers';
@@ -125,9 +125,47 @@ test('private reference: real inline editors, proof ordering and published talen
   await achievement.getByLabel('成果名称', { exact: true }).fill(achievementTitle);
   await achievement.getByLabel('作品与阶段成果说明', { exact: true }).fill('模拟资料：记录第一轮观察，保留原始来源与待核实的问题。');
   await achievement.getByLabel('立项或获奖说明', { exact: true }).fill('模拟资料：暂无奖项。');
-  await achievement.getByRole('button', { name: '保存成果草稿', exact: true }).click();
   const review = page.getByRole('region', { name: '成果核实与证明', exact: true });
-  await expect(review.getByText('还没有证明材料。', { exact: true })).toBeVisible();
+  const achievementPath = `/api/v1/ie/me/project-drafts/${projectId}/achievements/`;
+  const workflowRoute = new RegExp(`${achievementPath}[^/]+/workflow$`);
+  const holds: Promise<void>[] = [];
+  const reads: { method: string; path: string; status: number; heldMs: number }[] = [];
+  const completedReads: { kind: string; status: number; finished: boolean }[] = [];
+  // Preserve the real response; make the independent post-save read slower
+  // than the original five-second rendering assertion without changing it.
+  const holdWorkflow = async (route: Route) => {
+    const hold = (async () => {
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      await new Promise(resolve => setTimeout(resolve, 6500));
+      await route.fulfill({ response });
+      reads.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, status: response.status(), heldMs: 6500 });
+    })();
+    holds.push(hold);
+    await hold;
+  };
+  await page.route(workflowRoute, holdWorkflow);
+  try {
+    // Saving creates the editor before its independent review reads finish.
+    // Arm both real GETs before clicking; keep the original rendering budget.
+    const initialReads = ['workflow', 'evidence'].map(async kind => {
+      const response = await page.waitForResponse(response => {
+        const path = new URL(response.url()).pathname;
+        return response.request().method() === 'GET' && path.startsWith(achievementPath) && path.endsWith(`/${kind}`);
+      });
+      const error = await response.finished();
+      completedReads.push({ kind, status: response.status(), finished: error === null });
+      expect(response.status(), `Initial ${kind} must succeed through the real API`).toBe(200);
+      expect(error, `Initial ${kind} response must finish`).toBeNull();
+    });
+    await Promise.all([...initialReads, achievement.getByRole('button', { name: '保存成果草稿', exact: true }).click()]);
+    await expect(review.getByText('还没有证明材料。', { exact: true })).toBeVisible();
+  } finally {
+    await Promise.all(holds);
+    await page.unroute(workflowRoute, holdWorkflow);
+    await info.attach('initial-review-read-latency', { body: JSON.stringify(reads), contentType: 'application/json' });
+    await info.attach('initial-review-reads', { body: JSON.stringify(completedReads), contentType: 'application/json' });
+  }
   await review.getByLabel('上传证明材料', { exact: true }).setInputFiles({ name: '模拟维护证明.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n') });
   const proof = review.getByRole('checkbox', { name: '选择证明 1', exact: true }); await expect(proof).toBeEnabled({ timeout: 150_000 }); await proof.check();
   for (const width of widths) {
