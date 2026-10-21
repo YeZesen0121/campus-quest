@@ -53,7 +53,8 @@ test('R4.1: public materials filter follows publication and withdrawal without c
   const materialSelect=page.getByLabel('作品/证明材料筛选',{exact:true});await materialSelect.focus();await expect(materialSelect).toBeFocused();await page.keyboard.press('Tab');const skillToggle=page.locator('.campus-talent-filter-tags > summary');await expect(skillToggle).toBeFocused();await page.keyboard.press('Enter');await page.keyboard.press('Tab');await expect(page.getByRole('form',{name:'人才筛选'}).getByRole('checkbox').first()).toBeFocused();
   expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
   const latest=(await ownRecord(page))!;
-  const revoked=await page.request.post(`${API_URL}${TALENT_OWN}/files/${record.fields.file_ids[0]}/revoke`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:latest.version}});
+  expect(record.fields.file_ids).toHaveLength(1);
+  const revoked=await page.request.post(`${API_URL}${TALENT_OWN}/files/${record.fields.file_ids![0]}/revoke`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:latest.version}});
   expect(revoked.status()).toBe(200);await page.reload();await expect(page.getByRole('region',{name:'校内人才库'})).toContainText('暂无符合条件的人才');
   await page.getByLabel('作品/证明材料筛选',{exact:true}).selectOption('false');await page.getByRole('button',{name:'查找人才',exact:true}).click();await expect(page.getByRole('link',{name:'模拟材料同学',exact:true})).toBeVisible();
   await page.getByRole('link',{name:'清除筛选',exact:true}).click();await expect(page).toHaveURL(`${BASE_URL}/innovation/talents`);await expect(page.getByLabel('作品/证明材料筛选',{exact:true})).toHaveValue('');
@@ -79,7 +80,7 @@ test('R4 review: returning reconciles current visibility and clean fields while 
   await page.goBack();await expect(page.getByRole('region',{name:'最新人才版本'})).toContainText('需要明确比较的服务器介绍');await expect(editor(page).getByLabel('我的优势',{exact:true})).toHaveValue('本窗口第二次未保存优势');await expect(editor(page).getByRole('button',{name:'保存人才草稿',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'以最新版本继续（保留输入）',exact:true}).click();await expect(editor(page).getByLabel('我的优势',{exact:true})).toHaveValue('本窗口第二次未保存优势');await expect(editor(page).getByRole('button',{name:'保存人才草稿',exact:true})).toBeEnabled();
   await saveTalent(page);const selected=await uploadTalent(page,'模拟会被移除.png');await selected.check();await saveTalent(page);await editor(page).getByLabel('我的优势',{exact:true}).fill('清除失效选择时保留此输入');
-  await page.locator('a[href="/innovation"]:visible').first().click();await expect(page).toHaveURL(/\/innovation$/);row=(await ownRecord(page))!;const fileId=row.fields.file_ids[0];
+  await page.locator('a[href="/innovation"]:visible').first().click();await expect(page).toHaveURL(/\/innovation$/);row=(await ownRecord(page))!;expect(row.fields.file_ids).toHaveLength(1);const fileId=row.fields.file_ids![0];
   const removed=await page.request.post(`${API_URL}${TALENT_OWN}/files/${fileId}/remove`,{headers:ownerHeaders(),data:{request_id:crypto.randomUUID(),version:row.version}});expect(removed.status()).toBe(200);
   await page.goBack();await editor(page).getByRole('button',{name:'清除已移除的文件选择',exact:true}).click();await page.getByRole('button',{name:'以最新版本继续（保留输入）',exact:true}).click();await expect(editor(page).getByLabel('我的优势',{exact:true})).toHaveValue('清除失效选择时保留此输入');await saveTalent(page);
 });
@@ -238,8 +239,14 @@ test('R4: active_staff_can_browse_but_not_edit_student_talent',async({page})=>{
   await staffLogin(page,process.env.CQ_E2E_STAFF!,process.env.CQ_E2E_STAFF_TOTP_SECRET!);
   await page.goto(`${BASE_URL}/innovation/talents`);await expect(page.getByRole('form',{name:'人才筛选'})).toBeVisible();
   await expect(page.getByRole('link',{name:'建立或管理我的人才档案',exact:true})).toHaveCount(0);
-  await page.goto(`${BASE_URL}/profile/talent-profile`);await expect(page.getByRole('region',{name:'本人人才档案编辑器'})).toHaveCount(0);
-  await expect(page.getByRole('main')).toContainText(/学生|教师/);
+  const privateReads:string[]=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/v1/ie/me/talent-profile'))privateReads.push(request.method());});
+  await page.goto(`${BASE_URL}/profile/talent-profile`);
+  await page.waitForURL(/\/teacher\/reviews$/);
+  await expect(page).toHaveURL(/\/teacher\/reviews$/);
+  await expect(page.getByRole('heading',{name:'提交审核',level:1,exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'本人人才档案编辑器'})).toHaveCount(0);
+  expect(privateReads).toEqual([]);
 });
 
 test('R4: scan_retry_and_replace_five_files',async({page})=>{

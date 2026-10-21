@@ -17,18 +17,40 @@
  * Assert the complete entered value before submitting. Each TOTP attempt
  * replaces the previous value and only a real auth rejection can retry.
  */
-import { completeStaffPasswordLogin, expect, test } from "./fixtures";
+import { completeStaffPasswordLogin, expect, logoutStudentThroughUi, test } from "./fixtures";
 
 const E2E_ENABLED = process.env.CQ_E2E === "1";
 const BASE = process.env.CQ_E2E_BASE_URL ?? "https://localhost:3000";
 
 test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* env) to run this suite.");
 
+// Retain only method/path/status/timing, so a late read can be distinguished
+// from a rendering failure without recording credentials, bodies or queries.
+let network: object[] = [];
+test.beforeEach(() => { network = []; });
+test.afterEach(async () => {
+  await test.info().attach("cross-engine-read-timing", { body: JSON.stringify(network), contentType: "application/json" });
+});
+function observeReads(page: import("@playwright/test").Page): void {
+  const start = Date.now();
+  const record = (event: string, request: import("@playwright/test").Request, status?: number) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/v1/") && network.length < 1000) {
+      network.push({ event, method: request.method(), path, status, elapsed: Date.now() - start });
+    }
+  };
+  page.on("request", request => record("request", request));
+  page.on("response", response => record("response", response.request(), response.status()));
+  page.on("requestfinished", request => record("finished", request));
+  page.on("requestfailed", request => record("failed", request));
+}
+
 /** Native keyboard login keeps the cross-engine input/hydration contract. */
 async function studentLoginTyped(
   page: import("@playwright/test").Page,
   credentials: string,
 ): Promise<void> {
+  observeReads(page);
   const [username, password] = credentials.split(":");
   await page.goto(`${BASE}/login`);
   await page.getByRole("button", { name: "使用密码登录" }).click();
@@ -62,13 +84,16 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
     await expect(page.getByRole("region", { name: "校内已核实成果" })).toBeVisible();
     await page.goto(`${BASE}/profile/project-drafts`);
     await expect(page.getByRole("button", { name: "新建项目草稿", exact: true })).toBeVisible();
+    const growthRead = page.waitForResponse(response => response.request().method() === "GET" && new URL(response.url()).pathname === "/api/v1/growth/me");
     await page.getByRole("link", { name: "我的账户", exact: true }).click();
+    const growth = await growthRead;
+    expect(growth.status()).toBe(200);
+    expect(await growth.finished()).toBeNull();
     // Growth's ready-only honors region settles the page above the footer.
     // Otherwise its skeleton can expand between mouse-down and mouse-up,
     // moving the logout link away from the pointer without activating it.
     await expect(page.getByRole("region", { name: "获得的荣誉", exact: true })).toBeVisible();
-    await page.getByRole("region", { name: "退出当前账号", exact: true }).getByRole("link", { name: "退出登录", exact: true }).click();
-    await page.getByRole("button", { name: "确认退出登录", exact: true }).click();
+    await logoutStudentThroughUi(page);
     await expect(page).toHaveURL(/\/login$/);
     await page.goBack();
     await expect(page.getByRole("button", { name: "新建项目草稿", exact: true })).toHaveCount(0);
@@ -92,7 +117,12 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
       taskUrl === undefined,
       "needs CQ_E2E_TASK_URL (the seeded open task deep link)",
     );
-    await page.goto(`${BASE}${taskUrl}`);
+    const task = new URL(taskUrl!, BASE);
+    const detailRead = page.waitForResponse(response => response.request().method() === "GET" && new URL(response.url()).pathname === `/api/v1${task.pathname}`);
+    await page.goto(task.href);
+    const detail = await detailRead;
+    expect(detail.status()).toBe(200);
+    expect(await detail.finished()).toBeNull();
     await expect(
       page.locator(".claim-panel, .task-detail-body section").first(),
     ).toBeVisible({ timeout: 20_000 });
@@ -106,6 +136,7 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
       "needs CQ_E2E_STAFF + CQ_E2E_STAFF_TOTP_SECRET (the seeded staff contract)",
     );
     const page = await browser.newPage();
+    observeReads(page);
     await page.goto(`${BASE}/login`);
     await page.getByRole("button", { name: "使用密码登录" }).click();
     await page.getByLabel("账号", { exact: true }).pressSequentially(staff[0], { delay: 2 });
@@ -114,15 +145,14 @@ test.describe("cross-browser smoke (firefox + webkit subset)", () => {
     await expect(page.getByLabel("密码")).toHaveValue(staff[1] ?? "");
     // Observe the accepted login's own read; a second navigation can
     // discard its body. Both empty and populated queues are valid states.
-    const queueRequested = page.waitForRequest(request =>
-      request.method() === "GET" &&
-      new URL(request.url()).pathname === "/api/v1/teacher/submissions/review-queue" &&
-      new URL(request.frame().url()).pathname === "/teacher/reviews");
+    const queueRead = page.waitForResponse(response =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname === "/api/v1/teacher/submissions/review-queue");
     await completeStaffPasswordLogin(page, totpSecret);
     await expect(page).toHaveURL(/\/teacher\/reviews$/);
-    const response = await (await queueRequested).response();
-    if (response === null) throw new Error("staff queue request did not complete");
+    const response = await queueRead;
     expect(response.status()).toBe(200);
+    expect(await response.finished()).toBeNull();
     const queue = await response.json() as { items: unknown[] };
     expect(Array.isArray(queue.items)).toBe(true);
     const workspace = page.getByRole("region", { name: "任务审核工作区", exact: true });

@@ -119,7 +119,7 @@ test("out-of-order /me: a straggler answering OLD identity after the reset NEVER
   // Tab A: virtual clock (the session cache must age past its 30s fresh
   // window deterministically) + student A form login.
   const pageA = await context.newPage();
-  await pageA.clock.install({ now: Date.now() });
+  await pageA.clock.install({ time: Date.now() });
   // Capture A's REAL /me body — the straggler replays it verbatim (the
   // worst-case late answer carrying the OLD identity).
   let aMeBody: string | null = null;

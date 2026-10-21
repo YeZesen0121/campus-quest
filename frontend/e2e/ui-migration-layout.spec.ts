@@ -106,10 +106,10 @@ test('shared foundation: reduced motion removes visual frame transitions', async
   expect(durations.every(value => value === 0)).toBe(true);
 });
 
-test('approved source paint: workflow tags stay neutral and destructive triggers keep quiet frames', async ({ page }, info) => {
+for (const width of [320, 390, 800, 1440]) {
+  test(`approved source paint: workflow tags stay neutral and destructive triggers keep quiet frames at ${width}px`, async ({ page }, info) => {
   // Actual approved64-scene source probe: workflow .ie-tag variants are neutral;
   // purpose-specific blue tags and the unread/rank labels have separate owners.
-  for (const width of [320, 390, 800, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await openGallery(page);
     for (const tone of ['info', 'success', 'warning', 'danger', 'muted']) {
@@ -137,5 +137,5 @@ test('approved source paint: workflow tags stay neutral and destructive triggers
       expect.soft(paint.target).toBeGreaterThanOrEqual(44);
     }
     await page.screenshot({ path: info.outputPath(`source-paint-${width}.png`), fullPage: true });
-  }
-});
+  });
+}

@@ -41,7 +41,7 @@ test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* env) to run this suite."
 const SHELL = ".app-shell";
 const ME_ROUTE = "**/api/v1/me";
 
-/* Wide (≥64rem) sidebar band / medium top-nav band / narrow bottom-nav
+/* Wide (≥64rem) sidebar band / medium compact-menu band / narrow bottom-nav
  * band (design §8). 1280/1000/390 sit safely inside each. */
 const BANDS = [
   { band: "wide", viewport: { width: 1280, height: 800 } },
@@ -142,11 +142,12 @@ test.describe("refresh shell geometry (backlog: 刷新外壳跳变)", () => {
     // Wide: the rail owns primary navigation; the topbar degrades to
     // the actions strip (brand + nav hidden by the :has rule).
     expect(loading.wide.railAttached).toBe(true);
-    expect(loading.wide.railWidth).toBeGreaterThanOrEqual(230);
+    expect(loading.wide.railWidth).toBe(200);
     expect(loading.wide.topNavDisplay).toBe("none");
-    // Medium: the horizontal top nav keeps every destination.
-    expect(loading.medium.topNavDisplay).toBe("flex");
+    // Approved medium chrome uses the compact menu, not the old horizontal nav.
+    expect(loading.medium.topNavDisplay).toBe("none");
     expect(loading.medium.railWidth).toBe(0);
+    expect(loading.medium.bottomNavVisible).toBe(false);
     // Narrow: the 5-slot bottom nav; no rail, no top nav.
     expect(loading.narrow.bottomNavVisible).toBe(true);
     expect(loading.narrow.topNavDisplay).toBe("none");
@@ -166,6 +167,7 @@ test.describe("refresh shell geometry (backlog: 刷新外壳跳变)", () => {
       expect(settled.railWidth).toBe(loading[band].railWidth);
       expect(settled.topNavDisplay).toBe(loading[band].topNavDisplay);
       expect(settled.bottomNavVisible).toBe(loading[band].bottomNavVisible);
+      if (band === "medium") await expect(page.getByRole("button", { name: "全部导航", exact: true })).toBeVisible();
     }
   });
 
@@ -192,7 +194,7 @@ test.describe("refresh shell geometry (backlog: 刷新外壳跳变)", () => {
     // existed — never sidebar → card.
     gate.release();
     await expect(shell).toHaveAttribute("data-shell", "anonymous");
-    await expect(page.getByRole("heading", { name: "登录 CampusQuest" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "登录华师令" })).toBeVisible();
   });
 
   test("a session-bearing network failure keeps the workspace chrome around the retryable error", async ({ page }) => {

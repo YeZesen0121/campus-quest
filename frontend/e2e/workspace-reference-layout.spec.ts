@@ -44,8 +44,16 @@ for (const width of [390, 1440]) {
     const email = page.getByRole('region', { name: '邮箱', exact: true });
     await expect(avatar).toBeVisible();
     await expect(nickname).toBeVisible();
-    const a = (await avatar.boundingBox())!, n = (await nickname.boundingBox())!;
-    const p = (await phone.boundingBox())!, e = (await email.boundingBox())!;
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().iterations)).map(animation => animation.finished.catch(() => undefined)));
+    });
+    // Read all four independent sections in the same frame, after entry motion.
+    const [a, n, p, e] = await page.locator('.profile-page').evaluate(element =>
+      ['头像', '昵称', '手机号', '邮箱'].map(name => {
+        const rect = element.querySelector(`[aria-label="${name}"]`)!.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }));
     if (width >= 640) {
       expect(a.y).toBeCloseTo(n.y, 0);
       expect(p.y).toBeCloseTo(e.y, 0);

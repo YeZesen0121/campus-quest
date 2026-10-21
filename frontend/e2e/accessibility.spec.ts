@@ -30,13 +30,9 @@ test.skip(!E2E_ENABLED, "set CQ_E2E=1 (and the CQ_E2E_* env) to run this suite."
  * varying ancestor specificity) normalized away — axe emits different
  * ancestor chains for the same element between runs, so only the final
  * compound matters. */
-function fingerprint(violation: {
-  id: string;
-  impact?: string | null;
-  nodes: { target: (string | undefined)[] }[];
-}): string[] {
+function fingerprint(violation: Awaited<ReturnType<AxeBuilder['analyze']>>['violations'][number]): string[] {
   return violation.nodes.map((node) => {
-    const selector = (node.target?.[0] ?? "")
+    const selector = String(node.target?.[0] ?? "")
       .replace(/:nth-child\(\d+\)/g, "")
       .replace(/#[\w-]{8,}/g, "#dynamic");
     const ownSegment = selector.split(">").map((s) => s.trim()).filter(Boolean).pop() ?? selector;

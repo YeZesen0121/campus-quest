@@ -76,7 +76,7 @@ test('R6 selected proof preview, revocation, stale confirmation, lost receipt an
   expect((await page.request.post(`${chosen.root}/withdraw`,{headers:ownerAuth,data:{workflow_version:pending.version,case_id:pending.review_case.id,case_version:pending.review_case.version}})).status()).toBe(200);
   // Refresh clears the rejected command, while the server rechecks the same project.
   form=await pickSuccessor(page,projectId);await form.getByRole('checkbox',{name:/交接选中成果/}).check();await form.getByRole('checkbox',{name:/另行授权接任人/}).check();await openTransfer(page);
-  await form.getByRole('link',{name:'查看本次交接',exact:true}).click();await expect(page).toHaveURL(/\/profile\/collaboration\/transfers\/[^/]+$/);const firstId=new URL(page.url()).pathname.split('/').at(-1)!;
+  await Promise.all([page.waitForURL(/\/profile\/collaboration\/transfers\/[^/]+$/, {timeout:15_000}),form.getByRole('link',{name:'查看本次交接',exact:true}).click()]);await expect(page).toHaveURL(/\/profile\/collaboration\/transfers\/[^/]+$/);const firstId=new URL(page.url()).pathname.split('/').at(-1)!;
   const targetContext=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});const target=await targetContext.newPage();
   try{
     await loginThroughUi(target,parseSeededAccount(process.env.CQ_E2E_AUTHOR_STUDENT,'CQ_E2E_AUTHOR_STUDENT'));
@@ -93,7 +93,7 @@ test('R6 selected proof preview, revocation, stale confirmation, lost receipt an
     expect((await target.request.get(`${API_URL}/ie/transfers/${firstId}/evidence/${unselected.evidence.id}?version=${first.version}`,{headers:targetAuth})).status()).toBe(404);
     await page.getByRole('button',{name:'取消交接',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认取消交接',exact:true}).click();await expect(page.getByRole('region',{name:'交接摘要与结果'})).toContainText('发起人已取消');
     expect([403,404,409]).toContain((await target.request.get(`${API_URL}/ie/transfers/${firstId}/evidence/${chosen.evidence.id}?version=${first.version}`,{headers:targetAuth})).status());
-    form=await pickSuccessor(page,projectId);await form.getByRole('checkbox',{name:/交接选中成果/}).check();await openTransfer(page);await form.getByRole('link',{name:'查看本次交接',exact:true}).click();await expect(page).toHaveURL(/\/profile\/collaboration\/transfers\/[^/]+$/);const transferId=new URL(page.url()).pathname.split('/').at(-1)!;
+    form=await pickSuccessor(page,projectId);await form.getByRole('checkbox',{name:/交接选中成果/}).check();await openTransfer(page);await Promise.all([page.waitForURL(/\/profile\/collaboration\/transfers\/[^/]+$/, {timeout:15_000}),form.getByRole('link',{name:'查看本次交接',exact:true}).click()]);await expect(page).toHaveURL(/\/profile\/collaboration\/transfers\/[^/]+$/);const transferId=new URL(page.url()).pathname.split('/').at(-1)!;
     await target.goto(`${BASE_URL}/profile/collaboration/transfers/${transferId}`);await expect(target.getByRole('button',{name:/主动查阅证明/})).toHaveCount(0);
     await expect(target.getByRole('region',{name:'交接摘要与结果',exact:true})).toContainText('模拟公开前项目概况');
     await expect(target.getByRole('button',{name:'确认接任项目',exact:true})).toBeEnabled();

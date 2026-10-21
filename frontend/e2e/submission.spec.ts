@@ -567,7 +567,7 @@ test.describe("browser upload evidence (PR #2 final acceptance)", () => {
       expect(revisionDecision.claim_status).toBe("REVISION_REQUIRED");
       expect(revisionDecision.reward_lock_status).toBe("PROVISIONAL");
       await page.goto(`${BASE_URL}/claims/${claim.claim_id}`);
-      await expect(page.getByText("老师已退回修改，奖励档位已保留。")).toBeVisible();
+      await expect(page.getByText("老师已退回修改，奖励档位已保留", { exact: true })).toBeVisible();
       await expect(page.getByRole("region", { name: "奖励状态" })).toContainText("当前仍可获得 100 积分");
       await captureWork("revision-required");
       const revisedComplete = page.waitForResponse(response =>

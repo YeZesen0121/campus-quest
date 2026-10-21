@@ -120,16 +120,16 @@ for (const width of [320, 390, 800, 1440]) {
     await community.screenshot({ path: testInfo.outputPath(`community-filled-${width}.png`) });
   });
 }
-test('final visual refinement: student headings, return affordance and unselected rating', async ({ page }, info) => {
-  await ensureStudentLogin(page);
-  for (const width of [320, 390, 800, 1440]) {
+for (const width of [320, 390, 800, 1440]) {
+  test(`final visual refinement: student headings, return affordance and unselected rating at ${width}px`, async ({ page }, info) => {
+    await ensureStudentLogin(page);
     await page.setViewportSize({ width, height: 900 });
     for (const [path, title, subtitle] of [
       ['/', '首页', null],
       ['/rewards', '积分奖励', '把每一次完成，积累成下一份奖励。'],
       ['/rankings', '排行榜', '每一次认真完成，都在积累。'],
       ['/profile', '我的档案', '每一次完成，都是成长的一部分。'],
-    ]) {
+    ] as const) {
       await page.goto(`${BASE_URL}${path}`);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(title!);
       if (subtitle) await expect(page.locator('.page-subtitle').first()).toHaveText(subtitle);
@@ -158,7 +158,12 @@ test('final visual refinement: student headings, return affordance and unselecte
     await expect(page.locator('.page-subtitle').first()).toHaveText('成长数据、获得的荣誉与个人信息');
     const task = process.env.CQ_E2E_TASK_URL;
     if (!task) throw new Error('Isolated task is required');
-    await page.goto(task);
+    const taskUrl = new URL(task, BASE_URL);
+    const detailRead = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/v1${taskUrl.pathname}`);
+    await page.goto(taskUrl.href);
+    const detail = await detailRead;
+    expect(detail.status()).toBe(200);
+    expect(await detail.finished()).toBeNull();
     const back = page.getByRole('link', { name: '返回任务列表', exact: true });
     await expect(back.locator('[aria-hidden="true"]')).toHaveText('←');
     const stars = page.locator('.star-glyph');
@@ -167,5 +172,5 @@ test('final visual refinement: student headings, return affordance and unselecte
     await expect(page.locator('.star-option input').first()).not.toBeChecked();
     await page.screenshot({ path: info.outputPath(`task-${width}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  }
-});
+  });
+}
